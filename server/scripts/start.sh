@@ -95,6 +95,11 @@ do_start() {
         exit 1
     fi
     
+    # 确保有执行权限
+    if [ ! -x "./notice-server" ]; then
+        chmod +x ./notice-server
+    fi
+    
     echo "启动 Notice Server..."
     echo "HTTP:     http://localhost:${HTTP_PORT:-9090}"
     echo "MQTT TCP: tcp://localhost:${MQTT_TCP_PORT:-9091}"

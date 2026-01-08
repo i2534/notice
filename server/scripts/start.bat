@@ -1,4 +1,5 @@
-@echo off
+﻿@echo off
+chcp 65001 >nul 2>&1
 REM Notice Server 启动脚本 (Windows)
 REM 使用方法: start.bat [AUTH_TOKEN]
 REM          start.bat --help
@@ -22,6 +23,7 @@ REM 设置默认值
 if not defined HTTP_PORT set HTTP_PORT=9090
 if not defined MQTT_TCP_PORT set MQTT_TCP_PORT=9091
 if not defined MQTT_WS_PORT set MQTT_WS_PORT=9092
+if not defined LOG_FILE_PATH set LOG_FILE_PATH=logs\server.log
 
 echo 启动 Notice Server...
 echo HTTP:     http://localhost:%HTTP_PORT%
@@ -56,7 +58,7 @@ echo.
 echo   日志配置:
 echo     LOG_CONSOLE_LEVEL     控制台日志级别: debug/info/warn/error/off (默认: info)
 echo     LOG_FILE_LEVEL        文件日志级别: debug/info/warn/error/off (默认: debug)
-echo     LOG_FILE_PATH         日志文件路径 (默认: 空)
+echo     LOG_FILE_PATH         日志文件路径 (默认: logs\server.log)
 echo     LOG_PRETTY            控制台美化输出: true/false (默认: true)
 echo     LOG_ROTATE_DAYS       日志轮转天数 (默认: 1)
 echo     LOG_MAX_FILES         保留日志文件数 (默认: 7)
@@ -68,6 +70,6 @@ echo.
 echo 示例:
 echo   %~nx0                           启动服务
 echo   %~nx0 your-token                指定 TOKEN 启动
-echo   set HTTP_PORT=8080 ^& %~nx0     自定义端口启动
+echo   set HTTP_PORT=8080 ^&^& %~nx0   自定义端口启动
 echo.
 goto :eof

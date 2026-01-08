@@ -39,6 +39,13 @@ class MqttService : Service() {
 
     private val messageIdCounter = AtomicInteger(2000)
 
+    // 重连控制
+    private var reconnectJob: Job? = null
+    private var reconnectAttempt = 0
+    private var userDisconnected = false
+    private val maxReconnectDelay = 60_000L  // 最大重连间隔 60 秒
+    private val baseReconnectDelay = 3_000L  // 基础重连间隔 3 秒
+
     // 状态流
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
@@ -83,10 +90,34 @@ class MqttService : Service() {
     fun connect() {
         if (_connectionState.value == ConnectionState.CONNECTING) return
 
+        userDisconnected = false
+        reconnectJob?.cancel()
+        
         scope.launch {
             configStore.settings.first().let { settings ->
                 currentSettings = settings
                 connectMqtt(settings)
+            }
+        }
+    }
+
+    private fun scheduleReconnect() {
+        if (userDisconnected) {
+            Log.d(TAG, "User disconnected, skip reconnect")
+            return
+        }
+        
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            // 指数退避：3s, 6s, 12s, 24s, 48s, 60s (max)
+            val delay = minOf(baseReconnectDelay * (1L shl reconnectAttempt), maxReconnectDelay)
+            reconnectAttempt++
+            
+            Log.d(TAG, "Reconnecting in ${delay/1000}s (attempt $reconnectAttempt)")
+            delay(delay)
+            
+            if (_connectionState.value == ConnectionState.DISCONNECTED && !userDisconnected) {
+                currentSettings?.let { connectMqtt(it) }
             }
         }
     }
@@ -124,14 +155,7 @@ class MqttService : Service() {
                 override fun connectionLost(cause: Throwable?) {
                     Log.w(TAG, "Connection lost: ${cause?.message}")
                     _connectionState.value = ConnectionState.DISCONNECTED
-
-                    // 自动重连
-                    scope.launch {
-                        delay(5000)
-                        if (_connectionState.value == ConnectionState.DISCONNECTED) {
-                            connect()
-                        }
-                    }
+                    scheduleReconnect()
                 }
 
                 override fun messageArrived(topic: String?, message: MqttMessage?) {
@@ -164,15 +188,21 @@ class MqttService : Service() {
             mqttClient?.subscribe(settings.topic, 1)?.waitForCompletion(10000)
 
             _connectionState.value = ConnectionState.CONNECTED
+            reconnectAttempt = 0  // 连接成功，重置重连计数
             Log.d(TAG, "Connected and subscribed to ${settings.topic}")
 
         } catch (e: Exception) {
             Log.e(TAG, "Connection failed: ${e.message}", e)
             _connectionState.value = ConnectionState.DISCONNECTED
+            scheduleReconnect()  // 连接失败，安排重连
         }
     }
 
     fun disconnect() {
+        userDisconnected = true
+        reconnectJob?.cancel()
+        reconnectAttempt = 0
+        
         scope.launch {
             try {
                 mqttClient?.let {

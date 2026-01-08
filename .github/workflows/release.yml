@@ -167,6 +167,8 @@ jobs:
   build-docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
+    # Tag 触发时始终运行，手动触发时根据 push_docker 决定
+    if: ${{ github.event_name == 'push' || inputs.push_docker == true }}
     
     steps:
       - name: Checkout
@@ -196,7 +198,7 @@ jobs:
         with:
           context: ./server
           platforms: linux/amd64,linux/arm64
-          push: ${{ inputs.push_docker != false }}
+          push: true
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
@@ -211,6 +213,8 @@ jobs:
   release:
     name: Create Release
     needs: [build-server, build-linux-client, build-android, build-docker]
+    # 允许 build-docker 被跳过时继续执行
+    if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
