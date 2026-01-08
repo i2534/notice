@@ -4,9 +4,27 @@ on:
   push:
     tags:
       - 'v*'  # 推送 v 开头的 tag 时触发，如 v1.0.0
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (如 v1.0.0)'
+        required: true
+        type: string
+      push_docker:
+        description: '推送 Docker 镜像到 Hub'
+        required: false
+        type: boolean
+        default: true
+      create_release:
+        description: '创建 GitHub Release'
+        required: false
+        type: boolean
+        default: true
 
 env:
   GO_VERSION: '1.25'
+  # 版本号：手动触发使用输入值，tag 触发使用 tag 名称
+  VERSION: ${{ inputs.version || github.ref_name }}
 
 jobs:
   # 构建 Server (Go)
@@ -48,7 +66,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION="${{ env.VERSION }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
           go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
             -o ../dist/notice-server-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} .
@@ -87,7 +105,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION="${{ env.VERSION }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
           go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
             -o ../../dist/notice-client-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }} .
@@ -135,7 +153,7 @@ jobs:
 
       - name: Rename APK
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION="${{ env.VERSION }}"
           mkdir -p dist
           cp client/android/app/build/outputs/apk/release/app-release.apk dist/notice-android-${VERSION}.apk
 
@@ -169,7 +187,7 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION="${{ env.VERSION }}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "version_short=${VERSION#v}" >> $GITHUB_OUTPUT
 
@@ -178,7 +196,7 @@ jobs:
         with:
           context: ./server
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ inputs.push_docker != false }}
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
@@ -221,7 +239,7 @@ jobs:
 
       - name: Prepare Release Files
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION="${{ env.VERSION }}"
           mkdir -p release
           
           # ========== Server 打包 ==========
@@ -294,11 +312,13 @@ jobs:
           ls -la release/
 
       - name: Create Release
+        if: ${{ inputs.create_release != false }}
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.VERSION }}
           files: release/*
           generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          prerelease: ${{ contains(env.VERSION, 'alpha') || contains(env.VERSION, 'beta') || contains(env.VERSION, 'rc') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
