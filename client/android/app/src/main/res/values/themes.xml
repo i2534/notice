@@ -15,7 +15,10 @@
         <item name="colorSurface">@color/surface</item>
 
         <!-- 状态栏 -->
-        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:statusBarColor">@color/surface</item>
         <item name="android:navigationBarColor">@color/background</item>
+
+        <!-- 刘海屏适配 -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 </resources>

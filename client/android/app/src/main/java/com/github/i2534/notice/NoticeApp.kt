@@ -39,6 +39,7 @@ class NoticeApp : Application() {
             description = getString(R.string.notification_message_channel_desc)
             enableLights(true)
             enableVibration(true)
+            setShowBadge(true)  // 启用桌面图标角标
         }
 
         notificationManager.createNotificationChannels(listOf(serviceChannel, messageChannel))

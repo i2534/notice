@@ -37,4 +37,21 @@
     <string name="notification_message_channel_desc">接收到的推送消息</string>
     <string name="notification_title">Notice 运行中</string>
     <string name="notification_text">正在监听推送消息</string>
+
+    <!-- 电池优化 -->
+    <string name="battery_optimization_title">后台运行权限</string>
+    <string name="battery_optimization_message">为保证锁屏后能正常接收消息，请允许 Notice 在后台运行（忽略电池优化）。\n\n小米/华为等手机还需要在系统设置中开启"自启动"和"后台运行"权限。</string>
+    <string name="battery_optimization_settings">去设置</string>
+    <string name="battery_optimization_later">稍后</string>
+
+    <!-- 关于页面 -->
+    <string name="about_title">关于</string>
+    <string name="about_version_format">版本 %1$s</string>
+    <string name="about_version_code_format">Build %1$d</string>
+    <string name="about_description_title">应用简介</string>
+    <string name="about_description">Notice 是一个轻量级的消息推送系统客户端，支持通过 MQTT 协议接收实时推送消息。支持后台运行、开机自启、消息通知等功能。</string>
+    <string name="about_project_url">项目地址</string>
+    <string name="about_btn_github">GitHub</string>
+    <string name="about_btn_issues">问题反馈</string>
+    <string name="about_copyright">© 2024 Notice Project. MIT License.</string>
 </resources>

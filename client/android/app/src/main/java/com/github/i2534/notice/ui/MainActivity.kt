@@ -1,17 +1,22 @@
 package com.github.i2534.notice.ui
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -82,6 +87,10 @@ class MainActivity : AppCompatActivity() {
                     startActivity(Intent(this, SettingsActivity::class.java))
                     true
                 }
+                R.id.action_about -> {
+                    startActivity(Intent(this, AboutActivity::class.java))
+                    true
+                }
                 else -> false
             }
         }
@@ -108,6 +117,11 @@ class MainActivity : AppCompatActivity() {
             mqttService?.clearMessages()
             binding.latestMessageCard.visibility = View.GONE
         }
+
+        // 点击最新消息卡片清除未读计数
+        binding.latestMessageCard.setOnClickListener {
+            mqttService?.clearUnreadCount()
+        }
     }
 
     private fun checkNotificationPermission() {
@@ -130,6 +144,42 @@ class MainActivity : AppCompatActivity() {
     private fun startMqttService() {
         val intent = Intent(this, MqttService::class.java)
         startForegroundService(intent)
+        checkBatteryOptimization()
+    }
+
+    private fun checkBatteryOptimization() {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
+            showBatteryOptimizationDialog()
+        }
+    }
+
+    private fun showBatteryOptimizationDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.battery_optimization_title)
+            .setMessage(R.string.battery_optimization_message)
+            .setPositiveButton(R.string.battery_optimization_settings) { _, _ ->
+                requestIgnoreBatteryOptimization()
+            }
+            .setNegativeButton(R.string.battery_optimization_later, null)
+            .show()
+    }
+
+    @SuppressLint("BatteryLife")
+    private fun requestIgnoreBatteryOptimization() {
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            // 部分手机不支持，打开电池设置页面
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (e2: Exception) {
+                // 忽略
+            }
+        }
     }
 
     private fun bindMqttService() {
@@ -163,6 +213,7 @@ class MainActivity : AppCompatActivity() {
                     binding.latestTime.text = message.getFormattedTime()
                 }
             }
+
         }
     }
 

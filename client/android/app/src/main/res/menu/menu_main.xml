@@ -9,4 +9,11 @@
         app:iconTint="@color/text_primary"
         app:showAsAction="always" />
 
+    <item
+        android:id="@+id/action_about"
+        android:icon="@drawable/ic_info"
+        android:title="@string/about_title"
+        app:iconTint="@color/text_primary"
+        app:showAsAction="never" />
+
 </menu>

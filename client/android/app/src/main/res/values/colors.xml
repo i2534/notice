@@ -27,4 +27,7 @@
     <!-- 基础色 -->
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
+
+    <!-- 交互色 -->
+    <color name="ripple">#33FFFFFF</color>
 </resources>

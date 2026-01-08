@@ -32,14 +32,6 @@ data class MqttSettings(
         }
     }
 
-    fun isWebSocket(): Boolean {
-        return brokerUrl.startsWith("ws://") || brokerUrl.startsWith("wss://")
-    }
-
-    fun isSsl(): Boolean {
-        return brokerUrl.startsWith("ssl://") || brokerUrl.startsWith("wss://")
-    }
-
     fun hasAuth(): Boolean {
         return authToken.isNotBlank()
     }

@@ -1,8 +1,8 @@
 package com.github.i2534.notice.ui
 
 import android.os.Bundle
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.snackbar.Snackbar
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -93,7 +93,7 @@ class SettingsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             configStore.save(settings)
-            Toast.makeText(this@SettingsActivity, "设置已保存", Toast.LENGTH_SHORT).show()
+            Snackbar.make(binding.root, "设置已保存", Snackbar.LENGTH_SHORT).show()
             finish()
         }
     }

@@ -16,6 +16,12 @@
     <!-- 保持唤醒 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- 电池优化豁免 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- 全屏通知（用于悬浮通知） -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- 开机启动 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -45,6 +51,12 @@
         <!-- 设置 Activity -->
         <activity
             android:name=".ui.SettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity" />
+
+        <!-- 关于 Activity -->
+        <activity
+            android:name=".ui.AboutActivity"
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
 

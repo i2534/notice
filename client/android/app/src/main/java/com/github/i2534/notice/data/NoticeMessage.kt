@@ -9,8 +9,7 @@ data class NoticeMessage(
     val topic: String,
     val title: String,
     val content: String,
-    val timestamp: Long = System.currentTimeMillis(),
-    val raw: String? = null
+    val timestamp: Long = System.currentTimeMillis()
 ) {
     companion object {
         private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
@@ -27,16 +26,14 @@ data class NoticeMessage(
                 NoticeMessage(
                     topic = topic,
                     title = json.optString("title", "通知"),
-                    content = json.optString("content", text),
-                    raw = text
+                    content = json.optString("content", text)
                 )
             } catch (e: Exception) {
                 // 非 JSON 格式，使用纯文本
                 NoticeMessage(
                     topic = topic,
                     title = topic.substringAfterLast("/").ifBlank { "通知" },
-                    content = text,
-                    raw = text
+                    content = text
                 )
             }
         }

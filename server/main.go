@@ -17,8 +17,9 @@ import (
 
 // 版本信息（通过 -ldflags 注入）
 var (
-	Version   = "dev"
-	BuildTime = "unknown"
+	Version    = "dev"
+	BuildTime  = "unknown"
+	ProjectURL = "https://github.com/i2534/notice"
 )
 
 //go:embed web/*
@@ -27,7 +28,7 @@ var webFS embed.FS
 func main() {
 	// 处理 --version 参数
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
-		fmt.Printf("notice-server %s\nBuild Time: %s\n", Version, BuildTime)
+		fmt.Printf("notice-server %s\nBuild Time: %s\nProject: %s\n", Version, BuildTime, ProjectURL)
 		os.Exit(0)
 	}
 
@@ -48,7 +49,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger.Info("启动 Notice Server...")
+	logger.Info("启动 Notice Server...", "version", Version, "build", BuildTime)
+	logger.Info("项目地址", "url", ProjectURL)
 
 	// 创建并启动 MQTT Broker
 	brokerCfg := broker.Config{
