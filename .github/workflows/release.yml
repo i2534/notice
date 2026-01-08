@@ -201,10 +201,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download All Artifacts
+      - name: Download Server Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: server-*
+
+      - name: Download Client Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: client-*
+
+      - name: Download Android Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: android-*
 
       - name: Prepare Release Files
         run: |
