@@ -145,10 +145,54 @@ jobs:
           name: android-apk
           path: dist/notice-android-*.apk
 
+  # 构建并推送 Docker 镜像
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version_short=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Build and Push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/notice-server:${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/notice-server:${{ steps.version.outputs.version_short }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/notice-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # 创建 Release
   release:
     name: Create Release
-    needs: [build-server, build-linux-client, build-android]
+    needs: [build-server, build-linux-client, build-android, build-docker]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -164,15 +208,74 @@ jobs:
 
       - name: Prepare Release Files
         run: |
+          VERSION=${GITHUB_REF#refs/tags/}
           mkdir -p release
           
-          # Server binaries
-          find artifacts -name "notice-server-*" -exec cp {} release/ \;
+          # ========== Server 打包 ==========
+          # Linux amd64
+          mkdir -p pkg/notice-server-${VERSION}-linux-amd64
+          cp artifacts/server-linux-amd64/notice-server-${VERSION}-linux-amd64 pkg/notice-server-${VERSION}-linux-amd64/notice-server
+          cp server/scripts/start.sh pkg/notice-server-${VERSION}-linux-amd64/
+          cp server/README.md pkg/notice-server-${VERSION}-linux-amd64/
+          cp LICENSE pkg/notice-server-${VERSION}-linux-amd64/
+          chmod +x pkg/notice-server-${VERSION}-linux-amd64/start.sh
+          (cd pkg && zip -r ../release/notice-server-${VERSION}-linux-amd64.zip notice-server-${VERSION}-linux-amd64)
           
-          # Linux client binaries
-          find artifacts -name "notice-client-*" -exec cp {} release/ \;
+          # Linux arm64
+          mkdir -p pkg/notice-server-${VERSION}-linux-arm64
+          cp artifacts/server-linux-arm64/notice-server-${VERSION}-linux-arm64 pkg/notice-server-${VERSION}-linux-arm64/notice-server
+          cp server/scripts/start.sh pkg/notice-server-${VERSION}-linux-arm64/
+          cp server/README.md pkg/notice-server-${VERSION}-linux-arm64/
+          cp LICENSE pkg/notice-server-${VERSION}-linux-arm64/
+          chmod +x pkg/notice-server-${VERSION}-linux-arm64/start.sh
+          (cd pkg && zip -r ../release/notice-server-${VERSION}-linux-arm64.zip notice-server-${VERSION}-linux-arm64)
           
-          # Android APK
+          # macOS amd64
+          mkdir -p pkg/notice-server-${VERSION}-darwin-amd64
+          cp artifacts/server-darwin-amd64/notice-server-${VERSION}-darwin-amd64 pkg/notice-server-${VERSION}-darwin-amd64/notice-server
+          cp server/scripts/start.sh pkg/notice-server-${VERSION}-darwin-amd64/
+          cp server/README.md pkg/notice-server-${VERSION}-darwin-amd64/
+          cp LICENSE pkg/notice-server-${VERSION}-darwin-amd64/
+          chmod +x pkg/notice-server-${VERSION}-darwin-amd64/start.sh
+          (cd pkg && zip -r ../release/notice-server-${VERSION}-darwin-amd64.zip notice-server-${VERSION}-darwin-amd64)
+          
+          # macOS arm64
+          mkdir -p pkg/notice-server-${VERSION}-darwin-arm64
+          cp artifacts/server-darwin-arm64/notice-server-${VERSION}-darwin-arm64 pkg/notice-server-${VERSION}-darwin-arm64/notice-server
+          cp server/scripts/start.sh pkg/notice-server-${VERSION}-darwin-arm64/
+          cp server/README.md pkg/notice-server-${VERSION}-darwin-arm64/
+          cp LICENSE pkg/notice-server-${VERSION}-darwin-arm64/
+          chmod +x pkg/notice-server-${VERSION}-darwin-arm64/start.sh
+          (cd pkg && zip -r ../release/notice-server-${VERSION}-darwin-arm64.zip notice-server-${VERSION}-darwin-arm64)
+          
+          # Windows amd64
+          mkdir -p pkg/notice-server-${VERSION}-windows-amd64
+          cp artifacts/server-windows-amd64/notice-server-${VERSION}-windows-amd64.exe pkg/notice-server-${VERSION}-windows-amd64/notice-server.exe
+          cp server/scripts/start.bat pkg/notice-server-${VERSION}-windows-amd64/
+          cp server/README.md pkg/notice-server-${VERSION}-windows-amd64/
+          cp LICENSE pkg/notice-server-${VERSION}-windows-amd64/
+          (cd pkg && zip -r ../release/notice-server-${VERSION}-windows-amd64.zip notice-server-${VERSION}-windows-amd64)
+          
+          # ========== Linux Client 打包 ==========
+          # Linux amd64
+          mkdir -p pkg/notice-client-${VERSION}-linux-amd64
+          cp artifacts/client-linux-amd64/notice-client-${VERSION}-linux-amd64 pkg/notice-client-${VERSION}-linux-amd64/notice-client
+          cp client/linux/scripts/start.sh pkg/notice-client-${VERSION}-linux-amd64/
+          cp client/linux/README.md pkg/notice-client-${VERSION}-linux-amd64/
+          cp LICENSE pkg/notice-client-${VERSION}-linux-amd64/
+          chmod +x pkg/notice-client-${VERSION}-linux-amd64/start.sh
+          (cd pkg && zip -r ../release/notice-client-${VERSION}-linux-amd64.zip notice-client-${VERSION}-linux-amd64)
+          
+          # Linux arm64
+          mkdir -p pkg/notice-client-${VERSION}-linux-arm64
+          cp artifacts/client-linux-arm64/notice-client-${VERSION}-linux-arm64 pkg/notice-client-${VERSION}-linux-arm64/notice-client
+          cp client/linux/scripts/start.sh pkg/notice-client-${VERSION}-linux-arm64/
+          cp client/linux/README.md pkg/notice-client-${VERSION}-linux-arm64/
+          cp LICENSE pkg/notice-client-${VERSION}-linux-arm64/
+          chmod +x pkg/notice-client-${VERSION}-linux-arm64/start.sh
+          (cd pkg && zip -r ../release/notice-client-${VERSION}-linux-arm64.zip notice-client-${VERSION}-linux-arm64)
+          
+          # ========== Android APK ==========
           find artifacts -name "*.apk" -exec cp {} release/ \;
           
           ls -la release/

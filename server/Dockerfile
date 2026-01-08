@@ -16,9 +16,13 @@ RUN go mod download
 # 复制源代码
 COPY . .
 
-# 构建静态链接的二进制文件（注入构建时间）
+# 版本信息（构建时传入）
+ARG VERSION=dev
+ARG BUILD_TIME
+
+# 构建静态链接的二进制文件（注入版本和构建时间）
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w -X 'main.BuildTime=$(date '+%Y-%m-%d %H:%M:%S')'" \
+    -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME:-$(date -u +%Y-%m-%d\ %H:%M:%S)}'" \
     -o notice-server
 
 # 运行阶段
