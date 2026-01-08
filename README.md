@@ -4,22 +4,23 @@
 
 ## AIGC
 
-除了本行是人工添加以外, 其余所有的内容均为 Cursor Agent Auto 模式生成, 并且是通过 chat 交互而得
+除了本行是人工添加以外, 其余所有的内容均为 Cursor Agent Auto 模式生成, 并且是通过简单的 chat 交互而得
 
 ## 架构
 
 ```
-┌─────────────┐     Webhook      ┌─────────────────┐     MQTT      ┌─────────────┐
-│  外部系统    │ ───────────────▶ │  Notice Server  │ ────────────▶ │   客户端     │
-│  (CI/CD等)  │   POST /webhook  │  (Go + MQTT)    │  TCP/WS/WSS  │  (多平台)    │
-└─────────────┘                  └─────────────────┘               └─────────────┘
-                                         │
-                                    内置功能:
-                                  - MQTT Broker
-                                  - Token 认证
-                                  - IP 限流
-                                  - Web 管理界面
-                                  - 日志轮转
++---------------+                  +-------------------+                  +-------------+
+|  External     |   POST /webhook  |   Notice Server   |      MQTT        |   Clients   |
+|  Systems      | ---------------> |   (Go + MQTT)     | ---------------> |  (Mobile/   |
+|  (CI/CD etc)  |                  |                   |   TCP/WS/WSS     |   Desktop)  |
++---------------+                  +-------------------+                  +-------------+
+                                           |
+                                   Built-in Features:
+                                   - MQTT Broker
+                                   - Token Auth
+                                   - Rate Limiting
+                                   - Web Console
+                                   - Log Rotation
 ```
 
 ## 目录结构

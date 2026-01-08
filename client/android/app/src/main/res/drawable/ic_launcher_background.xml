@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- 渐变背景效果 -->
+    <path
+        android:fillColor="#0A0A0F"
+        android:pathData="M0,0h108v108H0z" />
+    
+    <!-- 装饰：左上角光晕 -->
+    <path
+        android:fillColor="#00D4AA"
+        android:fillAlpha="0.15"
+        android:pathData="M-20,-20 A60,60 0 0,1 40,40 A60,60 0 0,1 -20,-20z" />
+    
+    <!-- 装饰：右下角光晕 -->
+    <path
+        android:fillColor="#6366F1"
+        android:fillAlpha="0.12"
+        android:pathData="M128,128 A60,60 0 0,1 68,68 A60,60 0 0,1 128,128z" />
+    
+</vector>

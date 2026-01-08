@@ -14,6 +14,7 @@ client/android/build/
 client/android/app/build/
 client/android/*.apk
 client/android/local.properties
+client/android/key*
 client/android/release.keystore
 !client/android/gradle/wrapper/gradle-wrapper.jar
 

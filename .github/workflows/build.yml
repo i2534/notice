@@ -1,0 +1,91 @@
+name: Build Check
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+  pull_request:
+    branches: [main, master]
+
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  # 检查 Server
+  server:
+    name: Server Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download Dependencies
+        working-directory: server
+        run: go mod download
+
+      - name: Build
+        working-directory: server
+        run: |
+          VERSION="dev-${GITHUB_SHA::7}"
+          BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
+          go build -v -ldflags="-X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" ./...
+
+      - name: Test
+        working-directory: server
+        run: go test -v ./...
+
+  # 检查 Linux Client
+  linux-client:
+    name: Linux Client Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download Dependencies
+        working-directory: client/linux
+        run: go mod download
+
+      - name: Build
+        working-directory: client/linux
+        run: |
+          VERSION="dev-${GITHUB_SHA::7}"
+          BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
+          go build -v -ldflags="-X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" ./...
+
+  # 检查 Android Client
+  android-client:
+    name: Android Client Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant Execute Permission
+        working-directory: client/android
+        run: chmod +x gradlew
+
+      - name: Build
+        working-directory: client/android
+        run: ./gradlew assembleDebug --no-daemon

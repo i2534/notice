@@ -15,8 +15,11 @@ import (
 	"notice-server/webhook"
 )
 
-// 构建时间（通过 -ldflags 注入）
-var BuildTime = "unknown"
+// 版本信息（通过 -ldflags 注入）
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+)
 
 //go:embed web/*
 var webFS embed.FS
@@ -24,7 +27,7 @@ var webFS embed.FS
 func main() {
 	// 处理 --version 参数
 	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
-		fmt.Printf("notice-server\nBuild Time: %s\n", BuildTime)
+		fmt.Printf("notice-server %s\nBuild Time: %s\n", Version, BuildTime)
 		os.Exit(0)
 	}
 

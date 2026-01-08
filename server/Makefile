@@ -107,13 +107,16 @@ run-debug:
 	LOG_MAX_FILES=$(LOG_MAX_FILES) \
 	go run main.go
 
-# 构建时间
+# 版本信息
+VERSION ?= dev
 BUILD_TIME := $(shell date '+%Y-%m-%d %H:%M:%S')
-LDFLAGS := -s -w -X 'main.BuildTime=$(BUILD_TIME)'
+LDFLAGS := -s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'
 
 # 构建
 build:
+	@echo "Building notice-server $(VERSION)..."
 	go build -ldflags="$(LDFLAGS)" -o notice-server
+	@echo "Done: ./notice-server --version"
 
 # 发送简单测试通知
 test-push:

@@ -1,0 +1,188 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 推送 v 开头的 tag 时触发，如 v1.0.0
+
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  # 构建 Server (Go)
+  build-server:
+    name: Build Server
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: ''
+          - goos: linux
+            goarch: arm64
+            suffix: ''
+          - goos: darwin
+            goarch: amd64
+            suffix: ''
+          - goos: darwin
+            goarch: arm64
+            suffix: ''
+          - goos: windows
+            goarch: amd64
+            suffix: '.exe'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build Server
+        working-directory: server
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
+          go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
+            -o ../dist/notice-server-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} .
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/
+
+  # 构建 Linux Client (Go)
+  build-linux-client:
+    name: Build Linux Client
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build Linux Client
+        working-directory: client/linux
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
+          go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
+            -o ../../dist/notice-client-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }} .
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-linux-${{ matrix.goarch }}
+          path: dist/
+
+  # 构建 Android Client
+  build-android:
+    name: Build Android Client
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant Execute Permission
+        working-directory: client/android
+        run: chmod +x gradlew
+
+      - name: Decode Keystore
+        working-directory: client/android
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+
+      - name: Build Release APK
+        working-directory: client/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Rename APK
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          mkdir -p dist
+          cp client/android/app/build/outputs/apk/release/app-release.apk dist/notice-android-${VERSION}.apk
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/notice-android-*.apk
+
+  # 创建 Release
+  release:
+    name: Create Release
+    needs: [build-server, build-linux-client, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare Release Files
+        run: |
+          mkdir -p release
+          
+          # Server binaries
+          find artifacts -name "notice-server-*" -exec cp {} release/ \;
+          
+          # Linux client binaries
+          find artifacts -name "notice-client-*" -exec cp {} release/ \;
+          
+          # Android APK
+          find artifacts -name "*.apk" -exec cp {} release/ \;
+          
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -6,6 +6,11 @@ TOPIC ?= notice/\#
 CLIENT_ID ?= linux-client
 TOKEN ?=
 
+# 版本信息
+VERSION ?= dev
+BUILD_TIME := $(shell date '+%Y-%m-%d %H:%M:%S')
+LDFLAGS := -s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'
+
 # 默认目标
 help:
 	@echo "Notice Client (Linux) Makefile"
@@ -28,7 +33,9 @@ run:
 
 # 构建
 build:
-	go build -o notice-client
+	@echo "Building notice-client $(VERSION)..."
+	go build -ldflags="$(LDFLAGS)" -o notice-client
+	@echo "Done: ./notice-client --version"
 
 # 清理
 clean:

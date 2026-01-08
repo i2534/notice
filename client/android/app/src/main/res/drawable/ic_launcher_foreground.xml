@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- 主体：消息气泡 + 铃铛组合 -->
+    <group
+        android:translateX="24"
+        android:translateY="24">
+        
+        <!-- 消息气泡背景 -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M30,8C16.745,8 6,17.402 6,29C6,35.627 9.368,41.538 14.75,45.5L12,54L22.5,49.25C24.875,49.75 27.375,50 30,50C43.255,50 54,40.598 54,29C54,17.402 43.255,8 30,8Z" />
+        
+        <!-- 铃铛图标 -->
+        <path
+            android:fillColor="#00D4AA"
+            android:pathData="M30,18C30,17.172 30.672,16.5 31.5,16.5C32.328,16.5 33,17.172 33,18V18.85C36.51,19.59 39,22.58 39,26.25V32.25L41.25,34.5V35.625H21.75V34.5L24,32.25V26.25C24,22.58 26.49,19.59 30,18.85V18Z" />
+        
+        <!-- 铃铛底部 -->
+        <path
+            android:fillColor="#00D4AA"
+            android:pathData="M28.5,37.5H34.5C34.5,39.157 33.157,40.5 31.5,40.5C29.843,40.5 28.5,39.157 28.5,37.5Z" />
+        
+        <!-- 通知小红点 -->
+        <path
+            android:fillColor="#FF4757"
+            android:pathData="M40,15 A5,5 0 1,1 40,25 A5,5 0 1,1 40,15z" />
+        
+    </group>
+</vector>

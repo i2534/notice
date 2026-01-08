@@ -57,8 +57,8 @@ docker:
 	@echo "✅ Debug APK 已生成:"
 	@ls -lh app/build/outputs/apk/debug/*.apk
 
-# 签名配置 (通过环境变量传入)
-KEYSTORE_PASSWORD ?= abcdef
+# 签名配置 (通过环境变量传入，默认从 key 文件读取密码)
+KEYSTORE_PASSWORD ?= $(shell cat key 2>/dev/null || echo "")
 KEY_PASSWORD ?= $(KEYSTORE_PASSWORD)
 KEY_ALIAS ?= notice
 
