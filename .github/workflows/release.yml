@@ -326,7 +326,8 @@ jobs:
           ls -la release/
 
       - name: Create Release
-        if: ${{ inputs.create_release != false }}
+        # Tag 触发时始终创建，手动触发时根据 inputs.create_release 决定
+        if: ${{ github.event_name == 'push' || inputs.create_release == true }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
