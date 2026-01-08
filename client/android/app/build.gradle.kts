@@ -3,6 +3,15 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+// 从命令行参数或环境变量获取版本号
+val appVersionName: String = project.findProperty("versionName")?.toString()
+    ?: System.getenv("APP_VERSION_NAME")
+    ?: "1.0.0-dev"
+
+val appVersionCode: Int = project.findProperty("versionCode")?.toString()?.toIntOrNull()
+    ?: System.getenv("APP_VERSION_CODE")?.toIntOrNull()
+    ?: 1
+
 android {
     namespace = "com.github.i2534.notice"
     compileSdk = 35
@@ -12,8 +21,8 @@ android {
         applicationId = "com.github.i2534.notice"
         minSdk = 31  // Android 12
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
