@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Notice</string>
+
+    <!-- 主界面 -->
+    <string name="connection_status">连接状态</string>
+    <string name="status_connected">已连接</string>
+    <string name="status_disconnected">未连接</string>
+    <string name="status_connecting">连接中...</string>
+    <string name="latest_message">最新消息</string>
+    <string name="no_message">暂无消息</string>
+    <string name="btn_connect">连接</string>
+    <string name="btn_disconnect">断开</string>
+    <string name="btn_settings">设置</string>
+    <string name="message_history">消息历史</string>
+    <string name="clear_history">清空</string>
+
+    <!-- 设置界面 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_connection">连接设置</string>
+    <string name="settings_broker_url">Broker 地址</string>
+    <string name="settings_broker_hint">wss://example.com 或 tcp://host:port</string>
+    <string name="settings_client_id">客户端 ID</string>
+    <string name="settings_client_id_hint">留空自动生成</string>
+    <string name="settings_topic">订阅主题</string>
+    <string name="settings_topic_hint">notice/#</string>
+    <string name="settings_auto_connect">开机自动连接</string>
+    <string name="settings_keep_alive">心跳间隔 (秒)</string>
+    <string name="settings_auth_token">认证 Token</string>
+    <string name="settings_auth_token_hint">留空则不认证</string>
+    <string name="settings_save">保存</string>
+
+    <!-- 通知 -->
+    <string name="notification_channel_name">MQTT 服务</string>
+    <string name="notification_channel_desc">保持 MQTT 连接的后台服务</string>
+    <string name="notification_message_channel_name">消息通知</string>
+    <string name="notification_message_channel_desc">接收到的推送消息</string>
+    <string name="notification_title">Notice 运行中</string>
+    <string name="notification_text">正在监听推送消息</string>
+</resources>

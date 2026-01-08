@@ -1,0 +1,25 @@
+# 构建产物
+notice-server
+
+# 日志
+logs/
+*.log
+
+# 编辑器和IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# 文档
+README.md
+

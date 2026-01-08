@@ -1,0 +1,35 @@
+# Server
+server/logs/
+server/notice-server
+
+# Android Client
+client/android/.gradle/
+client/android/.gradle-cache/
+client/android/.android/
+client/android/.kotlin/
+client/android/app/.gradle/
+client/android/*.keystore
+client/android/*.jks
+client/android/build/
+client/android/app/build/
+client/android/*.apk
+client/android/local.properties
+client/android/release.keystore
+!client/android/gradle/wrapper/gradle-wrapper.jar
+
+# Linux Client
+client/linux/notice-client
+
+# General
+*.log
+*.aab
+*.ap_
+*.dex
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Kotlin
+*.kotlin_module

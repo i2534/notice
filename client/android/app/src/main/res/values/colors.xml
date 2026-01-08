@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调 - 青蓝色系 -->
+    <color name="primary">#0D7377</color>
+    <color name="primary_dark">#095052</color>
+    <color name="primary_light">#14A4A8</color>
+
+    <!-- 次要色 - 橙色 -->
+    <color name="secondary">#FF6B35</color>
+    <color name="secondary_dark">#D94F1A</color>
+
+    <!-- 背景色 -->
+    <color name="background">#121212</color>
+    <color name="surface">#1E1E1E</color>
+    <color name="surface_variant">#2D2D2D</color>
+
+    <!-- 文字颜色 -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B3B3B3</color>
+    <color name="text_hint">#666666</color>
+
+    <!-- 状态颜色 -->
+    <color name="status_connected">#4CAF50</color>
+    <color name="status_disconnected">#F44336</color>
+    <color name="status_connecting">#FF9800</color>
+
+    <!-- 基础色 -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

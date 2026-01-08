@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Notice - 消息中心</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a24;
+            --accent: #00d4aa;
+            --accent-dim: #00d4aa33;
+            --text-primary: #e8e8e8;
+            --text-secondary: #888;
+            --border: #2a2a3a;
+            --success: #00d4aa;
+            --error: #ff4757;
+            --warning: #ffa502;
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            background-image:
+                radial-gradient(ellipse at top left, #00d4aa08 0%, transparent 50%),
+                radial-gradient(ellipse at bottom right, #6366f108 0%, transparent 50%);
+        }
+
+        /* 全屏容器 */
+        .app {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 顶部栏 */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.6rem 1rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.3rem 0.6rem;
+            background: var(--bg-secondary);
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .server-stats {
+            display: flex;
+            gap: 0.75rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* 认证区域 */
+        .auth-section {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 360px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .auth-card h2 {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        /* 主内容区 */
+        .main-content {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .main-content.active {
+            display: flex;
+        }
+
+        /* 标签页导航 - 更紧凑 */
+        .tabs {
+            display: flex;
+            gap: 0;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 0.6rem 1rem;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+
+        /* 标签内容 */
+        .tab-content {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .tab-content.active {
+            display: flex;
+        }
+
+        /* 连接栏 - 内联紧凑 */
+        .connection-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .connection-bar input {
+            flex: 1;
+            min-width: 0;
+            padding: 0.4rem 0.6rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        .connection-bar input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .connection-bar input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .connection-bar label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.3rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            background: var(--bg-card);
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--error);
+        }
+
+        .status-dot.connected {
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+        }
+
+        /* 消息头 */
+        .messages-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.4rem 0.75rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .messages-header h3 {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .messages-header .meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* 消息列表 - 占满剩余空间 */
+        .messages-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .message-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.6rem 0.75rem;
+            margin-bottom: 0.4rem;
+            animation: slideIn 0.2s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.25rem;
+        }
+
+        .message-title {
+            font-weight: 600;
+            color: var(--accent);
+            font-size: 0.9rem;
+        }
+
+        .message-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+        }
+
+        .message-content {
+            color: var(--text-primary);
+            line-height: 1.4;
+            font-size: 0.85rem;
+            word-break: break-word;
+        }
+
+        .message-topic {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            margin-top: 0.3rem;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 0.75rem;
+            opacity: 0.3;
+        }
+
+        /* 发送消息面板 */
+        .send-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            overflow: auto;
+        }
+
+        .send-form {
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin-bottom: 0.75rem;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        label {
+            display: block;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 0.6rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+
+        /* 按钮 */
+        button,
+        .btn {
+            padding: 0.5rem 1rem;
+            background: var(--accent);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.8rem;
+        }
+
+        button:hover,
+        .btn:hover {
+            filter: brightness(1.1);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button.secondary {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+
+        button.secondary:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+        }
+
+        button.danger {
+            background: var(--error);
+        }
+
+        button.small {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.7rem;
+        }
+
+        button.full {
+            width: 100%;
+        }
+
+        /* 响应框 */
+        .response-box {
+            margin-top: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            display: none;
+        }
+
+        .response-box.success {
+            border-color: var(--success);
+        }
+
+        .response-box.error {
+            border-color: var(--error);
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            padding: 0.6rem 1rem;
+            border-radius: 6px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            animation: slideIn 0.2s ease;
+            z-index: 1000;
+        }
+
+        .toast.success {
+            border-color: var(--success);
+        }
+
+        .toast.error {
+            border-color: var(--error);
+        }
+
+        /* 响应式 */
+        @media (max-width: 640px) {
+            .topbar {
+                padding: 0.5rem;
+            }
+
+            .server-stats {
+                display: none;
+            }
+
+            .connection-bar {
+                flex-wrap: wrap;
+            }
+
+            .connection-bar input {
+                flex: 1 1 100%;
+            }
+
+            .connection-bar input:first-of-type {
+                flex: 2;
+            }
+
+            .connection-bar input:last-of-type {
+                flex: 1;
+            }
+
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+        <!-- 顶部栏 -->
+        <div class="topbar">
+            <div class="logo">📡 Notice</div>
+            <div class="topbar-right" id="topbarRight" style="display: none;">
+                <div class="server-stats" id="serverStats"></div>
+                <div class="user-badge">
+                    <span>🔑</span>
+                    <span id="tokenDisplay">-</span>
+                </div>
+                <button class="secondary small" onclick="logout()">退出</button>
+            </div>
+        </div>
+
+        <!-- 认证区域 -->
+        <div class="auth-section" id="authSection">
+            <div class="auth-card">
+                <h2>🔐 认证</h2>
+                <div class="form-group">
+                    <label>Token</label>
+                    <input type="password" id="authTokenInput" placeholder="请输入认证 Token">
+                </div>
+                <button class="full" onclick="authenticate()">验证并进入</button>
+                <div class="response-box" id="authResponse"></div>
+            </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="main-content" id="mainContent">
+            <!-- 标签页 -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('receive')">📥 接收消息</button>
+                <button class="tab-btn" onclick="switchTab('send')">📤 发送消息</button>
+            </div>
+
+            <!-- 接收消息标签页 -->
+            <div class="tab-content active" id="tab-receive">
+                <!-- 连接栏 -->
+                <div class="connection-bar">
+                    <label>WS地址</label>
+                    <input type="text" id="brokerUrl" placeholder="wss://mqtt.example.com">
+                    <label>主题</label>
+                    <input type="text" id="topic" value="notice/#" style="max-width: 120px;">
+                    <div class="status-indicator">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span id="statusText">离线</span>
+                    </div>
+                    <button id="connectBtn" onclick="toggleConnection()">连接</button>
+                </div>
+
+                <!-- 消息头 -->
+                <div class="messages-header">
+                    <h3>📨 消息</h3>
+                    <div class="meta">
+                        <span id="messageCount">0 条</span>
+                        <button class="secondary small" onclick="clearMessages()">清空</button>
+                    </div>
+                </div>
+
+                <!-- 消息列表 -->
+                <div class="messages-list" id="messagesList">
+                    <div class="empty-state" id="emptyState">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <p>等待消息...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 发送消息标签页 -->
+            <div class="tab-content" id="tab-send">
+                <div class="send-panel">
+                    <div class="send-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>标题</label>
+                                <input type="text" id="sendTitle" placeholder="消息标题">
+                            </div>
+                            <div class="form-group">
+                                <label>主题 (可选)</label>
+                                <input type="text" id="sendTopic" placeholder="留空使用默认">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>内容</label>
+                            <textarea id="sendContent" placeholder="消息内容..."></textarea>
+                        </div>
+                        <button onclick="sendMessage()" id="sendBtn">发送消息</button>
+                        <span
+                            style="margin-left: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">Ctrl+Enter</span>
+                        <div class="response-box" id="sendResponse"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let client = null;
+        let messageCount = 0;
+        let currentToken = '';
+        let clientId = '';
+
+        function generateClientId() {
+            return 'web-' + Math.random().toString(16).substr(2, 8);
+        }
+
+        window.onload = function () {
+            clientId = localStorage.getItem('mqttClientId');
+            if (!clientId) {
+                clientId = generateClientId();
+                localStorage.setItem('mqttClientId', clientId);
+            }
+
+            const savedBrokerUrl = localStorage.getItem('brokerUrl');
+            document.getElementById('brokerUrl').value = savedBrokerUrl || 'wss://mqtt.example.com';
+
+            const savedTopic = localStorage.getItem('mqttTopic');
+            if (savedTopic) {
+                document.getElementById('topic').value = savedTopic;
+            }
+
+            const savedToken = localStorage.getItem('authToken');
+            if (savedToken) {
+                document.getElementById('authTokenInput').value = savedToken;
+                authenticate();
+            }
+        };
+
+        async function authenticate() {
+            const token = document.getElementById('authTokenInput').value.trim();
+
+            if (!token) {
+                showAuthError('请输入 Token');
+                return;
+            }
+
+            try {
+                const res = await fetch('/webhook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ content: '__auth_check__' })
+                });
+
+                if (res.status === 429) {
+                    showAuthError('请求过于频繁，请稍后再试');
+                    return;
+                }
+
+                if (res.status === 401) {
+                    const data = await res.json().catch(() => ({}));
+                    showAuthError(data.message || 'Token 验证失败');
+                    return;
+                }
+
+                currentToken = token;
+                localStorage.setItem('authToken', token);
+
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('mainContent').classList.add('active');
+                document.getElementById('topbarRight').style.display = 'flex';
+                document.getElementById('tokenDisplay').textContent = token.substring(0, 6) + '**';
+
+                loadServerStatus();
+                showToast('认证成功', 'success');
+
+            } catch (e) {
+                showAuthError('连接失败: ' + e.message);
+            }
+        }
+
+        function showAuthError(msg) {
+            const box = document.getElementById('authResponse');
+            box.style.display = 'block';
+            box.className = 'response-box error';
+            box.textContent = '❌ ' + msg;
+        }
+
+        function logout() {
+            currentToken = '';
+            localStorage.removeItem('authToken');
+            if (client) {
+                client.end();
+                client = null;
+            }
+            document.getElementById('mainContent').classList.remove('active');
+            document.getElementById('authSection').style.display = 'flex';
+            document.getElementById('topbarRight').style.display = 'none';
+            document.getElementById('authResponse').style.display = 'none';
+            updateStatus('disconnected', '离线');
+        }
+
+        async function loadServerStatus() {
+            try {
+                const res = await fetch('/status');
+                const data = await res.json();
+                document.getElementById('serverStats').innerHTML = `
+                    <span>📊 ${data.status}</span>
+                    <span>👥 ${data.clients}</span>
+                `;
+            } catch (e) {
+                document.getElementById('serverStats').innerHTML = '<span style="color: var(--error)">⚠️</span>';
+            }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById('tab-' + tab).classList.add('active');
+        }
+
+        function toggleConnection() {
+            if (client && client.connected) {
+                disconnect();
+            } else {
+                connect();
+            }
+        }
+
+        function connect() {
+            const brokerUrl = document.getElementById('brokerUrl').value;
+            const topic = document.getElementById('topic').value;
+
+            updateStatus('connecting', '连接中');
+
+            client = mqtt.connect(brokerUrl, {
+                clientId: clientId,
+                username: currentToken,
+                reconnectPeriod: 5000,
+            });
+
+            client.on('connect', () => {
+                updateStatus('connected', '在线');
+                localStorage.setItem('brokerUrl', brokerUrl);
+                localStorage.setItem('mqttTopic', topic);
+                localStorage.setItem('authToken', currentToken);
+
+                client.subscribe(topic, (err) => {
+                    if (err) showToast('订阅失败: ' + err.message, 'error');
+                });
+                loadServerStatus();
+            });
+
+            client.on('message', (topic, payload) => {
+                try {
+                    const msg = JSON.parse(payload.toString());
+                    if (msg.content === '__auth_check__') return;
+                    addMessage(topic, msg);
+                } catch (e) {
+                    addMessage(topic, { content: payload.toString() });
+                }
+            });
+
+            client.on('error', (err) => {
+                updateStatus('error', '错误');
+                showToast('MQTT: ' + err.message, 'error');
+
+                const errMsg = (err.message || '').toLowerCase();
+                if (errMsg.includes('not authorized') || errMsg.includes('bad user') || errMsg.includes('auth')) {
+                    localStorage.removeItem('authToken');
+                    showToast('认证失败', 'error');
+                    logout();
+                }
+            });
+
+            client.on('close', () => {
+                updateStatus('disconnected', '离线');
+            });
+
+            client.on('reconnect', () => {
+                updateStatus('connecting', '重连');
+            });
+        }
+
+        function disconnect() {
+            if (client) {
+                client.end();
+                client = null;
+            }
+            updateStatus('disconnected', '离线');
+        }
+
+        function updateStatus(status, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            const btn = document.getElementById('connectBtn');
+
+            statusText.textContent = text;
+            dot.className = 'status-dot';
+
+            if (status === 'connected') {
+                dot.classList.add('connected');
+                btn.textContent = '断开';
+                btn.classList.add('danger');
+            } else {
+                btn.textContent = '连接';
+                btn.classList.remove('danger');
+            }
+        }
+
+        function addMessage(topic, msg) {
+            const list = document.getElementById('messagesList');
+            const emptyState = document.getElementById('emptyState');
+
+            if (emptyState) emptyState.style.display = 'none';
+
+            const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
+            const title = msg.title || '通知';
+            const content = msg.content || JSON.stringify(msg);
+
+            const item = document.createElement('div');
+            item.className = 'message-item';
+            item.innerHTML = `
+                <div class="message-header">
+                    <span class="message-title">${escapeHtml(title)}</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${escapeHtml(content)}</div>
+                <div class="message-topic">${escapeHtml(topic)}</div>
+            `;
+
+            list.insertBefore(item, list.firstChild);
+            messageCount++;
+            document.getElementById('messageCount').textContent = messageCount + ' 条';
+
+            if (Notification.permission === 'granted') {
+                new Notification(title, { body: content });
+            }
+        }
+
+        function clearMessages() {
+            const list = document.getElementById('messagesList');
+            list.innerHTML = `
+                <div class="empty-state" id="emptyState">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <p>等待消息...</p>
+                </div>
+            `;
+            messageCount = 0;
+            document.getElementById('messageCount').textContent = '0 条';
+        }
+
+        async function sendMessage() {
+            const title = document.getElementById('sendTitle').value.trim();
+            const content = document.getElementById('sendContent').value.trim();
+            const topic = document.getElementById('sendTopic').value.trim();
+
+            if (!content) {
+                showToast('请输入消息内容', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('sendBtn');
+            const responseBox = document.getElementById('sendResponse');
+
+            btn.disabled = true;
+            btn.textContent = '发送中...';
+
+            try {
+                const body = { title: title || '通知', content };
+                if (topic) body.topic = topic;
+
+                const res = await fetch('/webhook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + currentToken
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                responseBox.style.display = 'block';
+
+                if (res.status === 429) {
+                    responseBox.className = 'response-box error';
+                    responseBox.textContent = '❌ 请求过于频繁';
+                    return;
+                }
+
+                if (res.status === 401) {
+                    responseBox.className = 'response-box error';
+                    responseBox.textContent = '❌ 认证失败';
+                    logout();
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (data.success) {
+                    responseBox.className = 'response-box success';
+                    responseBox.textContent = `✅ ${data.message} (${data.clients} 客户端)`;
+                    showToast('发送成功', 'success');
+
+                    document.getElementById('sendTitle').value = '';
+                    document.getElementById('sendContent').value = '';
+
+                    loadServerStatus();
+                } else {
+                    responseBox.className = 'response-box error';
+                    responseBox.textContent = `❌ ${data.message}`;
+                }
+            } catch (e) {
+                responseBox.style.display = 'block';
+                responseBox.className = 'response-box error';
+                responseBox.textContent = `❌ ${e.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '发送消息';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                if (document.getElementById('tab-send').classList.contains('active')) {
+                    sendMessage();
+                }
+            }
+        });
+
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    </script>
+</body>
+
+</html>
