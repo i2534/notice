@@ -29,7 +29,8 @@
 notice/
 ├── server/              # 服务端 (Go)
 │   ├── broker/          # 内置 MQTT Broker
-│   ├── webhook/         # HTTP Webhook 处理
+│   ├── handlers/        # HTTP 处理器 (Webhook 等)
+│   ├── store/           # 消息持久化存储
 │   ├── ratelimit/       # IP 限流
 │   ├── logger/          # 日志系统（支持轮转）
 │   ├── web/             # Web 管理界面

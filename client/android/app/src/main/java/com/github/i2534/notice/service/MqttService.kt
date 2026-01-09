@@ -311,13 +311,11 @@ class MqttService : Service() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(message.content))
             .setNumber(unreadNum)  // 设置桌面图标角标数量
             .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-            // 悬浮通知必要设置
+            // 悬浮通知设置（几秒后自动消失）
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            // 全屏意图（用于触发悬浮通知）
-            .setFullScreenIntent(pendingIntent, true)
             .build()
 
         try {
@@ -340,9 +338,8 @@ class MqttService : Service() {
                 val method = extraNotification.javaClass.getDeclaredMethod("setMessageCount", Int::class.javaPrimitiveType)
                 method.invoke(extraNotification, count)
             }
-        } catch (e: Exception) {
-            // 非小米手机或不支持，忽略
-            AppLogger.d(TAG, "MIUI badge not supported: ${e.message}")
+        } catch (_: Exception) {
+            // 非小米手机或不支持，静默忽略
         }
     }
 

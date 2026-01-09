@@ -268,6 +268,9 @@ func Init(cfg Config) (*slog.Logger, error) {
 		handler = &multiHandler{handlers: handlers}
 	}
 
+	// 添加过滤层（过滤 mochi-mqtt badger hook 的 DEBUG 日志）
+	handler = &filterHandler{inner: handler}
+
 	defaultLogger = slog.New(handler)
 	slog.SetDefault(defaultLogger)
 
@@ -423,6 +426,46 @@ func (h *multiHandler) WithGroup(name string) slog.Handler {
 		handlers[i] = handler.WithGroup(name)
 	}
 	return &multiHandler{handlers: handlers}
+}
+
+// filterHandler 过滤特定来源的 DEBUG 日志
+type filterHandler struct {
+	inner      slog.Handler
+	isBadgerDB bool // 标记是否为 badger-db hook 的日志器
+}
+
+func (h *filterHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	// 如果是 badger-db hook，过滤 DEBUG 日志
+	if h.isBadgerDB && level == slog.LevelDebug {
+		return false
+	}
+	return h.inner.Enabled(ctx, level)
+}
+
+func (h *filterHandler) Handle(ctx context.Context, record slog.Record) error {
+	return h.inner.Handle(ctx, record)
+}
+
+func (h *filterHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	isBadgerDB := h.isBadgerDB
+	// 检查属性中是否有 hook=badger-db
+	for _, a := range attrs {
+		if a.Key == "hook" && a.Value.String() == "badger-db" {
+			isBadgerDB = true
+			break
+		}
+	}
+	return &filterHandler{
+		inner:      h.inner.WithAttrs(attrs),
+		isBadgerDB: isBadgerDB,
+	}
+}
+
+func (h *filterHandler) WithGroup(name string) slog.Handler {
+	return &filterHandler{
+		inner:      h.inner.WithGroup(name),
+		isBadgerDB: h.isBadgerDB,
+	}
 }
 
 // LevelOff 关闭日志输出

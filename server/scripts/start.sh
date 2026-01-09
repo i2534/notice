@@ -11,22 +11,25 @@ CONFIG_FILE="${CONFIG_FILE:-./config.yaml}"
 show_help() {
     echo "Notice Server 启动脚本"
     echo ""
-    echo "使用方法: $0 [选项]"
+    echo "使用方法: $0 [命令] [选项]"
+    echo ""
+    echo "命令:"
+    echo "  start       启动服务 (默认)"
+    echo "  stop        停止服务"
+    echo "  restart     重启服务"
+    echo "  status      查看运行状态"
     echo ""
     echo "选项:"
     echo "  -c FILE     指定配置文件 (默认: config.yaml)"
     echo "  -d          后台运行"
-    echo "  -s          停止服务"
-    echo "  -r          重启服务"
-    echo "  --status    查看运行状态"
     echo "  -h          显示此帮助"
     echo ""
     echo "示例:"
     echo "  $0                    # 前台运行"
     echo "  $0 -d                 # 后台运行"
     echo "  $0 -c prod.yaml -d    # 使用指定配置后台运行"
-    echo "  $0 -s                 # 停止服务"
-    echo "  $0 -r                 # 重启服务"
+    echo "  $0 stop               # 停止服务"
+    echo "  $0 restart -d         # 后台重启"
     echo ""
     echo "配置说明请参考 config.yaml 文件"
 }
@@ -115,9 +118,10 @@ while [ $# -gt 0 ]; do
             shift 2
             ;;
         -d) DAEMON=true; shift ;;
-        -s) ACTION="stop"; shift ;;
-        -r) ACTION="restart"; shift ;;
-        --status) ACTION="status"; shift ;;
+        -s|stop) ACTION="stop"; shift ;;
+        -r|restart) ACTION="restart"; shift ;;
+        --status|status) ACTION="status"; shift ;;
+        start) shift ;;  # 默认就是 start，忽略
         -h|--help) show_help; exit 0 ;;
         *) echo "未知选项: $1"; show_help; exit 1 ;;
     esac

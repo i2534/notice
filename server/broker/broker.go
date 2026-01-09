@@ -3,8 +3,10 @@ package broker
 import (
 	"encoding/json"
 	"math"
+	"path/filepath"
 	"time"
 
+	badgerdb "github.com/dgraph-io/badger/v4"
 	mqtt "github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/hooks/storage/badger"
 	"github.com/mochi-mqtt/server/v2/listeners"
@@ -12,6 +14,11 @@ import (
 
 	"notice-server/logger"
 	"notice-server/store"
+)
+
+const (
+	// mqttStorageDir MQTT 持久化存储子目录
+	mqttStorageDir = "mqtt"
 )
 
 // Message 推送消息结构
@@ -76,12 +83,17 @@ func (b *Broker) Start(tcpAddr, wsAddr string) error {
 
 	// 添加持久化存储钩子（必须最先添加，以便加载已保存的会话和订阅）
 	if b.config.StorageEnabled && b.config.StoragePath != "" {
+		mqttPath := filepath.Join(b.config.StoragePath, mqttStorageDir)
+		// 配置 BadgerDB 选项，设置日志级别为 WARNING 以减少 DEBUG 输出
+		badgerOpts := badgerdb.DefaultOptions(mqttPath).
+			WithLoggingLevel(badgerdb.INFO)
 		if err := b.server.AddHook(new(badger.Hook), &badger.Options{
-			Path: b.config.StoragePath + "/mqtt",
+			Path:    mqttPath,
+			Options: &badgerOpts,
 		}); err != nil {
 			return err
 		}
-		logger.Info("MQTT 持久化存储已启用", "path", b.config.StoragePath+"/mqtt")
+		logger.Info("MQTT 持久化存储已启用", "path", mqttPath)
 	}
 
 	// 启用 Token 认证

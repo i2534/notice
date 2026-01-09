@@ -36,12 +36,15 @@ server/
 │   └── config_test.go   # 配置单元测试
 ├── broker/
 │   └── broker.go        # 内置 MQTT Broker
-├── webhook/
-│   └── handler.go       # Webhook 处理器
+├── handlers/
+│   └── handlers.go      # HTTP 处理器（Webhook、消息历史等）
+├── store/
+│   ├── store.go         # 消息持久化存储
+│   └── store_test.go    # 存储单元测试
 ├── ratelimit/
 │   └── ratelimit.go     # IP 限流
 ├── logger/
-│   └── logger.go        # 日志系统（轮转）
+│   └── logger.go        # 日志系统（轮转 + 过滤）
 ├── web/
 │   └── index.html       # Web 管理界面（嵌入二进制）
 ├── scripts/
@@ -154,6 +157,8 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | 日志 | LOG_PRETTY | true | 控制台美化输出 |
 | 日志 | LOG_ROTATE_DAYS | 1 | 日志轮转天数 |
 | 日志 | LOG_MAX_FILES | 7 | 保留日志文件数 |
+| 存储 | STORAGE_ENABLED | true | 是否启用持久化存储 |
+| 存储 | STORAGE_PATH | data | 数据存储路径 |
 
 ## API 端点
 
@@ -234,7 +239,7 @@ mosquitto_sub -h localhost -p 9091 -t notice/# -u "<token>"
 - 会话保持时间：默认 1 天（MQTT_SESSION_EXPIRY）
 - 消息保留时间：默认 1 天（MQTT_MESSAGE_EXPIRY）
 
-**注意**：服务器重启后离线消息会丢失（内存存储）。
+启用持久化存储后（默认启用），服务器重启不会丢失离线消息。
 
 ### 示例代码
 
@@ -324,9 +329,10 @@ docker run -d --name notice-server \
 # Linux
 ./scripts/start.sh           # 前台运行
 ./scripts/start.sh -d        # 后台运行
-./scripts/start.sh -s        # 停止
-./scripts/start.sh -r        # 重启
-./scripts/start.sh --status  # 查看状态
+./scripts/start.sh stop      # 停止
+./scripts/start.sh restart   # 重启
+./scripts/start.sh status    # 查看状态
+./scripts/start.sh -c config.yaml -d  # 指定配置后台运行
 
 # Windows
 scripts\start.bat

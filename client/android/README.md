@@ -222,10 +222,13 @@ app/src/main/java/com/github/i2534/notice/
 │   └── MqttService.kt        # MQTT 后台服务
 ├── receiver/
 │   └── BootReceiver.kt       # 开机启动接收器
+├── util/
+│   └── AppLogger.kt          # 应用日志（持久化 + 轮转）
 └── ui/
     ├── MainActivity.kt       # 主界面
     ├── SettingsActivity.kt   # 设置界面
     ├── AboutActivity.kt      # 关于页面
+    ├── LogsActivity.kt       # 日志查看页面
     └── MessageAdapter.kt     # 消息列表适配器
 ```
 
