@@ -44,6 +44,21 @@
     <string name="battery_optimization_settings">去设置</string>
     <string name="battery_optimization_later">稍后</string>
 
+    <!-- 日志页面 -->
+    <string name="logs_title">日志</string>
+    <string name="logs_title_format">日志 (%1$d天)</string>
+    <string name="logs_empty">暂无日志</string>
+    <string name="logs_clear">清空</string>
+    <string name="logs_copy">复制</string>
+    <string name="logs_copied">日志已复制到剪贴板</string>
+    <string name="logs_days">天数</string>
+    <string name="logs_select_days">选择天数</string>
+    <string-array name="logs_days_options">
+        <item>今天</item>
+        <item>最近 3 天</item>
+        <item>最近 7 天</item>
+    </string-array>
+
     <!-- 关于页面 -->
     <string name="about_title">关于</string>
     <string name="about_version_format">版本 %1$s</string>

@@ -1,5 +1,9 @@
+# VSCode
+.vscode/
+
 # Server
 server/logs/
+server/data/
 server/notice-server
 
 # Android Client

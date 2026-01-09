@@ -8,7 +8,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import android.os.PowerManager
-import android.util.Log
+import com.github.i2534.notice.util.AppLogger
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.*
@@ -75,7 +75,7 @@ class MqttService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "MqttService created")
+        AppLogger.d(TAG, "MqttService created")
         acquireWakeLock()
     }
 
@@ -106,7 +106,7 @@ class MqttService : Service() {
                 setReferenceCounted(false)
                 acquire()
             }
-            Log.d(TAG, "WakeLock acquired")
+            AppLogger.d(TAG, "WakeLock acquired")
         }
     }
 
@@ -114,7 +114,7 @@ class MqttService : Service() {
         wakeLock?.let {
             if (it.isHeld) {
                 it.release()
-                Log.d(TAG, "WakeLock released")
+                AppLogger.d(TAG, "WakeLock released")
             }
         }
         wakeLock = null
@@ -136,7 +136,7 @@ class MqttService : Service() {
 
     private fun scheduleReconnect() {
         if (userDisconnected) {
-            Log.d(TAG, "User disconnected, skip reconnect")
+            AppLogger.d(TAG, "User disconnected, skip reconnect")
             return
         }
         
@@ -146,7 +146,7 @@ class MqttService : Service() {
             val delay = minOf(baseReconnectDelay * (1L shl reconnectAttempt), maxReconnectDelay)
             reconnectAttempt++
             
-            Log.d(TAG, "Reconnecting in ${delay/1000}s (attempt $reconnectAttempt)")
+            AppLogger.d(TAG, "Reconnecting in ${delay/1000}s (attempt $reconnectAttempt)")
             delay(delay)
             
             if (_connectionState.value == ConnectionState.DISCONNECTED && !userDisconnected) {
@@ -157,7 +157,7 @@ class MqttService : Service() {
 
     private suspend fun connectMqtt(settings: MqttSettings) {
         _connectionState.value = ConnectionState.CONNECTING
-        Log.d(TAG, "Connecting to ${settings.brokerUrl}")
+        AppLogger.d(TAG, "Connecting to ${settings.brokerUrl}")
 
         try {
             // 断开旧连接
@@ -174,7 +174,7 @@ class MqttService : Service() {
                 clientId = settings.getEffectiveClientId(generateNew = true)
                 // 保存生成的 clientId
                 configStore.save(settings.copy(clientId = clientId))
-                Log.d(TAG, "Generated and saved new clientId: $clientId")
+                AppLogger.d(TAG, "Generated and saved new clientId: $clientId")
             }
 
             // 创建新客户端
@@ -186,7 +186,7 @@ class MqttService : Service() {
 
             mqttClient?.setCallback(object : MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
-                    Log.w(TAG, "Connection lost: ${cause?.message}")
+                    AppLogger.w(TAG, "Connection lost: ${cause?.message}")
                     _connectionState.value = ConnectionState.DISCONNECTED
                     scheduleReconnect()
                 }
@@ -210,7 +210,7 @@ class MqttService : Service() {
                 // Token 认证 (使用 username 传递 token)
                 if (settings.hasAuth()) {
                     userName = settings.authToken
-                    Log.d(TAG, "Using token authentication")
+                    AppLogger.d(TAG, "Using token authentication")
                 }
             }
 
@@ -222,10 +222,10 @@ class MqttService : Service() {
 
             _connectionState.value = ConnectionState.CONNECTED
             reconnectAttempt = 0  // 连接成功，重置重连计数
-            Log.d(TAG, "Connected and subscribed to ${settings.topic}")
+            AppLogger.d(TAG, "Connected and subscribed to ${settings.topic}")
 
         } catch (e: Exception) {
-            Log.e(TAG, "Connection failed: ${e.message}", e)
+            AppLogger.e(TAG, "Connection failed: ${e.message}", e)
             _connectionState.value = ConnectionState.DISCONNECTED
             scheduleReconnect()  // 连接失败，安排重连
         }
@@ -246,16 +246,16 @@ class MqttService : Service() {
                 }
                 mqttClient = null
                 _connectionState.value = ConnectionState.DISCONNECTED
-                Log.d(TAG, "Disconnected")
+                AppLogger.d(TAG, "Disconnected")
             } catch (e: Exception) {
-                Log.e(TAG, "Disconnect error: ${e.message}")
+                AppLogger.e(TAG, "Disconnect error: ${e.message}")
             }
         }
     }
 
     private fun handleMessage(topic: String, payload: ByteArray) {
         val message = NoticeMessage.parse(topic, payload)
-        Log.d(TAG, "Message received: ${message.title}")
+        AppLogger.d(TAG, "Message received: ${message.title}")
 
         // 更新消息列表
         _messages.update { current ->
@@ -327,7 +327,7 @@ class MqttService : Service() {
             NotificationManagerCompat.from(this)
                 .notify(messageIdCounter.incrementAndGet(), notification)
         } catch (e: SecurityException) {
-            Log.w(TAG, "No notification permission")
+            AppLogger.w(TAG, "No notification permission")
         }
     }
 
@@ -342,7 +342,7 @@ class MqttService : Service() {
             }
         } catch (e: Exception) {
             // 非小米手机或不支持，忽略
-            Log.d(TAG, "MIUI badge not supported: ${e.message}")
+            AppLogger.d(TAG, "MIUI badge not supported: ${e.message}")
         }
     }
 

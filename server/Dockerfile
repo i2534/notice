@@ -33,24 +33,22 @@ WORKDIR /app
 # 安装时区数据和 CA 证书
 RUN apk add --no-cache ca-certificates tzdata
 
-# 从构建阶段复制二进制文件
+# 从构建阶段复制二进制文件和默认配置
 COPY --from=builder /app/notice-server .
+COPY --from=builder /app/config.yaml .
 
-# 创建日志目录
-RUN mkdir -p /app/logs
+# 创建日志和数据目录
+RUN mkdir -p /app/logs /app/data
 
-# 设置环境变量默认值
-ENV HTTP_PORT=9090 \
-    MQTT_TCP_PORT=9091 \
-    MQTT_WS_PORT=9092 \
-    LOG_CONSOLE_LEVEL=info \
-    LOG_FILE_LEVEL=debug \
-    LOG_FILE_PATH=/app/logs/server.log \
-    LOG_PRETTY=false
+# 声明数据卷（可挂载）
+VOLUME ["/app/data", "/app/logs"]
 
 # 暴露端口
 EXPOSE 9090 9091 9092
 
-# 运行
-ENTRYPOINT ["./notice-server"]
-
+# 使用方式:
+#   1. 挂载数据目录: -v /path/to/data:/app/data
+#   2. 挂载日志目录: -v /path/to/logs:/app/logs
+#   3. 挂载自定义配置: -v /path/to/config.yaml:/app/config.yaml
+#   4. 环境变量覆盖: -e AUTH_TOKEN=xxx -e HTTP_PORT=8080
+ENTRYPOINT ["./notice-server", "-c", "config.yaml"]

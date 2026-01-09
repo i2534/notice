@@ -1,4 +1,4 @@
-.PHONY: run build clean help
+.PHONY: run build clean help stop
 
 # 配置
 BROKER ?= tcp://localhost:9091
@@ -27,15 +27,20 @@ help:
 	@echo "  make run TOPIC=custom/#"
 	@echo "  make run TOKEN=your-secret-token         # 带认证"
 
-# 运行
+# 运行（开发模式）
 run:
-	go run main.go -broker=$(BROKER) -topic=$(TOPIC) -id=$(CLIENT_ID) $(if $(TOKEN),-token=$(TOKEN),)
+	@go build -o /tmp/notice-client-dev main.go && \
+	exec /tmp/notice-client-dev -broker=$(BROKER) -topic=$(TOPIC) -id=$(CLIENT_ID) $(if $(TOKEN),-token=$(TOKEN),)
 
 # 构建
 build:
 	@echo "Building notice-client $(VERSION)..."
 	go build -ldflags="$(LDFLAGS)" -o notice-client
 	@echo "Done: ./notice-client --version"
+
+# 停止客户端
+stop:
+	@pkill -f "notice-client.*-id=$(CLIENT_ID)" 2>/dev/null && echo "客户端已停止" || echo "客户端未运行"
 
 # 清理
 clean:

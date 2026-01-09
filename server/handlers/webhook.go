@@ -1,6 +1,7 @@
-package webhook
+package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -27,22 +28,22 @@ type Response struct {
 	Clients int    `json:"clients,omitempty"` // 当前连接的客户端数
 }
 
-// Handler Webhook 处理器
-type Handler struct {
+// WebhookHandler Webhook 处理器
+type WebhookHandler struct {
 	broker  *broker.Broker
 	config  *config.Config
 	limiter *ratelimit.Limiter
 }
 
-// NewHandler 创建新的 Webhook 处理器
-func NewHandler(b *broker.Broker, cfg *config.Config) *Handler {
+// NewWebhookHandler 创建新的 Webhook 处理器
+func NewWebhookHandler(b *broker.Broker, cfg *config.Config) *WebhookHandler {
 	limiter := ratelimit.New(ratelimit.Config{
-		MaxFailures: cfg.RateLimitMaxFailures,
-		BlockTime:   time.Duration(cfg.RateLimitBlockTime) * time.Second,
-		WindowTime:  time.Duration(cfg.RateLimitWindowTime) * time.Second,
+		MaxFailures: cfg.RateLimit.MaxFailures,
+		BlockTime:   time.Duration(cfg.RateLimit.BlockTime) * time.Second,
+		WindowTime:  time.Duration(cfg.RateLimit.WindowTime) * time.Second,
 	})
 
-	return &Handler{
+	return &WebhookHandler{
 		broker:  b,
 		config:  cfg,
 		limiter: limiter,
@@ -50,7 +51,7 @@ func NewHandler(b *broker.Broker, cfg *config.Config) *Handler {
 }
 
 // ServeHTTP 处理 Webhook 请求
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	clientIP := ratelimit.GetClientIP(r)
@@ -70,7 +71,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Token 校验
-	if !h.validateToken(r) {
+	if !ValidateToken(r, h.config.Auth.Token) {
 		h.limiter.RecordFailure(clientIP)
 		logger.Warn("Webhook Token 校验失败", "ip", clientIP)
 		h.sendError(w, http.StatusUnauthorized, "认证失败")
@@ -91,11 +92,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	logger.Debug("收到 Webhook 请求", "body_size", len(body))
 
+	// 预处理：修复 JSON 字符串中的换行符
+	// 将字符串值中的真实换行符转换为 \n 转义序列
+	body = fixJSONNewlines(body)
+
 	// 解析消息
 	var req Request
 	if err := json.Unmarshal(body, &req); err != nil {
-		logger.Warn("JSON 解析失败", "error", err)
-		h.sendError(w, http.StatusBadRequest, "JSON 解析失败")
+		logger.Warn("JSON 解析失败", "error", err, "body", string(body))
+		h.sendError(w, http.StatusBadRequest, "JSON 解析失败: "+err.Error())
 		return
 	}
 
@@ -117,7 +122,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 发布到 MQTT
 	topic := req.Topic
 	if topic == "" {
-		topic = h.config.MQTTTopic
+		topic = h.config.MQTT.Topic
 	}
 
 	if err := h.broker.Publish(topic, msg); err != nil {
@@ -126,6 +131,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 消息存储由 broker 的 MessageStoreHook 自动处理
+
 	clientCount := h.broker.ClientCount()
 	logger.Info("消息推送成功", "topic", topic, "title", req.Title, "clients", clientCount)
 
@@ -133,47 +140,68 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.sendSuccess(w, "消息推送成功", clientCount)
 }
 
-func (h *Handler) sendError(w http.ResponseWriter, status int, message string) {
+func (h *WebhookHandler) sendError(w http.ResponseWriter, status int, message string) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(Response{Success: false, Message: message})
 }
 
-func (h *Handler) sendSuccess(w http.ResponseWriter, message string, clients int) {
+func (h *WebhookHandler) sendSuccess(w http.ResponseWriter, message string, clients int) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(Response{Success: true, Message: message, Clients: clients})
 }
 
-// validateToken 校验请求中的 Token
-// 支持以下方式传入：
-//   - Header: Authorization: Bearer <token>
-//   - Header: X-Auth-Token: <token>
-//   - Query:  ?token=<token>
-func (h *Handler) validateToken(r *http.Request) bool {
-	token := h.config.AuthToken
+// fixJSONNewlines 修复 JSON 字符串值中的真实换行符
+// 将字符串内的 \n \r \t 等控制字符转换为对应的转义序列
+func fixJSONNewlines(data []byte) []byte {
+	// 如果不包含换行符，直接返回
+	if !bytes.ContainsAny(data, "\n\r\t") {
+		return data
+	}
 
-	// 1. 检查 Authorization Header
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		// Bearer token
-		if len(auth) > 7 && auth[:7] == "Bearer " {
-			if auth[7:] == token {
-				return true
+	var result bytes.Buffer
+	inString := false
+	escaped := false
+
+	for i := range data {
+		c := data[i]
+
+		if escaped {
+			// 上一个字符是反斜杠，当前字符是转义的一部分
+			result.WriteByte(c)
+			escaped = false
+			continue
+		}
+
+		if c == '\\' && inString {
+			// 遇到反斜杠，标记下一个字符为转义
+			result.WriteByte(c)
+			escaped = true
+			continue
+		}
+
+		if c == '"' {
+			// 切换字符串状态
+			inString = !inString
+			result.WriteByte(c)
+			continue
+		}
+
+		if inString {
+			// 在字符串内，转换控制字符
+			switch c {
+			case '\n':
+				result.WriteString("\\n")
+			case '\r':
+				result.WriteString("\\r")
+			case '\t':
+				result.WriteString("\\t")
+			default:
+				result.WriteByte(c)
 			}
-		}
-		// 直接传 token
-		if auth == token {
-			return true
+		} else {
+			result.WriteByte(c)
 		}
 	}
 
-	// 2. 检查 X-Auth-Token Header
-	if r.Header.Get("X-Auth-Token") == token {
-		return true
-	}
-
-	// 3. 检查 Query 参数
-	if r.URL.Query().Get("token") == token {
-		return true
-	}
-
-	return false
+	return result.Bytes()
 }

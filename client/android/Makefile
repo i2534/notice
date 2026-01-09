@@ -12,6 +12,13 @@ help:
 	@echo "  make docker-clean   - 清理 Docker 镜像"
 	@echo "  make clean          - 清理构建产物"
 	@echo ""
+	@echo "版本参数:"
+	@echo "  VERSION_NAME=1.0.0  - 版本名称"
+	@echo "  VERSION_CODE=1      - 版本号"
+	@echo ""
+	@echo "示例:"
+	@echo "  make docker-release KEYSTORE_PASSWORD=xxx VERSION_NAME=1.0.0 VERSION_CODE=1"
+	@echo ""
 
 # 本地构建 (需要 Android SDK)
 build:
@@ -26,11 +33,18 @@ build-release:
 	@echo "✅ Release APK 已生成:"
 	@ls -lh app/build/outputs/apk/release/*.apk 2>/dev/null || echo "⚠️  需要配置签名"
 
+# 版本信息 (可通过参数传入)
+VERSION_NAME ?= 0.0.0
+VERSION_CODE ?= 1
+
 # 缓存目录 (加速后续构建)
 GRADLE_CACHE ?= $(PWD)/.gradle-cache
 PROJECT_GRADLE ?= $(PWD)/.gradle
 ANDROID_HOME_CACHE ?= $(PWD)/.android
 KOTLIN_CACHE ?= $(PWD)/.kotlin
+
+# 构建参数
+GRADLE_VERSION_ARGS := $(if $(VERSION_NAME),-PversionName=$(VERSION_NAME),) $(if $(VERSION_CODE),-PversionCode=$(VERSION_CODE),)
 
 # Docker 构建 (无需本地 Android SDK)
 docker:
@@ -52,7 +66,8 @@ docker:
 		-v "$(PROJECT_GRADLE):/app/.gradle" \
 		-v "$(ANDROID_HOME_CACHE):/android-home" \
 		-v "$(KOTLIN_CACHE):/app/.kotlin" \
-		notice-android-builder
+		notice-android-builder \
+		./gradlew assembleDebug --no-daemon --console=plain $(GRADLE_VERSION_ARGS)
 	@echo ""
 	@echo "✅ Debug APK 已生成:"
 	@ls -lh app/build/outputs/apk/debug/*.apk
@@ -93,7 +108,7 @@ docker-release:
 		-v "$(ANDROID_HOME_CACHE):/android-home" \
 		-v "$(KOTLIN_CACHE):/app/.kotlin" \
 		notice-android-builder \
-		./gradlew assembleRelease --no-daemon --console=plain
+		./gradlew assembleRelease --no-daemon --console=plain $(GRADLE_VERSION_ARGS)
 	@echo ""
 	@echo "✅ Release APK 已生成:"
 	@ls -lh app/build/outputs/apk/release/*.apk

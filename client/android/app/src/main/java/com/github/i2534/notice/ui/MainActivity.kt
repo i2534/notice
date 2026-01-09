@@ -91,6 +91,10 @@ class MainActivity : AppCompatActivity() {
                     startActivity(Intent(this, AboutActivity::class.java))
                     true
                 }
+                R.id.action_logs -> {
+                    startActivity(Intent(this, LogsActivity::class.java))
+                    true
+                }
                 else -> false
             }
         }

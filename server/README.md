@@ -21,6 +21,8 @@
 - 🛡️ IP 限流（防止暴力破解）
 - 🌐 内置 Web 管理界面（消息发送/接收）
 - 📝 日志轮转（按天分割、自动清理）
+- 📦 YAML 配置文件支持
+- 💾 离线消息支持（会话保持）
 - ⚡ 单一服务，无外部依赖
 
 ## 项目结构
@@ -28,8 +30,10 @@
 ```
 server/
 ├── main.go              # 主程序入口
+├── config.yaml          # 默认配置文件
 ├── config/
-│   └── config.go        # 配置管理
+│   ├── config.go        # 配置管理（支持 YAML + 环境变量）
+│   └── config_test.go   # 配置单元测试
 ├── broker/
 │   └── broker.go        # 内置 MQTT Broker
 ├── webhook/
@@ -39,8 +43,11 @@ server/
 ├── logger/
 │   └── logger.go        # 日志系统（轮转）
 ├── web/
-│   └── index.html       # Web 管理界面
-├── go.mod
+│   └── index.html       # Web 管理界面（嵌入二进制）
+├── scripts/
+│   ├── start.sh         # Linux 启动脚本
+│   └── start.bat        # Windows 启动脚本
+├── Dockerfile
 ├── Makefile
 └── README.md
 ```
@@ -56,7 +63,14 @@ go mod tidy
 ### 2. 运行服务器
 
 ```bash
+# 方式一：使用 Makefile
 make run
+
+# 方式二：使用启动脚本
+./scripts/start.sh
+
+# 方式三：直接运行
+go run main.go
 ```
 
 服务端口：
@@ -76,46 +90,70 @@ make test-push
 
 ## 配置
 
-### 基础配置
+支持三种配置方式，优先级：**环境变量 > 配置文件 > 默认值**
 
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| HTTP_PORT | 9090 | HTTP 服务端口 |
-| MQTT_TCP_PORT | 9091 | MQTT TCP 端口 |
-| MQTT_WS_PORT | 9092 | MQTT WebSocket 端口 |
-| MQTT_TOPIC | notice | 默认推送主题 |
+### 配置文件
 
-### 认证配置
+编辑 `config.yaml`：
 
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| AUTH_TOKEN | (自动生成) | 访问令牌，不设置则自动生成 |
+```yaml
+http:
+  port: "9090"
 
-### 限流配置
+mqtt:
+  tcp_port: "9091"
+  ws_port: "9092"
+  topic: "notice"
+  session_expiry: 86400  # 会话过期时间（秒）
+  message_expiry: 86400  # 消息过期时间（秒）
 
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| RATE_LIMIT_MAX_FAILURES | 5 | 最大失败次数 |
-| RATE_LIMIT_BLOCK_TIME | 900 | 封禁时间（秒） |
-| RATE_LIMIT_WINDOW_TIME | 300 | 统计窗口（秒） |
+auth:
+  token: ""              # 留空则自动生成
 
-### 日志配置
+rate_limit:
+  max_failures: 5
+  block_time: 900
+  window_time: 300
 
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| LOG_CONSOLE_LEVEL | info | 控制台日志级别: debug, info, warn, error, off |
-| LOG_FILE_LEVEL | debug | 文件日志级别: debug, info, warn, error, off |
-| LOG_FILE_PATH | logs/server.log | 日志文件路径 |
-| LOG_PRETTY | true | 控制台美化输出 |
-| LOG_ROTATE_DAYS | 1 | 日志轮转天数（每N天一个文件） |
-| LOG_MAX_FILES | 7 | 保留日志文件数量 |
+log:
+  console_level: "info"
+  file_level: "debug"
+  file_path: ""          # 留空则不写入文件
+  pretty: true
+  rotate_days: 1
+  max_files: 7
+```
 
-### MQTT 会话配置
+指定配置文件：
 
-| 环境变量 | 默认值 | 说明 |
-|---------|--------|------|
-| MQTT_SESSION_EXPIRY | 3600 | 会话过期时间（秒） |
-| MQTT_MESSAGE_EXPIRY | 86400 | 消息过期时间（秒） |
+```bash
+./notice-server -c /path/to/config.yaml
+# 或
+CONFIG_PATH=/path/to/config.yaml ./notice-server
+```
+
+### 环境变量
+
+所有配置项都可通过环境变量覆盖，详见 `config.yaml` 中的注释。
+
+| 分类 | 环境变量 | 默认值 | 说明 |
+|------|---------|--------|------|
+| HTTP | HTTP_PORT | 9090 | HTTP 服务端口 |
+| MQTT | MQTT_TCP_PORT | 9091 | MQTT TCP 端口 |
+| MQTT | MQTT_WS_PORT | 9092 | MQTT WebSocket 端口 |
+| MQTT | MQTT_TOPIC | notice | 默认推送主题 |
+| MQTT | MQTT_SESSION_EXPIRY | 86400 | 会话过期时间（秒） |
+| MQTT | MQTT_MESSAGE_EXPIRY | 86400 | 消息过期时间（秒） |
+| 认证 | AUTH_TOKEN | (自动生成) | 访问令牌 |
+| 限流 | RATE_LIMIT_MAX_FAILURES | 5 | 最大失败次数 |
+| 限流 | RATE_LIMIT_BLOCK_TIME | 900 | 封禁时间（秒） |
+| 限流 | RATE_LIMIT_WINDOW_TIME | 300 | 统计窗口（秒） |
+| 日志 | LOG_CONSOLE_LEVEL | info | 控制台日志级别 |
+| 日志 | LOG_FILE_LEVEL | debug | 文件日志级别 |
+| 日志 | LOG_FILE_PATH | (空) | 日志文件路径 |
+| 日志 | LOG_PRETTY | true | 控制台美化输出 |
+| 日志 | LOG_ROTATE_DAYS | 1 | 日志轮转天数 |
+| 日志 | LOG_MAX_FILES | 7 | 保留日志文件数 |
 
 ## API 端点
 
@@ -182,12 +220,21 @@ Web 管理界面（需要认证）
 
 ### 认证方式
 
-MQTT 客户端通过 `username` 或 `password` 传递 Token：
+MQTT 客户端通过 `username` 传递 Token：
 
 ```bash
 # mosquitto_sub 示例
 mosquitto_sub -h localhost -p 9091 -t notice/# -u "<token>"
 ```
+
+### 离线消息
+
+客户端使用固定 Client ID + CleanSession=false 可接收离线消息：
+
+- 会话保持时间：默认 1 天（MQTT_SESSION_EXPIRY）
+- 消息保留时间：默认 1 天（MQTT_MESSAGE_EXPIRY）
+
+**注意**：服务器重启后离线消息会丢失（内存存储）。
 
 ### 示例代码
 
@@ -195,9 +242,11 @@ mosquitto_sub -h localhost -p 9091 -t notice/# -u "<token>"
 
 ```javascript
 const client = mqtt.connect('ws://your-server:9092', {
-  username: 'your-token'
+  username: 'your-token',
+  clientId: 'my-client-id',
+  clean: false  // 启用持久会话
 });
-client.subscribe('notice/#');
+client.subscribe('notice/#', { qos: 1 });
 client.on('message', (topic, message) => {
   console.log(JSON.parse(message.toString()));
 });
@@ -208,6 +257,7 @@ client.on('message', (topic, message) => {
 ```kotlin
 val options = MqttConnectOptions().apply {
     userName = "your-token"
+    isCleanSession = false  // 启用持久会话
 }
 val client = MqttAsyncClient("tcp://your-server:9091", clientId)
 client.connect(options)
@@ -246,30 +296,40 @@ curl -X POST http://localhost:9090/webhook \
 
 ```bash
 make build
-./notice-server
+./notice-server --version
 ```
 
 ## Docker
 
-```dockerfile
-FROM golang:1.25-alpine AS builder
-WORKDIR /app
-COPY . .
-RUN go mod tidy && go build -o notice-server
+```bash
+# 构建镜像
+make docker-build
 
-FROM alpine:latest
-WORKDIR /app
-COPY --from=builder /app/notice-server .
-COPY --from=builder /app/web ./web
-EXPOSE 9090 9091 9092
-CMD ["./notice-server"]
+# 运行（挂载配置文件）
+docker run -d --name notice-server \
+  -p 9090:9090 -p 9091:9091 -p 9092:9092 \
+  -v $(pwd)/config.yaml:/app/config.yaml \
+  notice-server:latest
+
+# 或使用环境变量
+docker run -d --name notice-server \
+  -p 9090:9090 -p 9091:9091 -p 9092:9092 \
+  -e AUTH_TOKEN=your-secret-token \
+  notice-server:latest
 ```
 
+## 启动脚本
+
 ```bash
-docker build -t notice-server .
-docker run -p 9090:9090 -p 9091:9091 -p 9092:9092 \
-  -e AUTH_TOKEN=your-secret-token \
-  notice-server
+# Linux
+./scripts/start.sh           # 前台运行
+./scripts/start.sh -d        # 后台运行
+./scripts/start.sh -s        # 停止
+./scripts/start.sh -r        # 重启
+./scripts/start.sh --status  # 查看状态
+
+# Windows
+scripts\start.bat
 ```
 
 ## License

@@ -1,0 +1,91 @@
+# Notice Server 配置文件
+# 优先级: 环境变量 > 配置文件 > 默认值
+#
+# 配置文件路径指定方式:
+#   命令行: ./notice-server -c /path/to/config.yaml
+#   环境变量: CONFIG_PATH=/path/to/config.yaml
+
+# HTTP 服务配置
+http:
+  # HTTP 端口
+  # 环境变量: HTTP_PORT
+  port: "9090"
+
+# MQTT Broker 配置
+mqtt:
+  # TCP 端口（内网使用）
+  # 环境变量: MQTT_TCP_PORT
+  tcp_port: "9091"
+
+  # WebSocket 端口（Web 客户端使用）
+  # 环境变量: MQTT_WS_PORT
+  ws_port: "9092"
+
+  # 默认消息主题
+  # 环境变量: MQTT_TOPIC
+  topic: "notice"
+
+  # 会话过期时间（秒），用于离线消息
+  # 环境变量: MQTT_SESSION_EXPIRY
+  session_expiry: 86400
+
+  # 消息过期时间（秒）
+  # 环境变量: MQTT_MESSAGE_EXPIRY
+  message_expiry: 86400
+
+# 认证配置
+auth:
+  # 访问令牌，留空则自动生成
+  # 环境变量: AUTH_TOKEN
+  token: ""
+
+# 限流配置
+rate_limit:
+  # 最大失败次数
+  # 环境变量: RATE_LIMIT_MAX_FAILURES
+  max_failures: 5
+
+  # 封禁时间（秒），默认 15 分钟
+  # 环境变量: RATE_LIMIT_BLOCK_TIME
+  block_time: 900
+
+  # 统计窗口（秒），默认 5 分钟
+  # 环境变量: RATE_LIMIT_WINDOW_TIME
+  window_time: 300
+
+# 日志配置
+log:
+  # 控制台日志级别: debug, info, warn, error, off
+  # 环境变量: LOG_CONSOLE_LEVEL
+  console_level: "info"
+
+  # 文件日志级别: debug, info, warn, error, off
+  # 环境变量: LOG_FILE_LEVEL
+  file_level: "debug"
+
+  # 日志文件路径，为空则不写入文件
+  # 环境变量: LOG_FILE_PATH
+  file_path: ""
+
+  # 控制台是否美化输出
+  # 环境变量: LOG_PRETTY
+  pretty: true
+
+  # 日志轮转天数，0 表示不轮转
+  # 环境变量: LOG_ROTATE_DAYS
+  rotate_days: 1
+
+  # 保留日志文件数量，0 表示不限制
+  # 环境变量: LOG_MAX_FILES
+  max_files: 7
+
+# 持久化存储配置
+storage:
+  # 是否启用持久化存储（会话、订阅、离线消息）
+  # 启用后服务器重启不会丢失数据
+  # 环境变量: STORAGE_ENABLED
+  enabled: true
+
+  # 数据存储路径
+  # 环境变量: STORAGE_PATH
+  path: "data"

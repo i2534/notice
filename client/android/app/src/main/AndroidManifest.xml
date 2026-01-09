@@ -60,6 +60,11 @@
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
 
+        <activity
+            android:name=".ui.LogsActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.MainActivity" />
+
         <!-- MQTT 前台服务 -->
         <service
             android:name=".service.MqttService"

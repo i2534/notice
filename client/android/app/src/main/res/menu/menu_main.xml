@@ -16,4 +16,11 @@
         app:iconTint="@color/text_primary"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_logs"
+        android:icon="@drawable/ic_logs"
+        android:title="@string/logs_title"
+        app:iconTint="@color/text_primary"
+        app:showAsAction="never" />
+
 </menu>

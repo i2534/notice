@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import com.github.i2534.notice.util.AppLogger
 
 class NoticeApp : Application() {
 
@@ -14,6 +15,7 @@ class NoticeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        AppLogger.init(this)
         createNotificationChannels()
     }
 

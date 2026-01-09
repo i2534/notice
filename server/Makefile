@@ -1,48 +1,20 @@
 .PHONY: run build test-push test-push-extra clean help docker-build docker-run docker-stop
 
-# 配置
+# 配置文件路径（可覆盖）
+CONFIG ?= config.yaml
+
+# 测试用配置
 HTTP_PORT ?= 9090
 MQTT_TCP_PORT ?= 9091
-MQTT_WS_PORT ?= 9092
-
-# 认证配置（为空则自动生成）
 AUTH_TOKEN ?= abcdef
-
-# 限流配置
-RATE_LIMIT_MAX_FAILURES ?= 5
-RATE_LIMIT_BLOCK_TIME ?= 900
-RATE_LIMIT_WINDOW_TIME ?= 300
-
-# 日志配置
-LOG_CONSOLE_LEVEL ?= info
-LOG_FILE_LEVEL ?= debug
-LOG_FILE_PATH ?= logs/server.log
-LOG_PRETTY ?= true
-LOG_ROTATE_DAYS ?= 1
-LOG_MAX_FILES ?= 7
 
 # 默认目标
 help:
 	@echo "Notice Server Makefile"
 	@echo ""
-	@echo "服务端口:"
-	@echo "  HTTP Webhook:   $(HTTP_PORT)"
-	@echo "  MQTT TCP:       $(MQTT_TCP_PORT)"
-	@echo "  MQTT WebSocket: $(MQTT_WS_PORT)"
-	@echo ""
-	@echo "认证配置:"
-	@echo "  AUTH_TOKEN:     $(if $(AUTH_TOKEN),$(shell echo $(AUTH_TOKEN) | head -c 4)****,未启用)"
-	@echo ""
-	@echo "日志配置:"
-	@echo "  Console Level:  $(LOG_CONSOLE_LEVEL)"
-	@echo "  File Level:     $(LOG_FILE_LEVEL)"
-	@echo "  File Path:      $(LOG_FILE_PATH)"
-	@echo "  Rotate Days:    $(LOG_ROTATE_DAYS)"
-	@echo "  Max Files:      $(LOG_MAX_FILES)"
-	@echo ""
 	@echo "使用方法:"
-	@echo "  make run             - 运行服务器（写日志文件）"
-	@echo "  make run-console     - 运行服务器（仅 console）"
+	@echo "  make run             - 运行服务器（使用 config.yaml）"
+	@echo "  make run-console     - 运行服务器（仅控制台输出）"
 	@echo "  make run-debug       - 运行服务器（debug 模式）"
 	@echo "  make build           - 构建可执行文件"
 	@echo "  make test-push       - 发送测试通知"
@@ -57,55 +29,29 @@ help:
 	@echo "  make docker-run      - 运行 Docker 容器"
 	@echo "  make docker-stop     - 停止并删除容器"
 	@echo ""
-	@echo "启用认证:"
-	@echo "  make run AUTH_TOKEN=your-secret-token"
+	@echo "配置文件:"
+	@echo "  make run                            # 使用默认 config.yaml"
+	@echo "  make run CONFIG=my-config.yaml      # 指定配置文件"
+	@echo ""
+	@echo "快速测试:"
+	@echo "  make run AUTH_TOKEN=your-token      # 覆盖 Token"
 
-# 运行服务器
+# 运行服务器（使用配置文件）
 run:
-	HTTP_PORT=$(HTTP_PORT) \
-	MQTT_TCP_PORT=$(MQTT_TCP_PORT) \
-	MQTT_WS_PORT=$(MQTT_WS_PORT) \
-	AUTH_TOKEN=$(AUTH_TOKEN) \
-	RATE_LIMIT_MAX_FAILURES=$(RATE_LIMIT_MAX_FAILURES) \
-	RATE_LIMIT_BLOCK_TIME=$(RATE_LIMIT_BLOCK_TIME) \
-	RATE_LIMIT_WINDOW_TIME=$(RATE_LIMIT_WINDOW_TIME) \
-	LOG_CONSOLE_LEVEL=$(LOG_CONSOLE_LEVEL) \
-	LOG_FILE_LEVEL=$(LOG_FILE_LEVEL) \
-	LOG_FILE_PATH=$(LOG_FILE_PATH) \
-	LOG_PRETTY=$(LOG_PRETTY) \
-	LOG_ROTATE_DAYS=$(LOG_ROTATE_DAYS) \
-	LOG_MAX_FILES=$(LOG_MAX_FILES) \
-	go run main.go
+	@if [ -f "$(CONFIG)" ]; then \
+		AUTH_TOKEN=$(AUTH_TOKEN) go run main.go -c $(CONFIG); \
+	else \
+		echo "配置文件 $(CONFIG) 不存在，使用默认配置"; \
+		AUTH_TOKEN=$(AUTH_TOKEN) go run main.go; \
+	fi
 
-# 运行服务器（仅 console，不写文件）
+# 运行服务器（仅控制台输出，不写日志文件）
 run-console:
-	HTTP_PORT=$(HTTP_PORT) \
-	MQTT_TCP_PORT=$(MQTT_TCP_PORT) \
-	MQTT_WS_PORT=$(MQTT_WS_PORT) \
-	AUTH_TOKEN=$(AUTH_TOKEN) \
-	RATE_LIMIT_MAX_FAILURES=$(RATE_LIMIT_MAX_FAILURES) \
-	RATE_LIMIT_BLOCK_TIME=$(RATE_LIMIT_BLOCK_TIME) \
-	RATE_LIMIT_WINDOW_TIME=$(RATE_LIMIT_WINDOW_TIME) \
-	LOG_CONSOLE_LEVEL=$(LOG_CONSOLE_LEVEL) \
-	LOG_PRETTY=$(LOG_PRETTY) \
-	go run main.go
+	AUTH_TOKEN=$(AUTH_TOKEN) LOG_FILE_PATH= go run main.go -c $(CONFIG)
 
 # 运行服务器（debug 模式）
 run-debug:
-	HTTP_PORT=$(HTTP_PORT) \
-	MQTT_TCP_PORT=$(MQTT_TCP_PORT) \
-	MQTT_WS_PORT=$(MQTT_WS_PORT) \
-	AUTH_TOKEN=$(AUTH_TOKEN) \
-	RATE_LIMIT_MAX_FAILURES=$(RATE_LIMIT_MAX_FAILURES) \
-	RATE_LIMIT_BLOCK_TIME=$(RATE_LIMIT_BLOCK_TIME) \
-	RATE_LIMIT_WINDOW_TIME=$(RATE_LIMIT_WINDOW_TIME) \
-	LOG_CONSOLE_LEVEL=debug \
-	LOG_FILE_LEVEL=debug \
-	LOG_FILE_PATH=$(LOG_FILE_PATH) \
-	LOG_PRETTY=$(LOG_PRETTY) \
-	LOG_ROTATE_DAYS=$(LOG_ROTATE_DAYS) \
-	LOG_MAX_FILES=$(LOG_MAX_FILES) \
-	go run main.go
+	AUTH_TOKEN=$(AUTH_TOKEN) LOG_CONSOLE_LEVEL=debug go run main.go -c $(CONFIG)
 
 # 版本信息
 VERSION ?= dev
@@ -118,19 +64,22 @@ build:
 	go build -ldflags="$(LDFLAGS)" -o notice-server
 	@echo "Done: ./notice-server --version"
 
-# 发送简单测试通知
+# 发送测试通知（带时间戳）
 test-push:
+	@TIME=$$(date '+%H:%M:%S'); \
 	curl -X POST http://localhost:$(HTTP_PORT)/webhook \
 		-H "Content-Type: application/json" \
-		$(if $(AUTH_TOKEN),-H "Authorization: Bearer $(AUTH_TOKEN)",) \
-		-d '{"title":"测试通知","content":"这是一条测试消息"}'
+		-H "Authorization: Bearer $(AUTH_TOKEN)" \
+		-d "{\"title\":\"测试通知 [$$TIME]\",\"content\":\"这是一条测试消息\\n发送时间: $$TIME\"}"
 
-# 发送带额外数据的测试通知
+# 发送带额外数据的测试通知（带时间戳和随机订单号）
 test-push-extra:
+	@TIME=$$(date '+%H:%M:%S'); \
+	ORDER_ID="ORD-$$(date '+%Y%m%d')-$$RANDOM"; \
 	curl -X POST http://localhost:$(HTTP_PORT)/webhook \
 		-H "Content-Type: application/json" \
-		$(if $(AUTH_TOKEN),-H "Authorization: Bearer $(AUTH_TOKEN)",) \
-		-d '{"title":"订单通知","content":"您的订单已发货","extra":{"orderId":"ORD-12345","status":"shipped"}}'
+		-H "Authorization: Bearer $(AUTH_TOKEN)" \
+		-d "{\"title\":\"订单通知 [$$TIME]\",\"content\":\"您的订单已发货\\n订单号: $$ORDER_ID\",\"extra\":{\"orderId\":\"$$ORDER_ID\",\"status\":\"shipped\",\"time\":\"$$TIME\"}}"
 
 # 订阅消息（需要安装 mosquitto-clients）
 test-sub:
@@ -145,9 +94,19 @@ health:
 status:
 	curl -s http://localhost:$(HTTP_PORT)/status
 
+# 查看消息历史
+messages:
+	@curl -s "http://localhost:$(HTTP_PORT)/messages?page=1&page_size=10" \
+		-H "Authorization: Bearer $(AUTH_TOKEN)" | jq .
+
 # 查看日志
 logs:
-	tail -f $(LOG_FILE_PATH)
+	@LOG_PATH=$$(grep -oP 'file_path:\s*"\K[^"]+' $(CONFIG) 2>/dev/null || echo "logs/server.log"); \
+	if [ -f "$$LOG_PATH" ]; then \
+		tail -f "$$LOG_PATH"; \
+	else \
+		echo "日志文件不存在: $$LOG_PATH"; \
+	fi
 
 # 清理
 clean:
@@ -162,17 +121,20 @@ DOCKER_TAG ?= latest
 docker-build:
 	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
-# 运行 Docker 容器
+# 运行 Docker 容器（挂载配置文件）
 docker-run:
-	docker run -d --name notice-server \
-		-p $(HTTP_PORT):9090 \
-		-p $(MQTT_TCP_PORT):9091 \
-		-p $(MQTT_WS_PORT):9092 \
-		-e AUTH_TOKEN=$(AUTH_TOKEN) \
-		-e RATE_LIMIT_MAX_FAILURES=$(RATE_LIMIT_MAX_FAILURES) \
-		-e RATE_LIMIT_BLOCK_TIME=$(RATE_LIMIT_BLOCK_TIME) \
-		-e RATE_LIMIT_WINDOW_TIME=$(RATE_LIMIT_WINDOW_TIME) \
-		$(DOCKER_IMAGE):$(DOCKER_TAG)
+	@if [ -f "$(CONFIG)" ]; then \
+		docker run -d --name notice-server \
+			-p $(HTTP_PORT):9090 \
+			-p $(MQTT_TCP_PORT):9091 \
+			-p 9092:9092 \
+			-v $(PWD)/$(CONFIG):/app/config.yaml:ro \
+			$(DOCKER_IMAGE):$(DOCKER_TAG); \
+	else \
+		echo "配置文件 $(CONFIG) 不存在"; \
+		echo "创建配置: cp config.example.yaml config.yaml"; \
+		exit 1; \
+	fi
 
 # 停止并删除容器
 docker-stop:

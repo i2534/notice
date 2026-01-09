@@ -6,10 +6,12 @@ import (
 	"time"
 
 	mqtt "github.com/mochi-mqtt/server/v2"
+	"github.com/mochi-mqtt/server/v2/hooks/storage/badger"
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/mochi-mqtt/server/v2/packets"
 
 	"notice-server/logger"
+	"notice-server/store"
 )
 
 // Message 推送消息结构
@@ -22,23 +24,27 @@ type Message struct {
 
 // Config Broker 配置
 type Config struct {
-	SessionExpiry uint32 // 会话过期时间（秒）
-	MessageExpiry uint32 // 消息过期时间（秒）
-	AuthToken     string // 认证 Token，为空则不校验
+	SessionExpiry  uint32 // 会话过期时间（秒）
+	MessageExpiry  uint32 // 消息过期时间（秒）
+	AuthToken      string // 认证 Token，为空则不校验
+	StorageEnabled bool   // 是否启用持久化存储
+	StoragePath    string // 持久化存储路径
 }
 
 // Broker MQTT Broker 服务
 type Broker struct {
-	server *mqtt.Server
-	topic  string
-	config Config
+	server       *mqtt.Server
+	topic        string
+	config       Config
+	storeManager *store.Manager
 }
 
 // New 创建新的 Broker
-func New(topic string, cfg Config) *Broker {
+func New(topic string, cfg Config, m *store.Manager) *Broker {
 	return &Broker{
-		topic:  topic,
-		config: cfg,
+		topic:        topic,
+		config:       cfg,
+		storeManager: m,
 	}
 }
 
@@ -57,6 +63,7 @@ func (b *Broker) Start(tcpAddr, wsAddr string) error {
 			MaximumMessageExpiryInterval: int64(b.config.MessageExpiry), // 消息过期时间
 			ReceiveMaximum:               1024,                          // 最大接收队列
 			MaximumInflight:              8192,                          // 最大飞行中消息数
+			MaximumQos:                   2,                             // 最大 QoS 级别（支持 QoS 0/1/2）
 		},
 		ClientNetWriteBufferSize: 4096, // 客户端写缓冲区
 		ClientNetReadBufferSize:  4096, // 客户端读缓冲区
@@ -67,6 +74,16 @@ func (b *Broker) Start(tcpAddr, wsAddr string) error {
 		"message_expiry", b.config.MessageExpiry,
 	)
 
+	// 添加持久化存储钩子（必须最先添加，以便加载已保存的会话和订阅）
+	if b.config.StorageEnabled && b.config.StoragePath != "" {
+		if err := b.server.AddHook(new(badger.Hook), &badger.Options{
+			Path: b.config.StoragePath + "/mqtt",
+		}); err != nil {
+			return err
+		}
+		logger.Info("MQTT 持久化存储已启用", "path", b.config.StoragePath+"/mqtt")
+	}
+
 	// 启用 Token 认证
 	if err := b.server.AddHook(&AuthHook{token: b.config.AuthToken}, nil); err != nil {
 		return err
@@ -76,6 +93,17 @@ func (b *Broker) Start(tcpAddr, wsAddr string) error {
 	// 添加日志钩子
 	if err := b.server.AddHook(new(LogHook), nil); err != nil {
 		return err
+	}
+
+	// 添加消息存储钩子（记录所有发布的消息）
+	if b.storeManager != nil && b.storeManager.IsEnabled() {
+		if err := b.server.AddHook(&MessageStoreHook{
+			manager: b.storeManager,
+			token:   b.config.AuthToken,
+		}, nil); err != nil {
+			return err
+		}
+		logger.Info("消息历史记录已启用")
 	}
 
 	// TCP 监听器
@@ -115,7 +143,6 @@ func (b *Broker) Publish(topic string, msg Message) error {
 	if err != nil {
 		return err
 	}
-
 	return b.server.Publish(topic, payload, false, 1)
 }
 
@@ -154,7 +181,10 @@ func (h *LogHook) Provides(b byte) bool {
 	return b == mqtt.OnConnect ||
 		b == mqtt.OnDisconnect ||
 		b == mqtt.OnSubscribed ||
-		b == mqtt.OnPublished
+		b == mqtt.OnPublished ||
+		b == mqtt.OnSessionEstablished ||
+		b == mqtt.OnQosPublish ||
+		b == mqtt.OnQosComplete
 }
 
 func (h *LogHook) OnConnect(cl *mqtt.Client, pk packets.Packet) error {
@@ -162,11 +192,32 @@ func (h *LogHook) OnConnect(cl *mqtt.Client, pk packets.Packet) error {
 	return nil
 }
 
+func (h *LogHook) OnSessionEstablished(cl *mqtt.Client, pk packets.Packet) {
+	// 只有当有待发送的离线消息时才记录
+	if cl.State.Inflight.Len() > 0 {
+		logger.Info("MQTT 会话恢复", "client_id", cl.ID, "pending_messages", cl.State.Inflight.Len())
+	}
+}
+
+func (h *LogHook) OnQosPublish(cl *mqtt.Client, pk packets.Packet, sent int64, resends int) {
+	// 只记录离线消息入队（客户端已断开时）
+	if cl.Closed() {
+		logger.Debug("离线消息入队", "client_id", cl.ID, "topic", pk.TopicName)
+	}
+}
+
+func (h *LogHook) OnQosComplete(cl *mqtt.Client, pk packets.Packet) {
+	logger.Debug("MQTT QoS 消息完成",
+		"client_id", cl.ID,
+		"packet_id", pk.PacketID,
+	)
+}
+
 func (h *LogHook) OnDisconnect(cl *mqtt.Client, err error, expire bool) {
 	if err != nil {
-		logger.Info("MQTT 客户端断开", "client_id", cl.ID, "expired", expire, "error", err)
+		logger.Info("MQTT 客户端断开", "client_id", cl.ID, "error", err)
 	} else {
-		logger.Info("MQTT 客户端断开", "client_id", cl.ID, "expired", expire)
+		logger.Info("MQTT 客户端断开", "client_id", cl.ID)
 	}
 }
 
@@ -225,4 +276,42 @@ func (h *AuthHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) boo
 func (h *AuthHook) OnACLCheck(cl *mqtt.Client, topic string, write bool) bool {
 	// 已通过认证的客户端允许所有操作
 	return true
+}
+
+// MessageStoreHook 消息存储钩子
+type MessageStoreHook struct {
+	mqtt.HookBase
+	manager *store.Manager
+	token   string // 当前服务使用的 token
+}
+
+func (h *MessageStoreHook) ID() string {
+	return "message-store"
+}
+
+func (h *MessageStoreHook) Provides(b byte) bool {
+	return b == mqtt.OnPublished
+}
+
+// OnPublished 消息发布时保存到存储
+func (h *MessageStoreHook) OnPublished(cl *mqtt.Client, pk packets.Packet) {
+	// 跳过系统消息（以 $ 开头的主题）
+	if len(pk.TopicName) > 0 && pk.TopicName[0] == '$' {
+		return
+	}
+
+	// 尝试解析消息内容
+	var msg Message
+	if err := json.Unmarshal(pk.Payload, &msg); err != nil {
+		// 非 JSON 格式，直接存储原始内容
+		if _, err := h.manager.Save(h.token, pk.TopicName, "", string(pk.Payload), nil); err != nil {
+			logger.Warn("消息保存失败", "error", err)
+		}
+		return
+	}
+
+	// JSON 格式，提取字段
+	if _, err := h.manager.Save(h.token, pk.TopicName, msg.Title, msg.Content, msg.Extra); err != nil {
+		logger.Warn("消息保存失败", "error", err)
+	}
 }

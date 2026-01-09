@@ -60,6 +60,7 @@ func main() {
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(*broker)
 	opts.SetClientID(*clientID)
+	opts.SetCleanSession(false) // 持久会话，支持离线消息
 	opts.SetAutoReconnect(true)
 	opts.SetConnectRetry(false) // 首次连接失败时不自动重试，以便显示错误
 	opts.SetConnectTimeout(10 * time.Second)
@@ -72,13 +73,16 @@ func main() {
 		opts.SetUsername(*authToken)
 	}
 
+	// 设置默认消息处理器（在连接前注册，确保能收到离线消息）
+	opts.SetDefaultPublishHandler(func(c mqtt.Client, m mqtt.Message) {
+		handleMessage(m.Topic(), m.Payload())
+	})
+
 	opts.SetOnConnectHandler(func(c mqtt.Client) {
 		log.Println("已连接到 MQTT Broker")
 
-		// 订阅主题
-		token := c.Subscribe(*topic, 1, func(c mqtt.Client, m mqtt.Message) {
-			handleMessage(m.Topic(), m.Payload())
-		})
+		// 订阅主题（会话恢复时订阅已存在，但仍需注册处理函数）
+		token := c.Subscribe(*topic, 1, nil) // 使用 nil，消息由 DefaultPublishHandler 处理
 		if token.Wait() && token.Error() != nil {
 			log.Printf("订阅失败: %v", token.Error())
 		} else {
