@@ -58,6 +58,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: server/go.sum
 
       - name: Build Server
         working-directory: server
@@ -97,6 +98,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: client/linux/go.sum
 
       - name: Build Linux Client
         working-directory: client/linux
@@ -260,6 +262,7 @@ jobs:
           # Linux amd64
           mkdir -p pkg/notice-server-${VERSION}-linux-amd64
           cp artifacts/server-linux-amd64/notice-server-${VERSION}-linux-amd64 pkg/notice-server-${VERSION}-linux-amd64/notice-server
+          cp server/config.yaml pkg/notice-server-${VERSION}-linux-amd64/
           cp server/scripts/start.sh pkg/notice-server-${VERSION}-linux-amd64/
           cp server/README.md pkg/notice-server-${VERSION}-linux-amd64/
           cp LICENSE pkg/notice-server-${VERSION}-linux-amd64/
@@ -269,6 +272,7 @@ jobs:
           # Linux arm64
           mkdir -p pkg/notice-server-${VERSION}-linux-arm64
           cp artifacts/server-linux-arm64/notice-server-${VERSION}-linux-arm64 pkg/notice-server-${VERSION}-linux-arm64/notice-server
+          cp server/config.yaml pkg/notice-server-${VERSION}-linux-arm64/
           cp server/scripts/start.sh pkg/notice-server-${VERSION}-linux-arm64/
           cp server/README.md pkg/notice-server-${VERSION}-linux-arm64/
           cp LICENSE pkg/notice-server-${VERSION}-linux-arm64/
@@ -278,6 +282,7 @@ jobs:
           # macOS amd64
           mkdir -p pkg/notice-server-${VERSION}-darwin-amd64
           cp artifacts/server-darwin-amd64/notice-server-${VERSION}-darwin-amd64 pkg/notice-server-${VERSION}-darwin-amd64/notice-server
+          cp server/config.yaml pkg/notice-server-${VERSION}-darwin-amd64/
           cp server/scripts/start.sh pkg/notice-server-${VERSION}-darwin-amd64/
           cp server/README.md pkg/notice-server-${VERSION}-darwin-amd64/
           cp LICENSE pkg/notice-server-${VERSION}-darwin-amd64/
@@ -287,6 +292,7 @@ jobs:
           # macOS arm64
           mkdir -p pkg/notice-server-${VERSION}-darwin-arm64
           cp artifacts/server-darwin-arm64/notice-server-${VERSION}-darwin-arm64 pkg/notice-server-${VERSION}-darwin-arm64/notice-server
+          cp server/config.yaml pkg/notice-server-${VERSION}-darwin-arm64/
           cp server/scripts/start.sh pkg/notice-server-${VERSION}-darwin-arm64/
           cp server/README.md pkg/notice-server-${VERSION}-darwin-arm64/
           cp LICENSE pkg/notice-server-${VERSION}-darwin-arm64/
@@ -296,6 +302,7 @@ jobs:
           # Windows amd64
           mkdir -p pkg/notice-server-${VERSION}-windows-amd64
           cp artifacts/server-windows-amd64/notice-server-${VERSION}-windows-amd64.exe pkg/notice-server-${VERSION}-windows-amd64/notice-server.exe
+          cp server/config.yaml pkg/notice-server-${VERSION}-windows-amd64/
           cp server/scripts/start.bat pkg/notice-server-${VERSION}-windows-amd64/
           cp server/README.md pkg/notice-server-${VERSION}-windows-amd64/
           cp LICENSE pkg/notice-server-${VERSION}-windows-amd64/
