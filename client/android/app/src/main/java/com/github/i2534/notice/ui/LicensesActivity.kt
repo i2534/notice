@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.github.i2534.notice.R
 import com.github.i2534.notice.databinding.ActivityLicensesBinding
 import com.google.android.material.card.MaterialCardView
+import org.json.JSONArray
 
 class LicensesActivity : AppCompatActivity() {
 
@@ -22,45 +23,6 @@ class LicensesActivity : AppCompatActivity() {
         val url: String
     )
 
-    private val licenses = listOf(
-        License(
-            "AndroidX Libraries",
-            "Google",
-            "Apache License 2.0",
-            "https://developer.android.com/jetpack/androidx"
-        ),
-        License(
-            "Material Components for Android",
-            "Google",
-            "Apache License 2.0",
-            "https://github.com/material-components/material-components-android"
-        ),
-        License(
-            "Eclipse Paho MQTT Client",
-            "Eclipse Foundation",
-            "Eclipse Public License 2.0",
-            "https://github.com/eclipse/paho.mqtt.java"
-        ),
-        License(
-            "Kotlin Coroutines",
-            "JetBrains",
-            "Apache License 2.0",
-            "https://github.com/Kotlin/kotlinx.coroutines"
-        ),
-        License(
-            "Room Persistence Library",
-            "Google",
-            "Apache License 2.0",
-            "https://developer.android.com/jetpack/androidx/releases/room"
-        ),
-        License(
-            "Paging Library",
-            "Google",
-            "Apache License 2.0",
-            "https://developer.android.com/jetpack/androidx/releases/paging"
-        )
-    )
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityLicensesBinding.inflate(layoutInflater)
@@ -71,8 +33,27 @@ class LicensesActivity : AppCompatActivity() {
         setupLicenses()
     }
 
+    private fun loadLicenses(): List<License> {
+        return try {
+            val json = assets.open("licenses.json").bufferedReader().use { it.readText() }
+            val jsonArray = JSONArray(json)
+            (0 until jsonArray.length()).map { i ->
+                val obj = jsonArray.getJSONObject(i)
+                License(
+                    name = obj.getString("name"),
+                    author = obj.getString("author"),
+                    license = obj.getString("license"),
+                    url = obj.getString("url")
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     private fun setupLicenses() {
         val inflater = LayoutInflater.from(this)
+        val licenses = loadLicenses()
 
         licenses.forEach { license ->
             val card = MaterialCardView(this).apply {

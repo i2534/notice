@@ -14,9 +14,11 @@ Android MQTT 客户端，用于接收 Notice Server 的推送通知。
 - ✅ 消息分页加载（Paging 3）
 - ✅ 消息多选批量删除
 - ✅ 消息详情弹窗查看
+- ✅ 智能时间显示（今天/今年/跨年）
 - ✅ 配置持久化（DataStore）
-- ✅ 日志查看与分享导出
-- ✅ 节能优化 (可配置心跳间隔)
+- ✅ 日志查看、分享导出、下拉刷新
+- ✅ 开源许可页面
+- ✅ 节能优化（可配置心跳间隔）
 - ✅ 智能重连（指数退避）
 
 ## 系统要求
@@ -217,26 +219,30 @@ tcp://192.168.1.100:9091 # TCP 明文（局域网）
 ## 项目结构
 
 ```
-app/src/main/java/com/github/i2534/notice/
-├── NoticeApp.kt              # Application 类
-├── data/
-│   ├── MqttConfig.kt         # 配置管理 (DataStore)
-│   ├── NoticeMessage.kt      # 消息数据类 (Room Entity)
-│   ├── AppDatabase.kt        # Room 数据库
-│   └── MessageDao.kt         # 消息 DAO (分页查询)
-├── service/
-│   └── MqttService.kt        # MQTT 后台服务
-├── receiver/
-│   └── BootReceiver.kt       # 开机启动接收器
-├── util/
-│   └── AppLogger.kt          # 应用日志（持久化 + 轮转）
-└── ui/
-    ├── MainActivity.kt       # 主界面
-    ├── SettingsActivity.kt   # 设置界面
-    ├── AboutActivity.kt      # 关于页面
-    ├── LogsActivity.kt       # 日志查看页面
-    ├── LicensesActivity.kt   # 开源许可页面
-    └── MessageAdapter.kt     # 消息列表适配器 (PagingDataAdapter)
+app/src/main/
+├── assets/
+│   └── licenses.json         # 开源许可数据
+├── java/com/github/i2534/notice/
+│   ├── NoticeApp.kt          # Application 类
+│   ├── data/
+│   │   ├── MqttConfig.kt     # 配置管理 (DataStore)
+│   │   ├── NoticeMessage.kt  # 消息数据类 (Room Entity)
+│   │   ├── AppDatabase.kt    # Room 数据库
+│   │   └── MessageDao.kt     # 消息 DAO (分页查询)
+│   ├── service/
+│   │   └── MqttService.kt    # MQTT 后台服务
+│   ├── receiver/
+│   │   └── BootReceiver.kt   # 开机启动接收器
+│   ├── util/
+│   │   └── AppLogger.kt      # 应用日志（持久化 + 轮转）
+│   └── ui/
+│       ├── MainActivity.kt       # 主界面
+│       ├── SettingsActivity.kt   # 设置界面
+│       ├── AboutActivity.kt      # 关于页面
+│       ├── LogsActivity.kt       # 日志查看页面
+│       ├── LicensesActivity.kt   # 开源许可页面
+│       └── MessageAdapter.kt     # 消息列表适配器
+└── res/                      # 资源文件
 ```
 
 ## 依赖库
@@ -245,6 +251,7 @@ app/src/main/java/com/github/i2534/notice/
 - AndroidX Room - 消息持久化存储
 - AndroidX Paging 3 - 消息分页加载
 - AndroidX DataStore - 配置存储
+- AndroidX SwipeRefreshLayout - 下拉刷新
 - Kotlin Coroutines - 异步处理
 - Material Design 3 - UI 组件
 

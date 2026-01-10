@@ -92,6 +92,12 @@ class LogsActivity : AppCompatActivity() {
     private fun setupRecyclerView() {
         binding.logList.layoutManager = LinearLayoutManager(this)
         binding.logList.adapter = adapter
+
+        // 下拉刷新
+        binding.swipeRefresh.setColorSchemeResources(R.color.primary)
+        binding.swipeRefresh.setOnRefreshListener {
+            loadLogs()
+        }
     }
 
     private fun loadLogs() {
@@ -107,6 +113,7 @@ class LogsActivity : AppCompatActivity() {
             }
             adapter.submitList(allLogs)
             updateEmptyView(allLogs.isEmpty())
+            binding.swipeRefresh.isRefreshing = false
         }
     }
 

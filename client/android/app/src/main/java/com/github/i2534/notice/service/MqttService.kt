@@ -330,6 +330,13 @@ class MqttService : Service() {
 
     private fun handleMessage(topic: String, payload: ByteArray) {
         val message = NoticeMessage.parse(topic, payload)
+
+        // 过滤 Web 界面的认证检查消息
+        if (message.content == "__auth_check__") {
+            AppLogger.d(TAG, "Ignoring auth check message")
+            return
+        }
+
         AppLogger.d(TAG, "Message received: ${message.title}")
 
         // 保存到数据库

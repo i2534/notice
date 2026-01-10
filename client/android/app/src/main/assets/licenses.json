@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Eclipse Paho MQTT Client",
+    "author": "Eclipse Foundation",
+    "license": "Eclipse Public License 2.0",
+    "url": "https://github.com/eclipse/paho.mqtt.java"
+  },
+  {
+    "name": "Kotlin Coroutines",
+    "author": "JetBrains",
+    "license": "Apache License 2.0",
+    "url": "https://github.com/Kotlin/kotlinx.coroutines"
+  },
+  {
+    "name": "Material Components for Android",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://github.com/material-components/material-components-android"
+  },
+  {
+    "name": "AndroidX Core",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx"
+  },
+  {
+    "name": "AndroidX Room",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx/releases/room"
+  },
+  {
+    "name": "AndroidX Paging",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx/releases/paging"
+  },
+  {
+    "name": "AndroidX DataStore",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx/releases/datastore"
+  },
+  {
+    "name": "AndroidX Lifecycle",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx/releases/lifecycle"
+  },
+  {
+    "name": "AndroidX SwipeRefreshLayout",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx/releases/swiperefreshlayout"
+  }
+]
