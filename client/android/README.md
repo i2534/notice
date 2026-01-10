@@ -10,10 +10,14 @@ Android MQTT 客户端，用于接收 Notice Server 的推送通知。
 - ✅ 后台前台服务，保持连接
 - ✅ 开机自动启动
 - ✅ 系统通知推送
-- ✅ 消息历史记录
-- ✅ 配置持久化（自动保存）
+- ✅ 消息持久化（Room 数据库）
+- ✅ 消息分页加载（Paging 3）
+- ✅ 消息多选批量删除
+- ✅ 消息详情弹窗查看
+- ✅ 配置持久化（DataStore）
+- ✅ 日志查看与分享导出
 - ✅ 节能优化 (可配置心跳间隔)
-- ✅ 自动重连
+- ✅ 智能重连（指数退避）
 
 ## 系统要求
 
@@ -217,7 +221,9 @@ app/src/main/java/com/github/i2534/notice/
 ├── NoticeApp.kt              # Application 类
 ├── data/
 │   ├── MqttConfig.kt         # 配置管理 (DataStore)
-│   └── NoticeMessage.kt      # 消息数据类
+│   ├── NoticeMessage.kt      # 消息数据类 (Room Entity)
+│   ├── AppDatabase.kt        # Room 数据库
+│   └── MessageDao.kt         # 消息 DAO (分页查询)
 ├── service/
 │   └── MqttService.kt        # MQTT 后台服务
 ├── receiver/
@@ -229,12 +235,15 @@ app/src/main/java/com/github/i2534/notice/
     ├── SettingsActivity.kt   # 设置界面
     ├── AboutActivity.kt      # 关于页面
     ├── LogsActivity.kt       # 日志查看页面
-    └── MessageAdapter.kt     # 消息列表适配器
+    ├── LicensesActivity.kt   # 开源许可页面
+    └── MessageAdapter.kt     # 消息列表适配器 (PagingDataAdapter)
 ```
 
 ## 依赖库
 
 - [Eclipse Paho MQTT](https://github.com/eclipse/paho.mqtt.java) - MQTT 客户端
+- AndroidX Room - 消息持久化存储
+- AndroidX Paging 3 - 消息分页加载
 - AndroidX DataStore - 配置存储
 - Kotlin Coroutines - 异步处理
 - Material Design 3 - UI 组件

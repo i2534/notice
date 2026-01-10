@@ -125,6 +125,10 @@ log:
   pretty: true
   rotate_days: 1
   max_files: 7
+
+message:
+  max_title_length: 50    # 标题最大长度，0 表示不限制
+  max_content_length: 250 # 内容最大长度，0 表示不限制
 ```
 
 指定配置文件：
@@ -159,6 +163,8 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | 日志 | LOG_MAX_FILES | 7 | 保留日志文件数 |
 | 存储 | STORAGE_ENABLED | true | 是否启用持久化存储 |
 | 存储 | STORAGE_PATH | data | 数据存储路径 |
+| 消息 | MESSAGE_MAX_TITLE_LENGTH | 50 | 标题最大长度（字符） |
+| 消息 | MESSAGE_MAX_CONTENT_LENGTH | 250 | 内容最大长度（字符） |
 
 ## API 端点
 

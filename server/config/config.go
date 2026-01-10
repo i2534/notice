@@ -111,8 +111,8 @@ func defaultConfig() *Config {
 			Path:    "data",
 		},
 		Message: MessageConfig{
-			MaxTitleLength:   200,   // 标题最大 200 字符
-			MaxContentLength: 10000, // 内容最大 10000 字符
+			MaxTitleLength:   50,  // 标题最大 50 字符
+			MaxContentLength: 250, // 内容最大 250 字符
 		},
 	}
 }

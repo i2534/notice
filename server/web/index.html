@@ -314,6 +314,7 @@
             line-height: 1.4;
             font-size: 0.85rem;
             word-break: break-word;
+            white-space: pre-wrap;
         }
 
         .message-topic {
@@ -492,6 +493,145 @@
             border-color: var(--error);
         }
 
+        /* 模态框 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            max-width: 480px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+            animation: slideIn 0.2s ease;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h3 {
+            font-size: 1.1rem;
+            background: linear-gradient(135deg, var(--accent), #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 1.25rem;
+        }
+
+        .modal-desc {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .help-section {
+            margin-bottom: 1.25rem;
+        }
+
+        .help-section h4 {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .help-section ul {
+            list-style: none;
+            font-size: 0.85rem;
+        }
+
+        .help-section li {
+            padding: 0.3rem 0;
+            color: var(--text-primary);
+        }
+
+        .code-block {
+            display: block;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent);
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .help-links {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .help-link {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .help-link:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .help-footer {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
         /* 响应式 */
         @media (max-width: 640px) {
             .topbar {
@@ -537,7 +677,58 @@
                     <span>🔑</span>
                     <span id="tokenDisplay">-</span>
                 </div>
+                <button class="secondary small" onclick="showHelp()">帮助</button>
                 <button class="secondary small" onclick="logout()">退出</button>
+            </div>
+        </div>
+
+        <!-- 帮助弹框 -->
+        <div class="modal-overlay" id="helpModal" onclick="hideHelp(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h3>📡 Notice</h3>
+                    <button class="modal-close" onclick="hideHelp()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-desc">轻量级消息推送服务，集成 HTTP Webhook 和 MQTT Broker</p>
+
+                    <div class="help-section">
+                        <h4>功能特性</h4>
+                        <ul>
+                            <li>📥 HTTP Webhook 接收消息</li>
+                            <li>📡 内置 MQTT Broker (TCP + WebSocket)</li>
+                            <li>🔐 Token 认证</li>
+                            <li>💾 离线消息支持</li>
+                        </ul>
+                    </div>
+
+                    <div class="help-section">
+                        <h4>API 使用</h4>
+                        <code class="code-block">curl -X POST /webhook \
+  -H "Authorization: Bearer &lt;token&gt;" \
+  -d '{"title":"标题","content":"内容"}'</code>
+                    </div>
+
+                    <div class="help-section">
+                        <h4>项目链接</h4>
+                        <div class="help-links">
+                            <a href="https://github.com/i2534/notice" target="_blank" class="help-link">
+                                <span>📦</span> GitHub 仓库
+                            </a>
+                            <a href="https://github.com/i2534/notice/issues" target="_blank" class="help-link">
+                                <span>🐛</span> 问题反馈
+                            </a>
+                            <a href="https://github.com/i2534/notice/releases" target="_blank" class="help-link">
+                                <span>📋</span> 版本发布
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="help-footer">
+                        <span>MIT License</span>
+                        <span>© 2024 Notice Project</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -616,6 +807,8 @@
                             <textarea id="sendContent" placeholder="消息内容..."></textarea>
                         </div>
                         <button onclick="sendMessage()" id="sendBtn">发送消息</button>
+                        <button class="secondary" onclick="clearSendForm()">清空</button>
+                        <button class="secondary" onclick="fillTestMessage()">测试信息</button>
                         <span
                             style="margin-left: 0.5rem; font-size: 0.75rem; color: var(--text-secondary);">Ctrl+Enter</span>
                         <div class="response-box" id="sendResponse"></div>
@@ -971,6 +1164,46 @@
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
+
+        function clearSendForm() {
+            document.getElementById('sendTitle').value = '';
+            document.getElementById('sendContent').value = '';
+            document.getElementById('sendTopic').value = '';
+            document.getElementById('sendResponse').style.display = 'none';
+        }
+
+        function fillTestMessage() {
+            const now = new Date();
+            const time = now.toLocaleTimeString();
+            const titles = ['系统通知', '测试消息', '服务提醒', '状态更新', '调试信息'];
+            const contents = [
+                '这是一条测试消息，用于验证推送功能是否正常工作。\n时间：' + time,
+                '服务运行正常，所有组件状态良好。\n时间：' + time,
+                '您有一条新的通知消息，请及时查看。\n时间：' + time,
+                '测试多行内容：\n第一行\n第二行\n第三行\n时间：' + time,
+                '🎉 恭喜！消息推送测试成功！\n时间：' + time
+            ];
+            const idx = Math.floor(Math.random() * titles.length);
+            document.getElementById('sendTitle').value = titles[idx];
+            document.getElementById('sendContent').value = contents[idx];
+            document.getElementById('sendResponse').style.display = 'none';
+        }
+
+        function showHelp() {
+            document.getElementById('helpModal').classList.add('active');
+        }
+
+        function hideHelp(event) {
+            if (!event || event.target === event.currentTarget) {
+                document.getElementById('helpModal').classList.remove('active');
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideHelp();
+            }
+        });
     </script>
 </body>
 
