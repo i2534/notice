@@ -3,9 +3,11 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
+	"unicode/utf8"
 
 	"notice-server/broker"
 	"notice-server/config"
@@ -108,6 +110,19 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if req.Content == "" {
 		logger.Warn("content 字段为空")
 		h.sendError(w, http.StatusBadRequest, "content 字段不能为空")
+		return
+	}
+
+	// 验证字段长度
+	if h.config.Message.MaxTitleLength > 0 && utf8.RuneCountInString(req.Title) > h.config.Message.MaxTitleLength {
+		logger.Warn("title 超出长度限制", "size", utf8.RuneCountInString(req.Title), "max", h.config.Message.MaxTitleLength)
+		h.sendError(w, http.StatusBadRequest, fmt.Sprintf("title 长度不能超过 %d 字符", h.config.Message.MaxTitleLength))
+		return
+	}
+
+	if h.config.Message.MaxContentLength > 0 && utf8.RuneCountInString(req.Content) > h.config.Message.MaxContentLength {
+		logger.Warn("content 超出长度限制", "size", utf8.RuneCountInString(req.Content), "max", h.config.Message.MaxContentLength)
+		h.sendError(w, http.StatusBadRequest, fmt.Sprintf("content 长度不能超过 %d 字符", h.config.Message.MaxContentLength))
 		return
 	}
 

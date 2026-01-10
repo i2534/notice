@@ -49,6 +49,11 @@ class AboutActivity : AppCompatActivity() {
         binding.btnIssues.setOnClickListener {
             openUrl("$PROJECT_URL/issues")
         }
+
+        // 开源许可
+        binding.btnLicenses.setOnClickListener {
+            startActivity(Intent(this, LicensesActivity::class.java))
+        }
     }
 
     private fun openUrl(url: String) {

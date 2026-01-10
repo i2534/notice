@@ -89,3 +89,13 @@ storage:
   # 数据存储路径
   # 环境变量: STORAGE_PATH
   path: "data"
+
+# 消息配置
+message:
+  # 标题最大长度（字符），0 表示不限制
+  # 环境变量: MESSAGE_MAX_TITLE_LENGTH
+  max_title_length: 50
+
+  # 内容最大长度（字符），0 表示不限制
+  # 环境变量: MESSAGE_MAX_CONTENT_LENGTH
+  max_content_length: 250

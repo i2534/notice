@@ -17,6 +17,11 @@ import org.eclipse.paho.client.mqttv3.*
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import com.github.i2534.notice.NoticeApp
 import com.github.i2534.notice.R
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import com.github.i2534.notice.data.AppDatabase
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.data.NoticeMessage
@@ -39,6 +44,8 @@ class MqttService : Service() {
     private var mqttClient: MqttAsyncClient? = null
     private var currentSettings: MqttSettings? = null
     private val configStore by lazy { MqttConfigStore(this) }
+    private val database by lazy { AppDatabase.getInstance(this) }
+    private val messageDao by lazy { database.messageDao() }
 
     private val messageIdCounter = AtomicInteger(2000)
 
@@ -49,14 +56,27 @@ class MqttService : Service() {
     private val maxReconnectDelay = 60_000L  // 最大重连间隔 60 秒
     private val baseReconnectDelay = 3_000L  // 基础重连间隔 3 秒
 
+    // 心跳日志
+    private var heartbeatJob: Job? = null
+    private val heartbeatInterval = 5_000L  // 5 秒
+
     // 状态流
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private val _messages = MutableStateFlow<List<NoticeMessage>>(emptyList())
-    val messages: StateFlow<List<NoticeMessage>> = _messages.asStateFlow()
+    // 分页消息流
+    val messagesPaging: Flow<PagingData<NoticeMessage>> by lazy {
+        Pager(
+            config = PagingConfig(
+                pageSize = 20,
+                enablePlaceholders = false,
+                initialLoadSize = 40
+            ),
+            pagingSourceFactory = { messageDao.getMessagesPaging() }
+        ).flow.cachedIn(scope)
+    }
 
-    private val _latestMessage = MutableSharedFlow<NoticeMessage>(replay = 0)
+    private val _latestMessage = MutableSharedFlow<NoticeMessage>(replay = 1)
     val latestMessage: SharedFlow<NoticeMessage> = _latestMessage.asSharedFlow()
 
     // 未读消息计数
@@ -77,19 +97,57 @@ class MqttService : Service() {
         super.onCreate()
         AppLogger.d(TAG, "MqttService created")
         acquireWakeLock()
+        startHeartbeat()
+        loadLatestMessage()
+    }
+
+    private fun loadLatestMessage() {
+        scope.launch {
+            messageDao.getLatestMessage()?.let { message ->
+                _latestMessage.emit(message)
+                AppLogger.d(TAG, "Loaded latest message: ${message.title}")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, createServiceNotification())
+
         when (intent?.action) {
             ACTION_CONNECT -> connect()
             ACTION_DISCONNECT -> disconnect()
+            else -> {
+                // 首次启动时检查是否需要自动连接
+                tryAutoConnect()
+            }
         }
 
-        startForeground(NOTIFICATION_ID, createServiceNotification())
         return START_STICKY
     }
 
+    /**
+     * 尝试自动连接
+     * 条件：autoConnect 为 true 且 broker URL 已被用户设置过（非默认值）
+     */
+    private fun tryAutoConnect() {
+        if (_connectionState.value != ConnectionState.DISCONNECTED) return
+
+        scope.launch {
+            configStore.settings.first().let { settings ->
+                val isConfigured = settings.brokerUrl != MqttSettings().brokerUrl
+                if (settings.autoConnect && isConfigured) {
+                    AppLogger.d(TAG, "Auto connecting on startup...")
+                    currentSettings = settings
+                    connectMqtt(settings)
+                } else if (!isConfigured) {
+                    AppLogger.d(TAG, "Skip auto connect: broker not configured")
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
+        stopHeartbeat()
         disconnect()
         releaseWakeLock()
         scope.cancel()
@@ -231,6 +289,23 @@ class MqttService : Service() {
         }
     }
 
+    private fun startHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = scope.launch {
+            while (isActive) {
+                delay(heartbeatInterval)
+                val state = _connectionState.value.name
+                val mqttConnected = mqttClient?.isConnected == true
+                AppLogger.d(TAG, "Heartbeat: alive, state=$state, mqtt=$mqttConnected")
+            }
+        }
+    }
+
+    private fun stopHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
+    }
+
     fun disconnect() {
         userDisconnected = true
         reconnectJob?.cancel()
@@ -257,9 +332,11 @@ class MqttService : Service() {
         val message = NoticeMessage.parse(topic, payload)
         AppLogger.d(TAG, "Message received: ${message.title}")
 
-        // 更新消息列表
-        _messages.update { current ->
-            (listOf(message) + current).take(100) // 保留最近100条
+        // 保存到数据库
+        scope.launch {
+            messageDao.insert(message)
+            // 保留最近 500 条消息
+            messageDao.trimToSize(500)
         }
 
         // 增加未读计数
@@ -344,8 +421,16 @@ class MqttService : Service() {
     }
 
     fun clearMessages() {
-        _messages.value = emptyList()
         clearUnreadCount()
+        scope.launch { messageDao.deleteAll() }
+    }
+
+    fun deleteMessage(messageId: String) {
+        scope.launch { messageDao.delete(messageId) }
+    }
+
+    fun deleteMessages(messageIds: Set<String>) {
+        scope.launch { messageDao.deleteByIds(messageIds.toList()) }
     }
 
     fun clearUnreadCount() {

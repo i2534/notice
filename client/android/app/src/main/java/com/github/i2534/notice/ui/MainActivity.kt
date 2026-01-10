@@ -2,6 +2,8 @@ package com.github.i2534.notice.ui
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -15,15 +17,19 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
+import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import com.github.i2534.notice.R
+import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.databinding.ActivityMainBinding
 import com.github.i2534.notice.service.MqttService
 
@@ -33,7 +39,17 @@ class MainActivity : AppCompatActivity() {
     private var mqttService: MqttService? = null
     private var serviceBound = false
 
-    private val messageAdapter = MessageAdapter()
+    private val messageAdapter = MessageAdapter(
+        onItemClick = { message ->
+            showMessageDetailDialog(message)
+        },
+        onEnterSelectMode = {
+            updateSelectModeUI()
+        },
+        onSelectionChanged = { count ->
+            updateSelectionCount(count)
+        }
+    )
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -80,6 +96,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
+        // 返回键处理（多选模式下退出多选）
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (messageAdapter.isSelectMode) {
+                    exitSelectMode()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
+
         // Toolbar
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -116,10 +144,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 清空按钮
+        // 清空按钮（正常模式：清空全部，多选模式：删除选中）
         binding.btnClear.setOnClickListener {
-            mqttService?.clearMessages()
-            binding.latestMessageCard.visibility = View.GONE
+            if (messageAdapter.isSelectMode) {
+                deleteSelectedMessages()
+            } else {
+                showClearAllDialog()
+            }
         }
 
         // 点击最新消息卡片清除未读计数
@@ -159,14 +190,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showBatteryOptimizationDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.battery_optimization_title)
-            .setMessage(R.string.battery_optimization_message)
-            .setPositiveButton(R.string.battery_optimization_settings) { _, _ ->
-                requestIgnoreBatteryOptimization()
-            }
-            .setNegativeButton(R.string.battery_optimization_later, null)
-            .show()
+        showConfirmDialog(
+            title = getString(R.string.battery_optimization_title),
+            message = getString(R.string.battery_optimization_message),
+            positiveText = getString(R.string.battery_optimization_settings),
+            negativeText = getString(R.string.battery_optimization_later),
+            isDestructive = false,
+            onConfirm = { requestIgnoreBatteryOptimization() }
+        )
     }
 
     @SuppressLint("BatteryLife")
@@ -200,11 +231,19 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // 观察消息列表
+            // 观察分页消息列表
             lifecycleScope.launch {
-                service.messages.collectLatest { messages ->
-                    messageAdapter.submitList(messages)
-                    binding.emptyText.visibility = if (messages.isEmpty()) View.VISIBLE else View.GONE
+                service.messagesPaging.collectLatest { pagingData ->
+                    messageAdapter.submitData(pagingData)
+                }
+            }
+
+            // 观察列表是否为空
+            lifecycleScope.launch {
+                messageAdapter.loadStateFlow.collectLatest { loadStates ->
+                    val isEmpty = loadStates.refresh is androidx.paging.LoadState.NotLoading &&
+                            messageAdapter.itemCount == 0
+                    binding.emptyText.visibility = if (isEmpty) View.VISIBLE else View.GONE
                 }
             }
 
@@ -219,6 +258,119 @@ class MainActivity : AppCompatActivity() {
             }
 
         }
+    }
+
+    private fun updateSelectModeUI() {
+        binding.btnClear.text = getString(R.string.btn_delete_selected)
+        binding.toolbar.title = getString(R.string.select_mode_title, messageAdapter.getSelectedCount())
+    }
+
+    private fun updateSelectionCount(count: Int) {
+        binding.toolbar.title = getString(R.string.select_mode_title, count)
+    }
+
+    private fun exitSelectMode() {
+        messageAdapter.exitSelectMode()
+        binding.btnClear.text = getString(R.string.clear_history)
+        binding.toolbar.title = getString(R.string.app_name)
+    }
+
+    private fun deleteSelectedMessages() {
+        val selectedIds = messageAdapter.getSelectedIds()
+        if (selectedIds.isEmpty()) {
+            Snackbar.make(binding.root, R.string.no_message_selected, Snackbar.LENGTH_SHORT).show()
+            return
+        }
+
+        showConfirmDialog(
+            title = getString(R.string.message_delete_title),
+            message = getString(R.string.message_delete_selected_confirm, selectedIds.size),
+            onConfirm = {
+                mqttService?.deleteMessages(selectedIds)
+                exitSelectMode()
+                Snackbar.make(binding.root, getString(R.string.messages_deleted, selectedIds.size), Snackbar.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    private fun showClearAllDialog() {
+        showConfirmDialog(
+            title = getString(R.string.clear_all_title),
+            message = getString(R.string.clear_all_confirm),
+            onConfirm = {
+                mqttService?.clearMessages()
+                binding.latestMessageCard.visibility = View.GONE
+            }
+        )
+    }
+
+    private fun showConfirmDialog(
+        title: String,
+        message: String,
+        positiveText: String = getString(R.string.message_delete_yes),
+        negativeText: String = getString(R.string.message_delete_no),
+        isDestructive: Boolean = true,
+        onConfirm: () -> Unit
+    ) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_confirm, null)
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = title
+        dialogView.findViewById<TextView>(R.id.dialogMessage).text = message
+
+        val dialog = AlertDialog.Builder(this, R.style.Theme_Notice_Dialog)
+            .setView(dialogView)
+            .create()
+
+        dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPositive).apply {
+            text = positiveText
+            // 非破坏性操作使用主色调
+            if (!isDestructive) {
+                backgroundTintList = ContextCompat.getColorStateList(context, R.color.primary)
+            }
+            setOnClickListener {
+                onConfirm()
+                dialog.dismiss()
+            }
+        }
+
+        dialogView.findViewById<View>(R.id.btnNegative).apply {
+            (this as? com.google.android.material.button.MaterialButton)?.text = negativeText
+            setOnClickListener {
+                dialog.dismiss()
+            }
+        }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+    }
+
+    private fun showMessageDetailDialog(message: NoticeMessage) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_message_detail, null)
+
+        // 绑定数据
+        dialogView.findViewById<TextView>(R.id.dialogTitle).text = message.title
+        dialogView.findViewById<TextView>(R.id.dialogContent).text = message.content
+        dialogView.findViewById<TextView>(R.id.dialogTopic).text = message.topic
+        dialogView.findViewById<TextView>(R.id.dialogTime).text = message.getFormattedTime()
+
+        val dialog = AlertDialog.Builder(this, R.style.Theme_Notice_Dialog)
+            .setView(dialogView)
+            .create()
+
+        // 关闭按钮
+        dialogView.findViewById<View>(R.id.btnClose).setOnClickListener {
+            dialog.dismiss()
+        }
+
+        // 复制按钮
+        dialogView.findViewById<View>(R.id.btnCopy).setOnClickListener {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText(message.title, message.content)
+            clipboard.setPrimaryClip(clip)
+            Snackbar.make(binding.root, R.string.message_detail_copied, Snackbar.LENGTH_SHORT).show()
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     private fun updateConnectionUI(state: MqttService.ConnectionState) {

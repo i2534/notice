@@ -24,10 +24,15 @@
     <color name="status_disconnected">#F44336</color>
     <color name="status_connecting">#FF9800</color>
 
+    <!-- 错误/警告色 -->
+    <color name="error">#CF6679</color>
+    <color name="warning">#FFB74D</color>
+
     <!-- 基础色 -->
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
 
     <!-- 交互色 -->
     <color name="ripple">#33FFFFFF</color>
+    <color name="selected_background">#1A0D7377</color>
 </resources>

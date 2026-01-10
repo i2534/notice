@@ -65,6 +65,12 @@
             android:exported="false"
             android:parentActivityName=".ui.MainActivity" />
 
+        <!-- 开源许可 Activity -->
+        <activity
+            android:name=".ui.LicensesActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.AboutActivity" />
+
         <!-- MQTT 前台服务 -->
         <service
             android:name=".service.MqttService"
@@ -84,6 +90,17 @@
 
         <!-- Paho MQTT Service -->
         <service android:name="org.eclipse.paho.android.service.MqttService" />
+
+        <!-- FileProvider for sharing files -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

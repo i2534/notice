@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 用于分享日志文件 -->
+    <cache-path
+        name="shared_logs"
+        path="shared_logs/" />
+</paths>

@@ -1,10 +1,14 @@
 package com.github.i2534.notice.data
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 
+@Entity(tableName = "messages")
 data class NoticeMessage(
+    @PrimaryKey
     val id: String = UUID.randomUUID().toString(),
     val topic: String,
     val title: String,
@@ -12,7 +16,9 @@ data class NoticeMessage(
     val timestamp: Long = System.currentTimeMillis()
 ) {
     companion object {
-        private val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+        private val dateTimeFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+        private val fullDateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
 
         /**
          * 从 MQTT 消息解析
@@ -37,9 +43,33 @@ data class NoticeMessage(
                 )
             }
         }
+
+        private fun isSameDay(time1: Long, time2: Long): Boolean {
+            val cal1 = Calendar.getInstance().apply { timeInMillis = time1 }
+            val cal2 = Calendar.getInstance().apply { timeInMillis = time2 }
+            return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+                    cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+        }
+
+        private fun isSameYear(timestamp: Long): Boolean {
+            val cal1 = Calendar.getInstance().apply { timeInMillis = timestamp }
+            val cal2 = Calendar.getInstance()
+            return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)
+        }
     }
 
+    /**
+     * 格式化时间显示
+     * - 今天: 15:30
+     * - 今年其他日期: 01-08 15:30
+     * - 跨年: 2025-01-08 15:30
+     */
     fun getFormattedTime(): String {
-        return dateFormat.format(Date(timestamp))
+        val now = System.currentTimeMillis()
+        return when {
+            isSameDay(timestamp, now) -> timeFormat.format(Date(timestamp))
+            isSameYear(timestamp) -> dateTimeFormat.format(Date(timestamp))
+            else -> fullDateTimeFormat.format(Date(timestamp))
+        }
     }
 }

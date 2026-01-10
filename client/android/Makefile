@@ -62,6 +62,8 @@ docker:
 		-u $(shell id -u):$(shell id -g) \
 		-e ANDROID_USER_HOME=/android-home \
 		-v "$(PWD)/app:/app/app" \
+		-v "$(PWD)/build.gradle.kts:/app/build.gradle.kts:ro" \
+		-v "$(PWD)/gradle:/app/gradle:ro" \
 		-v "$(GRADLE_CACHE):/gradle-cache" \
 		-v "$(PROJECT_GRADLE):/app/.gradle" \
 		-v "$(ANDROID_HOME_CACHE):/android-home" \
@@ -102,6 +104,8 @@ docker-release:
 		-e KEY_PASSWORD="$(KEY_PASSWORD)" \
 		-e KEY_ALIAS="$(KEY_ALIAS)" \
 		-v "$(PWD)/app:/app/app" \
+		-v "$(PWD)/build.gradle.kts:/app/build.gradle.kts:ro" \
+		-v "$(PWD)/gradle:/app/gradle:ro" \
 		-v "$(PWD)/release.keystore:/app/release.keystore:ro" \
 		-v "$(GRADLE_CACHE):/gradle-cache" \
 		-v "$(PROJECT_GRADLE):/app/.gradle" \

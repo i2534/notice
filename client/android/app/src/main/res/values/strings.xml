@@ -3,7 +3,6 @@
     <string name="app_name">Notice</string>
 
     <!-- 主界面 -->
-    <string name="connection_status">连接状态</string>
     <string name="status_connected">已连接</string>
     <string name="status_disconnected">未连接</string>
     <string name="status_connecting">连接中...</string>
@@ -14,6 +13,20 @@
     <string name="btn_settings">设置</string>
     <string name="message_history">消息历史</string>
     <string name="clear_history">清空</string>
+    <string name="message_detail_copy">复制</string>
+    <string name="message_detail_close">关闭</string>
+    <string name="message_detail_copied">内容已复制</string>
+    <string name="message_delete_title">删除消息</string>
+    <string name="message_delete_selected_confirm">确定删除选中的 %1$d 条消息吗？</string>
+    <string name="message_delete_yes">删除</string>
+    <string name="message_delete_no">取消</string>
+    <string name="message_deleted">消息已删除</string>
+    <string name="messages_deleted">已删除 %1$d 条消息</string>
+    <string name="select_mode_title">已选择 %1$d 项</string>
+    <string name="btn_delete_selected">删除</string>
+    <string name="no_message_selected">未选择任何消息</string>
+    <string name="clear_all_title">清空消息</string>
+    <string name="clear_all_confirm">确定清空所有消息吗？</string>
 
     <!-- 设置界面 -->
     <string name="settings_title">设置</string>
@@ -50,7 +63,12 @@
     <string name="logs_empty">暂无日志</string>
     <string name="logs_clear">清空</string>
     <string name="logs_copy">复制</string>
-    <string name="logs_copied">日志已复制到剪贴板</string>
+    <string name="logs_copied_count">已复制 %1$d 条日志</string>
+    <string name="logs_copied_partial">日志过多，已复制 %1$d / %2$d 条（受剪贴板限制）</string>
+    <string name="logs_share">分享</string>
+    <string name="logs_share_title">分享日志文件</string>
+    <string name="logs_exporting">正在导出日志...</string>
+    <string name="logs_export_failed">导出失败</string>
     <string name="logs_days">天数</string>
     <string name="logs_select_days">选择天数</string>
     <string-array name="logs_days_options">
@@ -68,5 +86,9 @@
     <string name="about_project_url">项目地址</string>
     <string name="about_btn_github">GitHub</string>
     <string name="about_btn_issues">问题反馈</string>
+    <string name="about_btn_licenses">开源许可</string>
     <string name="about_copyright">© 2024 Notice Project. MIT License.</string>
+
+    <!-- 开源许可页面 -->
+    <string name="licenses_title">开源许可</string>
 </resources>

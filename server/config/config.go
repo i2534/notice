@@ -20,6 +20,13 @@ type Config struct {
 	RateLimit RateLimitConfig `yaml:"rate_limit"`
 	Log       LogConfig       `yaml:"log"`
 	Storage   StorageConfig   `yaml:"storage"`
+	Message   MessageConfig   `yaml:"message"`
+}
+
+// MessageConfig 消息配置
+type MessageConfig struct {
+	MaxTitleLength   int `yaml:"max_title_length" env:"MESSAGE_MAX_TITLE_LENGTH"`     // 标题最大长度
+	MaxContentLength int `yaml:"max_content_length" env:"MESSAGE_MAX_CONTENT_LENGTH"` // 内容最大长度
 }
 
 // StorageConfig 持久化存储配置
@@ -102,6 +109,10 @@ func defaultConfig() *Config {
 		Storage: StorageConfig{
 			Enabled: true,
 			Path:    "data",
+		},
+		Message: MessageConfig{
+			MaxTitleLength:   200,   // 标题最大 200 字符
+			MaxContentLength: 10000, // 内容最大 10000 字符
 		},
 	}
 }

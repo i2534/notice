@@ -21,4 +21,13 @@
         <!-- 刘海屏适配 -->
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
+
+    <!-- 消息详情弹窗主题 -->
+    <style name="Theme.Notice.Dialog" parent="Theme.Material3.DayNight.Dialog">
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="android:windowBackground">@color/surface</item>
+        <item name="android:backgroundDimAmount">0.6</item>
+        <item name="dialogCornerRadius">16dp</item>
+    </style>
 </resources>
