@@ -1,13 +1,18 @@
 package com.github.i2534.notice.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import com.github.i2534.notice.util.AppLogger
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -25,6 +30,7 @@ import com.github.i2534.notice.data.AppDatabase
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.data.NoticeMessage
+import com.github.i2534.notice.receiver.KeepAliveReceiver
 import com.github.i2534.notice.ui.MainActivity
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -35,6 +41,10 @@ class MqttService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_CONNECT = "com.github.i2534.notice.CONNECT"
         private const val ACTION_DISCONNECT = "com.github.i2534.notice.DISCONNECT"
+        const val ACTION_KEEP_ALIVE = "com.github.i2534.notice.KEEP_ALIVE"
+        
+        // Doze 保活闹钟间隔（10 分钟）
+        private const val KEEP_ALIVE_INTERVAL = 10 * 60 * 1000L
     }
 
     private val binder = LocalBinder()
@@ -58,7 +68,36 @@ class MqttService : Service() {
 
     // 心跳日志
     private var heartbeatJob: Job? = null
-    private val heartbeatInterval = 5_000L  // 5 秒
+    private val heartbeatInterval = 10_000L  // 10 秒
+
+    // Doze 保活闹钟
+    private val alarmManager by lazy { getSystemService(Context.ALARM_SERVICE) as AlarmManager }
+    private val powerManager by lazy { getSystemService(Context.POWER_SERVICE) as PowerManager }
+    private val keepAlivePendingIntent by lazy {
+        val intent = Intent(this, KeepAliveReceiver::class.java).apply {
+            action = KeepAliveReceiver.ACTION_KEEP_ALIVE
+        }
+        PendingIntent.getBroadcast(
+            this, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    // Doze 模式监听
+    private val dozeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED) {
+                val isDozeMode = powerManager.isDeviceIdleMode
+                if (isDozeMode) {
+                    AppLogger.w(TAG, "Device entered Doze mode")
+                } else {
+                    AppLogger.i(TAG, "Device exited Doze mode, checking connection...")
+                    // 退出 Doze 时检查连接状态
+                    handleKeepAlive()
+                }
+            }
+        }
+    }
 
     // 状态流
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
@@ -99,6 +138,8 @@ class MqttService : Service() {
         acquireWakeLock()
         startHeartbeat()
         loadLatestMessage()
+        scheduleKeepAliveAlarm()
+        registerDozeReceiver()
     }
 
     private fun loadLatestMessage() {
@@ -116,6 +157,7 @@ class MqttService : Service() {
         when (intent?.action) {
             ACTION_CONNECT -> connect()
             ACTION_DISCONNECT -> disconnect()
+            ACTION_KEEP_ALIVE -> handleKeepAlive()
             else -> {
                 // 首次启动时检查是否需要自动连接
                 tryAutoConnect()
@@ -147,6 +189,8 @@ class MqttService : Service() {
     }
 
     override fun onDestroy() {
+        unregisterDozeReceiver()
+        cancelKeepAliveAlarm()
         stopHeartbeat()
         disconnect()
         releaseWakeLock()
@@ -304,6 +348,98 @@ class MqttService : Service() {
     private fun stopHeartbeat() {
         heartbeatJob?.cancel()
         heartbeatJob = null
+    }
+
+    /**
+     * 设置 Doze 保活闹钟
+     * 使用 setExactAndAllowWhileIdle 在 Doze 模式下也能触发
+     */
+    private fun scheduleKeepAliveAlarm() {
+        val triggerTime = SystemClock.elapsedRealtime() + KEEP_ALIVE_INTERVAL
+        
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12+ 需要检查权限
+                if (alarmManager.canScheduleExactAlarms()) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        triggerTime,
+                        keepAlivePendingIntent
+                    )
+                    AppLogger.d(TAG, "Keep-alive alarm scheduled for ${KEEP_ALIVE_INTERVAL / 60000} minutes")
+                } else {
+                    // 没有精确闹钟权限，使用非精确闹钟
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        triggerTime,
+                        keepAlivePendingIntent
+                    )
+                    AppLogger.w(TAG, "Using inexact alarm (no SCHEDULE_EXACT_ALARM permission)")
+                }
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    triggerTime,
+                    keepAlivePendingIntent
+                )
+                AppLogger.d(TAG, "Keep-alive alarm scheduled for ${KEEP_ALIVE_INTERVAL / 60000} minutes")
+            }
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to schedule keep-alive alarm: ${e.message}")
+        }
+    }
+
+    /**
+     * 取消 Doze 保活闹钟
+     */
+    private fun cancelKeepAliveAlarm() {
+        alarmManager.cancel(keepAlivePendingIntent)
+        AppLogger.d(TAG, "Keep-alive alarm cancelled")
+    }
+
+    /**
+     * 注册 Doze 模式变化监听
+     */
+    private fun registerDozeReceiver() {
+        val filter = IntentFilter(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(dozeReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(dozeReceiver, filter)
+        }
+        AppLogger.d(TAG, "Doze mode receiver registered")
+    }
+
+    /**
+     * 取消注册 Doze 模式变化监听
+     */
+    private fun unregisterDozeReceiver() {
+        try {
+            unregisterReceiver(dozeReceiver)
+            AppLogger.d(TAG, "Doze mode receiver unregistered")
+        } catch (e: Exception) {
+            // 忽略未注册的情况
+        }
+    }
+
+    /**
+     * 处理保活闹钟唤醒
+     * 检查连接状态，必要时重连，并重新设置下一次闹钟
+     */
+    private fun handleKeepAlive() {
+        val mqttConnected = mqttClient?.isConnected == true
+        val state = _connectionState.value
+        
+        AppLogger.d(TAG, "Keep-alive check: state=$state, mqtt=$mqttConnected")
+        
+        // 如果未连接且用户没有主动断开，尝试重连
+        if (!mqttConnected && !userDisconnected) {
+            AppLogger.d(TAG, "Keep-alive: connection lost, attempting reconnect...")
+            connect()
+        }
+        
+        // 重新设置下一次闹钟
+        scheduleKeepAliveAlarm()
     }
 
     fun disconnect() {

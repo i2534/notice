@@ -25,6 +25,9 @@
     <!-- 开机启动 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- 精确闹钟权限 (Android 12+, 用于 Doze 模式下保活) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
     <application
         android:name=".NoticeApp"
         android:allowBackup="true"
@@ -87,6 +90,12 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- Doze 模式保活闹钟接收器 -->
+        <receiver
+            android:name=".receiver.KeepAliveReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- Paho MQTT Service -->
         <service android:name="org.eclipse.paho.android.service.MqttService" />
