@@ -248,19 +248,23 @@
             background: var(--bg-card);
             border-bottom: 1px solid var(--border);
             flex-shrink: 0;
+            gap: 0.5rem;
         }
 
         .messages-header h3 {
             font-size: 0.85rem;
             font-weight: 600;
+            flex-shrink: 0;
         }
 
         .messages-header .meta {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-secondary);
+            flex-shrink: 0;
+            line-height: 1;
         }
 
         /* 消息列表 - 占满剩余空间 */
@@ -277,6 +281,136 @@
             padding: 0.6rem 0.75rem;
             margin-bottom: 0.4rem;
             animation: slideIn 0.2s ease;
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
+        }
+
+        .message-item.selected {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .message-body {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* 自定义 Checkbox 样式 */
+        .custom-checkbox {
+            position: relative;
+            flex-shrink: 0;
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .custom-checkbox input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .custom-checkbox .checkmark {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 18px;
+            height: 18px;
+            background: var(--bg-secondary);
+            border: 2px solid var(--border);
+            border-radius: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .custom-checkbox:hover .checkmark {
+            border-color: var(--accent);
+        }
+
+        .custom-checkbox input:checked~.checkmark {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .custom-checkbox .checkmark:after {
+            content: "";
+            position: absolute;
+            display: none;
+            left: 50%;
+            top: 45%;
+            width: 4px;
+            height: 8px;
+            border: solid var(--bg-primary);
+            border-width: 0 2px 2px 0;
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+
+        .custom-checkbox input:checked~.checkmark:after {
+            display: block;
+        }
+
+        /* 全选标签样式 */
+        .select-all-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            cursor: pointer;
+            white-space: nowrap;
+            color: inherit;
+            padding: 0.25rem 0;
+        }
+
+        .select-all-label:hover {
+            color: var(--text-primary);
+        }
+
+        .select-all-label .custom-checkbox {
+            width: 12px;
+            height: 12px;
+            margin: 0;
+            overflow: visible;
+        }
+
+        .select-all-label .checkmark {
+            width: 12px;
+            height: 12px;
+            border-width: 1px;
+        }
+
+        /* 确认对话框 */
+        .confirm-dialog {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-width: 360px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .confirm-dialog h4 {
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+        }
+
+        .confirm-dialog p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .confirm-dialog .btn-group {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+        }
+
+        .confirm-dialog .btn-group button {
+            min-width: 80px;
         }
 
         @keyframes slideIn {
@@ -682,6 +816,18 @@
             </div>
         </div>
 
+        <!-- 确认对话框 -->
+        <div class="modal-overlay" id="confirmModal" onclick="hideConfirm(event)">
+            <div class="confirm-dialog" onclick="event.stopPropagation()">
+                <h4 id="confirmTitle">确认操作</h4>
+                <p id="confirmMessage">确定要执行此操作吗？</p>
+                <div class="btn-group">
+                    <button class="secondary" onclick="hideConfirm()">取消</button>
+                    <button class="danger" id="confirmBtn" onclick="executeConfirm()">确定</button>
+                </div>
+            </div>
+        </div>
+
         <!-- 帮助弹框 -->
         <div class="modal-overlay" id="helpModal" onclick="hideHelp(event)">
             <div class="modal-content" onclick="event.stopPropagation()">
@@ -737,8 +883,8 @@
             <div class="auth-card">
                 <h2>🔐 认证</h2>
                 <div class="form-group">
-                    <label>Token</label>
-                    <input type="password" id="authTokenInput" placeholder="请输入认证 Token">
+                    <input type="password" id="authTokenInput" placeholder="请输入认证 Token"
+                        onkeydown="if(event.key==='Enter')authenticate()">
                 </div>
                 <button class="full" onclick="authenticate()">验证并进入</button>
                 <div class="response-box" id="authResponse"></div>
@@ -773,7 +919,16 @@
                     <h3>📨 消息</h3>
                     <div class="meta">
                         <span id="messageCount">0 条</span>
-                        <button class="secondary small" onclick="clearMessages()">清空</button>
+                        <label class="select-all-label" style="white-space: nowrap;">
+                            <span class="custom-checkbox">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                                <span class="checkmark"></span>
+                            </span>
+                            全选
+                        </label>
+                        <button class="secondary small" id="deleteSelectedBtn"
+                            onclick="confirmDeleteSelected()">删除选中</button>
+                        <button class="secondary small" onclick="confirmClearMessages()">清空</button>
                     </div>
                 </div>
 
@@ -823,6 +978,9 @@
         let messageCount = 0;
         let currentToken = '';
         let clientId = '';
+        let messages = []; // 消息缓存数组
+        const MAX_MESSAGES = 100; // 最大缓存消息数
+        let confirmCallback = null; // 确认对话框回调
 
         function generateClientId() {
             return 'web-' + Math.random().toString(16).substr(2, 8);
@@ -843,12 +1001,83 @@
                 document.getElementById('topic').value = savedTopic;
             }
 
+            // 加载缓存的消息
+            loadCachedMessages();
+
             const savedToken = localStorage.getItem('authToken');
             if (savedToken) {
                 document.getElementById('authTokenInput').value = savedToken;
                 authenticate();
             }
         };
+
+        // 加载缓存的消息
+        function loadCachedMessages() {
+            try {
+                const cached = localStorage.getItem('cachedMessages');
+                if (cached) {
+                    messages = JSON.parse(cached);
+                    renderMessages();
+                }
+            } catch (e) {
+                console.error('加载缓存消息失败:', e);
+                messages = [];
+            }
+        }
+
+        // 保存消息到缓存
+        function saveCachedMessages() {
+            try {
+                localStorage.setItem('cachedMessages', JSON.stringify(messages));
+            } catch (e) {
+                console.error('保存缓存消息失败:', e);
+            }
+        }
+
+        // 渲染所有消息
+        function renderMessages() {
+            const list = document.getElementById('messagesList');
+            const emptyState = document.getElementById('emptyState');
+
+            if (messages.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state" id="emptyState">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <p>等待消息...</p>
+                    </div>
+                `;
+                messageCount = 0;
+            } else {
+                list.innerHTML = messages.map((msg, idx) => createMessageHTML(msg, idx)).join('');
+                messageCount = messages.length;
+            }
+            document.getElementById('messageCount').textContent = messageCount + ' 条';
+            updateSelectAllState();
+            updateDeleteSelectedBtn();
+        }
+
+        // 创建单条消息的 HTML
+        function createMessageHTML(msg, idx) {
+            const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+            return `
+                <div class="message-item" data-idx="${idx}">
+                    <label class="custom-checkbox">
+                        <input type="checkbox" onchange="onMessageSelect(${idx})" data-idx="${idx}">
+                        <span class="checkmark"></span>
+                    </label>
+                    <div class="message-body">
+                        <div class="message-header">
+                            <span class="message-title">${escapeHtml(msg.title)}</span>
+                            <span class="message-time">${time}</span>
+                        </div>
+                        <div class="message-content">${escapeHtml(msg.content)}</div>
+                        <div class="message-topic">${escapeHtml(msg.topic)}</div>
+                    </div>
+                </div>
+            `;
+        }
 
         async function authenticate() {
             const token = document.getElementById('authTokenInput').value.trim();
@@ -1027,47 +1256,150 @@
         }
 
         function addMessage(topic, msg) {
-            const list = document.getElementById('messagesList');
-            const emptyState = document.getElementById('emptyState');
-
-            if (emptyState) emptyState.style.display = 'none';
-
-            const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
             const title = msg.title || '通知';
             const content = msg.content || JSON.stringify(msg);
+            const timestamp = msg.timestamp || new Date().toISOString();
 
-            const item = document.createElement('div');
-            item.className = 'message-item';
-            item.innerHTML = `
-                <div class="message-header">
-                    <span class="message-title">${escapeHtml(title)}</span>
-                    <span class="message-time">${time}</span>
-                </div>
-                <div class="message-content">${escapeHtml(content)}</div>
-                <div class="message-topic">${escapeHtml(topic)}</div>
-            `;
+            // 添加到消息数组开头
+            messages.unshift({
+                topic: topic,
+                title: title,
+                content: content,
+                timestamp: timestamp
+            });
 
-            list.insertBefore(item, list.firstChild);
-            messageCount++;
-            document.getElementById('messageCount').textContent = messageCount + ' 条';
+            // 保持最多 MAX_MESSAGES 条消息
+            if (messages.length > MAX_MESSAGES) {
+                messages = messages.slice(0, MAX_MESSAGES);
+            }
+
+            // 保存到缓存并重新渲染
+            saveCachedMessages();
+            renderMessages();
 
             if (Notification.permission === 'granted') {
                 new Notification(title, { body: content });
             }
         }
 
-        function clearMessages() {
-            const list = document.getElementById('messagesList');
-            list.innerHTML = `
-                <div class="empty-state" id="emptyState">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                    </svg>
-                    <p>等待消息...</p>
-                </div>
-            `;
-            messageCount = 0;
-            document.getElementById('messageCount').textContent = '0 条';
+        // 确认清空消息
+        function confirmClearMessages() {
+            if (messages.length === 0) {
+                showToast('没有消息可清空', 'error');
+                return;
+            }
+            showConfirm('清空消息', `确定要清空全部 ${messages.length} 条消息吗？`, () => {
+                messages = [];
+                saveCachedMessages();
+                renderMessages();
+                document.getElementById('selectAllCheckbox').checked = false;
+                showToast('已清空所有消息', 'success');
+            });
+        }
+
+        // 消息选中状态变化
+        function onMessageSelect(idx) {
+            const item = document.querySelector(`.message-item[data-idx="${idx}"]`);
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (checkbox.checked) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
+            updateSelectAllState();
+            updateDeleteSelectedBtn();
+        }
+
+        // 全选/取消全选
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAllCheckbox').checked;
+            const checkboxes = document.querySelectorAll('.message-item input[type="checkbox"]');
+            const items = document.querySelectorAll('.message-item');
+            checkboxes.forEach(cb => cb.checked = selectAll);
+            items.forEach(item => {
+                if (selectAll) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+            updateDeleteSelectedBtn();
+        }
+
+        // 更新全选复选框状态
+        function updateSelectAllState() {
+            const checkboxes = document.querySelectorAll('.message-item input[type="checkbox"]');
+            const checkedCount = document.querySelectorAll('.message-item input[type="checkbox"]:checked').length;
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            if (checkboxes.length === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCount === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCount === checkboxes.length) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = true;
+            }
+        }
+
+        // 更新删除选中按钮显示
+        function updateDeleteSelectedBtn() {
+            // 按钮始终显示 "删除选中"，不显示数字避免视觉晃动
+        }
+
+        // 确认删除选中消息
+        function confirmDeleteSelected() {
+            const checkedCount = document.querySelectorAll('.message-item input[type="checkbox"]:checked').length;
+            if (checkedCount === 0) {
+                showToast('请先选择要删除的消息', 'error');
+                return;
+            }
+            showConfirm('删除消息', `确定要删除选中的 ${checkedCount} 条消息吗？`, () => {
+                deleteSelectedMessages();
+            });
+        }
+
+        // 删除选中的消息
+        function deleteSelectedMessages() {
+            const checkedBoxes = document.querySelectorAll('.message-item input[type="checkbox"]:checked');
+            const indicesToDelete = Array.from(checkedBoxes).map(cb => parseInt(cb.dataset.idx));
+            // 从大到小排序，避免删除时索引变化
+            indicesToDelete.sort((a, b) => b - a);
+            indicesToDelete.forEach(idx => {
+                messages.splice(idx, 1);
+            });
+            saveCachedMessages();
+            renderMessages();
+            document.getElementById('selectAllCheckbox').checked = false;
+            showToast(`已删除 ${indicesToDelete.length} 条消息`, 'success');
+        }
+
+        // 显示确认对话框
+        function showConfirm(title, message, callback) {
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            confirmCallback = callback;
+            document.getElementById('confirmModal').classList.add('active');
+        }
+
+        // 隐藏确认对话框
+        function hideConfirm(event) {
+            if (!event || event.target === event.currentTarget) {
+                document.getElementById('confirmModal').classList.remove('active');
+                confirmCallback = null;
+            }
+        }
+
+        // 执行确认操作
+        function executeConfirm() {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            hideConfirm();
         }
 
         async function sendMessage() {
@@ -1202,6 +1534,7 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 hideHelp();
+                hideConfirm();
             }
         });
     </script>
