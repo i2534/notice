@@ -3,12 +3,12 @@ module notice-client
 go 1.25
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast v1.1.2
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/gen2brain/beeep v0.11.2
 )
 
 require (
-	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect

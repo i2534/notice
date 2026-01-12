@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notice Client</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="app">
+    <!-- 顶部工具栏 -->
+    <header class="toolbar">
+      <h1 class="title">Notice</h1>
+      <div class="toolbar-actions">
+        <button id="logsBtn" class="icon-btn" title="日志">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor"
+              d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M13,13H11V18H13V13M13,10H11V12H13V10Z" />
+          </svg>
+        </button>
+        <button id="settingsBtn" class="icon-btn" title="设置">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor"
+              d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- 连接状态栏 -->
+      <div class="status-card">
+        <div class="status-left">
+          <span id="statusDot" class="status-dot disconnected"></span>
+          <span id="statusText" class="status-text">未连接</span>
+        </div>
+        <button id="connectBtn" class="connect-btn">连接</button>
+      </div>
+
+      <!-- 最新消息卡片 -->
+      <div id="latestCard" class="latest-card hidden">
+        <div class="latest-label">最新消息</div>
+        <div id="latestTitle" class="latest-title"></div>
+        <div id="latestContent" class="latest-content"></div>
+        <div id="latestTime" class="latest-time"></div>
+      </div>
+
+      <!-- 消息历史 -->
+      <div class="history-header">
+        <div class="history-left">
+          <span class="history-title">消息历史</span>
+          <span id="selectedCount" class="selected-count hidden"></span>
+        </div>
+        <div class="history-actions">
+          <button id="selectModeBtn" class="text-btn">选择</button>
+          <button id="deleteSelectedBtn" class="text-btn danger hidden">删除</button>
+          <button id="clearBtn" class="text-btn">清除</button>
+        </div>
+      </div>
+
+      <div id="messageList" class="message-list">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" width="48" height="48">
+            <path fill="currentColor"
+              d="M20,2H4C2.9,2,2,2.9,2,4v18l4-4h14c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2z M20,16H5.17L4,17.17V4h16V16z" />
+          </svg>
+          <p>暂无消息</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- 设置面板 -->
+    <div id="settingsOverlay" class="overlay hidden"></div>
+    <aside id="settingsPanel" class="settings-panel hidden">
+      <div class="panel-header">
+        <h2>设置</h2>
+        <button id="closeSettingsBtn" class="icon-btn">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor"
+              d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="panel-content">
+        <div class="section-title">服务器配置</div>
+
+        <div class="form-group">
+          <label for="server">服务器地址</label>
+          <input type="text" id="server" placeholder="tcp://localhost:1883">
+          <small class="hint">支持 tcp:// ssl:// ws:// wss://</small>
+        </div>
+
+        <div class="form-group">
+          <label for="clientId">客户端 ID</label>
+          <input type="text" id="clientId" placeholder="留空自动生成">
+          <small class="hint">唯一标识，用于离线消息</small>
+        </div>
+
+        <div class="form-group">
+          <label for="topic">订阅主题</label>
+          <input type="text" id="topic" placeholder="notice/#">
+        </div>
+
+        <div class="form-group">
+          <label for="token">认证 Token</label>
+          <input type="password" id="token" placeholder="可选">
+        </div>
+
+        <button id="saveBtn" class="save-btn">保存设置</button>
+
+        <div class="section-divider"></div>
+
+        <!-- 关于 -->
+        <div class="menu-item" id="aboutBtn">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor"
+              d="M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2M13,17H11V11H13V17M13,9H11V7H13V9Z" />
+          </svg>
+          <span>关于</span>
+          <svg class="arrow" viewBox="0 0 24 24" width="16" height="16">
+            <path fill="currentColor" d="M8.59,16.58L13.17,12L8.59,7.41L10,6L16,12L10,18L8.59,16.58Z" />
+          </svg>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 日志面板 -->
+    <div id="logsOverlay" class="overlay hidden"></div>
+    <aside id="logsPanel" class="settings-panel hidden">
+      <div class="panel-header">
+        <h2>日志</h2>
+        <button id="closeLogsBtn" class="icon-btn">
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="currentColor"
+              d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41z" />
+          </svg>
+        </button>
+      </div>
+      <div class="panel-content logs-content">
+        <div id="logList" class="log-list">
+          <div class="empty-state small">
+            <p>暂无日志</p>
+          </div>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button id="clearLogsBtn" class="text-btn">清除日志</button>
+      </div>
+    </aside>
+
+    <!-- 关于弹窗 -->
+    <div id="aboutOverlay" class="overlay hidden"></div>
+    <div id="aboutDialog" class="about-dialog hidden">
+      <div class="about-header">
+        <div class="about-icon">📬</div>
+        <h2>Notice Client</h2>
+        <div class="about-version">v0.1.0</div>
+      </div>
+      <div class="about-body">
+        <p>轻量级消息推送客户端</p>
+        <p class="about-desc">基于 MQTT 协议的跨平台消息接收工具，支持系统通知推送。</p>
+        <div class="about-links">
+          <a href="#" id="githubLink" class="about-link">
+            <svg viewBox="0 0 24 24" width="16" height="16">
+              <path fill="currentColor"
+                d="M12,2A10,10 0 0,0 2,12C2,16.42 4.87,20.17 8.84,21.5C9.34,21.58 9.5,21.27 9.5,21C9.5,20.77 9.5,20.14 9.5,19.31C6.73,19.91 6.14,17.97 6.14,17.97C5.68,16.81 5.03,16.5 5.03,16.5C4.12,15.88 5.1,15.9 5.1,15.9C6.1,15.97 6.63,16.93 6.63,16.93C7.5,18.45 8.97,18 9.54,17.76C9.63,17.11 9.89,16.67 10.17,16.42C7.95,16.17 5.62,15.31 5.62,11.5C5.62,10.39 6,9.5 6.65,8.79C6.55,8.54 6.2,7.5 6.75,6.15C6.75,6.15 7.59,5.88 9.5,7.17C10.29,6.95 11.15,6.84 12,6.84C12.85,6.84 13.71,6.95 14.5,7.17C16.41,5.88 17.25,6.15 17.25,6.15C17.8,7.5 17.45,8.54 17.35,8.79C18,9.5 18.38,10.39 18.38,11.5C18.38,15.32 16.04,16.16 13.81,16.41C14.17,16.72 14.5,17.33 14.5,18.26C14.5,19.6 14.5,20.68 14.5,21C14.5,21.27 14.66,21.59 15.17,21.5C19.14,20.16 22,16.42 22,12A10,10 0 0,0 12,2Z" />
+            </svg>
+            GitHub
+          </a>
+        </div>
+      </div>
+      <div class="about-footer">
+        <button id="aboutCloseBtn" class="primary-btn">确定</button>
+      </div>
+    </div>
+
+    <!-- 消息详情弹窗 -->
+    <div id="detailOverlay" class="overlay hidden"></div>
+    <div id="detailDialog" class="detail-dialog hidden">
+      <div class="detail-header">
+        <div id="detailTitle" class="detail-title"></div>
+        <div id="detailTime" class="detail-time"></div>
+        <div id="detailTopic" class="detail-topic"></div>
+      </div>
+      <div class="detail-body">
+        <div id="detailContent" class="detail-content"></div>
+      </div>
+      <div class="detail-footer">
+        <button id="detailDeleteBtn" class="text-btn danger">删除</button>
+        <div class="footer-right">
+          <button id="detailCloseBtn" class="text-btn">关闭</button>
+          <button id="detailCopyBtn" class="primary-btn">复制</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 确认弹窗 -->
+    <div id="confirmOverlay" class="overlay hidden"></div>
+    <div id="confirmDialog" class="confirm-dialog hidden">
+      <div class="confirm-body">
+        <p id="confirmMessage"></p>
+      </div>
+      <div class="confirm-footer">
+        <button id="confirmCancelBtn" class="text-btn">取消</button>
+        <button id="confirmOkBtn" class="primary-btn danger">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 容器 -->
+  <div id="toastContainer"></div>
+
+  <script src="main.js"></script>
+</body>
+
+</html>

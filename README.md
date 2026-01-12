@@ -37,7 +37,8 @@ notice/
 │   └── config/          # 配置管理
 │
 ├── client/
-│   ├── linux/           # Linux 桌面客户端 (Go)
+│   ├── cli/             # 跨平台命令行客户端 (Go) - Linux/Windows/macOS
+│   ├── gui/             # 跨平台桌面客户端 (Tauri) - Linux/Windows/macOS
 │   └── android/         # Android 客户端 (Kotlin)
 │
 └── README.md
@@ -60,10 +61,13 @@ make run
 
 ### 2. 启动客户端
 
-**Linux:**
+**CLI (Linux/Windows/macOS):**
 ```bash
-cd client/linux
+cd client/cli
 make run TOKEN=<server-token>
+
+# Windows
+go run main.go -broker=tcp://localhost:9091 -token=<server-token>
 ```
 
 **Android:**
@@ -134,22 +138,30 @@ curl -X POST http://localhost:9090/webhook \
 
 ## 功能特性
 
-| 功能 | Server | Linux | Android |
-|------|--------|-------|---------|
-| MQTT Broker | ✅ 内置 | - | - |
-| Webhook 接收 | ✅ | - | - |
-| Token 认证 | ✅ | ✅ | ✅ |
-| IP 限流 | ✅ | - | - |
-| Web 界面 | ✅ | - | - |
-| 日志轮转 | ✅ | - | - |
-| 桌面通知 | - | ✅ | ✅ |
-| 后台运行 | - | - | ✅ |
-| 开机自启 | - | - | ✅ |
+| 功能 | Server | CLI | GUI | Android |
+|------|--------|-----|-----|---------|
+| MQTT Broker | ✅ 内置 | - | - | - |
+| Webhook 接收 | ✅ | - | - | - |
+| Token 认证 | ✅ | ✅ | ✅ | ✅ |
+| IP 限流 | ✅ | - | - | - |
+| Web 界面 | ✅ | - | - | - |
+| 日志轮转 | ✅ | - | - | - |
+| 桌面通知 | - | ✅ | ✅ | ✅ |
+| 消息历史 | ✅ | - | ✅ | ✅ |
+| 系统托盘 | - | - | ✅ | - |
+| 后台运行 | - | - | ✅ | ✅ |
+| 开机自启 | - | - | - | ✅ |
+| 执行命令 | - | ✅ | - | - |
+| Linux | ✅ | ✅ | ✅ | - |
+| Windows | ✅ | ✅ | ✅ | - |
+| macOS | ✅ | ✅ | ✅ | - |
+| Android | - | - | - | ✅ |
 
 ## 文档
 
 - [Server 文档](server/README.md) - 服务端部署和配置
-- [Linux Client 文档](client/linux/README.md) - Linux 桌面客户端
+- [CLI Client 文档](client/cli/README.md) - 跨平台命令行客户端
+- [GUI Client 文档](client/gui/README.md) - 跨平台桌面客户端
 - [Android Client 文档](client/android/README.md) - Android 客户端
 
 ## License

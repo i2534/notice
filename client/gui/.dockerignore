@@ -1,0 +1,17 @@
+# 构建产物
+tauri/target/
+dist/
+node_modules/
+
+# 开发文件
+.vscode/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# 其他
+README.md
+Makefile
+screenshot.png

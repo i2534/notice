@@ -1,17 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/gen2brain/beeep"
 )
 
 // 版本信息（通过 -ldflags 注入）
@@ -19,6 +21,9 @@ var (
 	Version   = "dev"
 	BuildTime = "unknown"
 )
+
+// 全局配置
+var globalExecCmd string
 
 // Message 接收到的消息结构
 type Message struct {
@@ -40,13 +45,20 @@ func main() {
 	// 命令行参数
 	broker := flag.String("broker", "tcp://localhost:9091", "MQTT Broker 地址")
 	topic := flag.String("topic", "notice/#", "订阅的主题")
-	clientID := flag.String("id", "linux-client", "客户端 ID")
+	clientID := flag.String("id", "cli-client", "客户端 ID")
 	authToken := flag.String("token", "", "认证 Token (可选)")
+	execCmd := flag.String("exec", "", "收到消息时执行的命令 (消息通过环境变量和stdin传递)")
 	flag.Parse()
+
+	// 保存到全局变量供 handleMessage 使用
+	globalExecCmd = *execCmd
 
 	log.Printf("启动 Notice Client...")
 	log.Printf("连接到: %s", *broker)
 	log.Printf("订阅主题: %s", *topic)
+	if globalExecCmd != "" {
+		log.Printf("消息处理命令: %s", globalExecCmd)
+	}
 
 	// Token 认证提示
 	if *authToken == "" {
@@ -138,9 +150,108 @@ func handleMessage(topic string, payload []byte) {
 	if title == "" {
 		title = "Notice"
 	}
+	showNotification(title, msg.Content)
 
-	err := beeep.Notify(title, msg.Content, "")
-	if err != nil {
-		log.Printf("显示通知失败: %v", err)
+	// 执行外部命令
+	if globalExecCmd != "" {
+		go executeCommand(globalExecCmd, topic, payload, &msg)
 	}
+}
+
+// executeCommand 执行外部命令
+// 消息通过以下方式传递:
+// - 环境变量: NOTICE_TOPIC, NOTICE_TITLE, NOTICE_CONTENT, NOTICE_EXTRA, NOTICE_TIMESTAMP, NOTICE_RAW
+// - stdin: 原始 JSON 消息
+func executeCommand(cmdStr, topic string, payload []byte, msg *Message) {
+	// 解析命令（支持带参数的命令）
+	parts := parseCommand(cmdStr)
+	if len(parts) == 0 {
+		log.Printf("无效的命令: %s", cmdStr)
+		return
+	}
+
+	cmd := exec.Command(parts[0], parts[1:]...)
+
+	// 设置环境变量
+	cmd.Env = append(os.Environ(),
+		"NOTICE_TOPIC="+topic,
+		"NOTICE_TITLE="+msg.Title,
+		"NOTICE_CONTENT="+msg.Content,
+		"NOTICE_TIMESTAMP="+msg.Timestamp.Format(time.RFC3339),
+		"NOTICE_RAW="+string(payload),
+	)
+
+	// Extra 字段转为 JSON 字符串
+	if msg.Extra != nil {
+		extraJSON, err := json.Marshal(msg.Extra)
+		if err == nil {
+			cmd.Env = append(cmd.Env, "NOTICE_EXTRA="+string(extraJSON))
+		}
+	}
+
+	// 通过 stdin 传递原始 JSON
+	cmd.Stdin = bytes.NewReader(payload)
+
+	// 捕获输出
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	log.Printf("执行命令: %s", cmdStr)
+	if err := cmd.Run(); err != nil {
+		log.Printf("命令执行失败: %v, stderr: %s", err, stderr.String())
+		return
+	}
+
+	if stdout.Len() > 0 {
+		log.Printf("命令输出: %s", strings.TrimSpace(stdout.String()))
+	}
+}
+
+// parseCommand 解析命令字符串，支持引号
+func parseCommand(cmdStr string) []string {
+	var parts []string
+	var current strings.Builder
+	var inQuote rune
+	var escaped bool
+
+	for _, r := range cmdStr {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+
+		if r == '\\' {
+			escaped = true
+			continue
+		}
+
+		if inQuote != 0 {
+			if r == inQuote {
+				inQuote = 0
+			} else {
+				current.WriteRune(r)
+			}
+			continue
+		}
+
+		switch r {
+		case '"', '\'':
+			inQuote = r
+		case ' ', '\t':
+			if current.Len() > 0 {
+				parts = append(parts, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+
+	return parts
 }

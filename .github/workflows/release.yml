@@ -78,17 +78,28 @@ jobs:
           name: server-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
 
-  # 构建 Linux Client (Go)
-  build-linux-client:
-    name: Build Linux Client
+  # 构建 CLI Client (Go) - 跨平台
+  build-cli-client:
+    name: Build CLI Client
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - goos: linux
             goarch: amd64
+            suffix: ''
           - goos: linux
             goarch: arm64
+            suffix: ''
+          - goos: windows
+            goarch: amd64
+            suffix: '.exe'
+          - goos: darwin
+            goarch: amd64
+            suffix: ''
+          - goos: darwin
+            goarch: arm64
+            suffix: ''
 
     steps:
       - name: Checkout
@@ -98,10 +109,10 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: client/linux/go.sum
+          cache-dependency-path: client/cli/go.sum
 
-      - name: Build Linux Client
-        working-directory: client/linux
+      - name: Build CLI Client
+        working-directory: client/cli
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
@@ -110,12 +121,12 @@ jobs:
           VERSION="${{ env.VERSION }}"
           BUILD_TIME=$(date -u '+%Y-%m-%d %H:%M:%S')
           go build -ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
-            -o ../../dist/notice-client-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }} .
+            -o ../../dist/notice-cli-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.suffix }} .
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: client-linux-${{ matrix.goarch }}
+          name: client-cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
 
   # 构建 Android Client
@@ -224,7 +235,7 @@ jobs:
   # 创建 Release
   release:
     name: Create Release
-    needs: [build-server, build-linux-client, build-android, build-docker]
+    needs: [build-server, build-cli-client, build-android, build-docker]
     # 允许 build-docker 被跳过时继续执行
     if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
@@ -308,24 +319,54 @@ jobs:
           cp LICENSE pkg/notice-server-${VERSION}-windows-amd64/
           (cd pkg && zip -r ../release/notice-server-${VERSION}-windows-amd64.zip notice-server-${VERSION}-windows-amd64)
           
-          # ========== Linux Client 打包 ==========
+          # ========== CLI Client 打包 ==========
           # Linux amd64
-          mkdir -p pkg/notice-client-${VERSION}-linux-amd64
-          cp artifacts/client-linux-amd64/notice-client-${VERSION}-linux-amd64 pkg/notice-client-${VERSION}-linux-amd64/notice-client
-          cp client/linux/scripts/start.sh pkg/notice-client-${VERSION}-linux-amd64/
-          cp client/linux/README.md pkg/notice-client-${VERSION}-linux-amd64/
-          cp LICENSE pkg/notice-client-${VERSION}-linux-amd64/
-          chmod +x pkg/notice-client-${VERSION}-linux-amd64/start.sh
-          (cd pkg && zip -r ../release/notice-client-${VERSION}-linux-amd64.zip notice-client-${VERSION}-linux-amd64)
+          mkdir -p pkg/notice-cli-${VERSION}-linux-amd64
+          cp artifacts/client-cli-linux-amd64/notice-cli-${VERSION}-linux-amd64 pkg/notice-cli-${VERSION}-linux-amd64/notice-cli
+          cp client/cli/scripts/start.sh pkg/notice-cli-${VERSION}-linux-amd64/
+          cp client/cli/scripts/example.sh pkg/notice-cli-${VERSION}-linux-amd64/
+          cp client/cli/README.md pkg/notice-cli-${VERSION}-linux-amd64/
+          cp LICENSE pkg/notice-cli-${VERSION}-linux-amd64/
+          chmod +x pkg/notice-cli-${VERSION}-linux-amd64/notice-cli pkg/notice-cli-${VERSION}-linux-amd64/start.sh
+          (cd pkg && zip -r ../release/notice-cli-${VERSION}-linux-amd64.zip notice-cli-${VERSION}-linux-amd64)
           
           # Linux arm64
-          mkdir -p pkg/notice-client-${VERSION}-linux-arm64
-          cp artifacts/client-linux-arm64/notice-client-${VERSION}-linux-arm64 pkg/notice-client-${VERSION}-linux-arm64/notice-client
-          cp client/linux/scripts/start.sh pkg/notice-client-${VERSION}-linux-arm64/
-          cp client/linux/README.md pkg/notice-client-${VERSION}-linux-arm64/
-          cp LICENSE pkg/notice-client-${VERSION}-linux-arm64/
-          chmod +x pkg/notice-client-${VERSION}-linux-arm64/start.sh
-          (cd pkg && zip -r ../release/notice-client-${VERSION}-linux-arm64.zip notice-client-${VERSION}-linux-arm64)
+          mkdir -p pkg/notice-cli-${VERSION}-linux-arm64
+          cp artifacts/client-cli-linux-arm64/notice-cli-${VERSION}-linux-arm64 pkg/notice-cli-${VERSION}-linux-arm64/notice-cli
+          cp client/cli/scripts/start.sh pkg/notice-cli-${VERSION}-linux-arm64/
+          cp client/cli/scripts/example.sh pkg/notice-cli-${VERSION}-linux-arm64/
+          cp client/cli/README.md pkg/notice-cli-${VERSION}-linux-arm64/
+          cp LICENSE pkg/notice-cli-${VERSION}-linux-arm64/
+          chmod +x pkg/notice-cli-${VERSION}-linux-arm64/notice-cli pkg/notice-cli-${VERSION}-linux-arm64/start.sh
+          (cd pkg && zip -r ../release/notice-cli-${VERSION}-linux-arm64.zip notice-cli-${VERSION}-linux-arm64)
+          
+          # Windows amd64
+          mkdir -p pkg/notice-cli-${VERSION}-windows-amd64
+          cp artifacts/client-cli-windows-amd64/notice-cli-${VERSION}-windows-amd64.exe pkg/notice-cli-${VERSION}-windows-amd64/notice-cli.exe
+          cp client/cli/scripts/start.bat pkg/notice-cli-${VERSION}-windows-amd64/
+          cp client/cli/README.md pkg/notice-cli-${VERSION}-windows-amd64/
+          cp LICENSE pkg/notice-cli-${VERSION}-windows-amd64/
+          (cd pkg && zip -r ../release/notice-cli-${VERSION}-windows-amd64.zip notice-cli-${VERSION}-windows-amd64)
+          
+          # macOS amd64
+          mkdir -p pkg/notice-cli-${VERSION}-darwin-amd64
+          cp artifacts/client-cli-darwin-amd64/notice-cli-${VERSION}-darwin-amd64 pkg/notice-cli-${VERSION}-darwin-amd64/notice-cli
+          cp client/cli/scripts/start.sh pkg/notice-cli-${VERSION}-darwin-amd64/
+          cp client/cli/scripts/example.sh pkg/notice-cli-${VERSION}-darwin-amd64/
+          cp client/cli/README.md pkg/notice-cli-${VERSION}-darwin-amd64/
+          cp LICENSE pkg/notice-cli-${VERSION}-darwin-amd64/
+          chmod +x pkg/notice-cli-${VERSION}-darwin-amd64/notice-cli pkg/notice-cli-${VERSION}-darwin-amd64/start.sh
+          (cd pkg && zip -r ../release/notice-cli-${VERSION}-darwin-amd64.zip notice-cli-${VERSION}-darwin-amd64)
+          
+          # macOS arm64
+          mkdir -p pkg/notice-cli-${VERSION}-darwin-arm64
+          cp artifacts/client-cli-darwin-arm64/notice-cli-${VERSION}-darwin-arm64 pkg/notice-cli-${VERSION}-darwin-arm64/notice-cli
+          cp client/cli/scripts/start.sh pkg/notice-cli-${VERSION}-darwin-arm64/
+          cp client/cli/scripts/example.sh pkg/notice-cli-${VERSION}-darwin-arm64/
+          cp client/cli/README.md pkg/notice-cli-${VERSION}-darwin-arm64/
+          cp LICENSE pkg/notice-cli-${VERSION}-darwin-arm64/
+          chmod +x pkg/notice-cli-${VERSION}-darwin-arm64/notice-cli pkg/notice-cli-${VERSION}-darwin-arm64/start.sh
+          (cd pkg && zip -r ../release/notice-cli-${VERSION}-darwin-arm64.zip notice-cli-${VERSION}-darwin-arm64)
           
           # ========== Android APK ==========
           find artifacts -name "*.apk" -exec cp {} release/ \;

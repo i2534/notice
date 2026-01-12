@@ -1,0 +1,14 @@
+{
+  "name": "notice-gui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev --config tauri/tauri.conf.json",
+    "build": "tauri build --config tauri/tauri.conf.json"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
