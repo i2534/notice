@@ -65,6 +65,10 @@ class MqttService : Service() {
     private var userDisconnected = false
     private val maxReconnectDelay = 60_000L  // 最大重连间隔 60 秒
     private val baseReconnectDelay = 3_000L  // 基础重连间隔 3 秒
+    private var lastConnectTime = 0L  // 上次成功连接的时间戳
+    private var lastMessageTime = 0L  // 上次收到消息的时间戳
+    private val minConnectStableTime = 30 * 60 * 1000L  // 连接稳定时间阈值（30分钟，减少重连频率）
+    private val maxNoMessageTime = 30 * 60 * 1000L  // 最大无消息时间（30分钟），超过此时间才重连刷新回调
 
     // 心跳日志
     private var heartbeatJob: Job? = null
@@ -324,6 +328,7 @@ class MqttService : Service() {
 
             _connectionState.value = ConnectionState.CONNECTED
             reconnectAttempt = 0  // 连接成功，重置重连计数
+            lastConnectTime = System.currentTimeMillis()  // 记录连接成功时间
             AppLogger.d(TAG, "Connected and subscribed to ${settings.topic}")
 
         } catch (e: Exception) {
@@ -425,6 +430,8 @@ class MqttService : Service() {
     /**
      * 处理保活闹钟唤醒
      * 检查连接状态，必要时重连，并重新设置下一次闹钟
+     * 即使连接存在，也定期重新连接以确保回调有效（解决后台时回调失效问题）
+     * 但只有在连接稳定超过阈值后才重新连接，避免连接刚建立就被立即断开
      */
     private fun handleKeepAlive() {
         val mqttConnected = mqttClient?.isConnected == true
@@ -436,6 +443,30 @@ class MqttService : Service() {
         if (!mqttConnected && !userDisconnected) {
             AppLogger.d(TAG, "Keep-alive: connection lost, attempting reconnect...")
             connect()
+        } else if (mqttConnected && !userDisconnected) {
+            // 智能判断是否需要重连刷新回调
+            if (lastConnectTime > 0) {
+                val connectDuration = System.currentTimeMillis() - lastConnectTime
+                val timeSinceLastMessage = if (lastMessageTime > 0) {
+                    System.currentTimeMillis() - lastMessageTime
+                } else {
+                    Long.MAX_VALUE  // 从未收到消息
+                }
+                
+                // 只有在以下情况才重连：
+                // 1. 连接稳定超过阈值（30分钟）
+                // 2. 且长时间未收到消息（30分钟），说明回调可能失效
+                if (connectDuration >= minConnectStableTime && timeSinceLastMessage >= maxNoMessageTime) {
+                    // 连接稳定但长时间未收到消息，重新连接以确保回调有效
+                    AppLogger.d(TAG, "Keep-alive: reconnecting to refresh callback (connected ${connectDuration / 1000}s, no message for ${timeSinceLastMessage / 1000}s)...")
+                    connect()
+                } else {
+                    AppLogger.d(TAG, "Keep-alive: connection healthy (connected ${connectDuration / 1000}s, last message ${if (lastMessageTime > 0) "${timeSinceLastMessage / 1000}s ago" else "never"}), skip reconnect")
+                }
+            } else {
+                // lastConnectTime 为 0，说明连接刚建立但时间戳未更新，跳过重连
+                AppLogger.d(TAG, "Keep-alive: connection just established, skip reconnect")
+            }
         }
         
         // 重新设置下一次闹钟
@@ -473,6 +504,7 @@ class MqttService : Service() {
             return
         }
 
+        lastMessageTime = System.currentTimeMillis()  // 更新收到消息的时间
         AppLogger.d(TAG, "Message received: ${message.title}")
 
         // 保存到数据库
