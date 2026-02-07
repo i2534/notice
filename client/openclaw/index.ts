@@ -588,7 +588,7 @@ export default function register(api: RegisterApi): void {
                 client = mqtt.connect(brokerUrl, {
                     username: token,
                     password: token,
-                    clientId: "openclaw-notice-" + Math.random().toString(16).slice(2, 10),
+                    clientId: "openclaw-" + Math.random().toString(16).slice(2, 10),
                     reconnectPeriod: 5000,
                 });
                 client.on("connect", () => {
