@@ -12,8 +12,10 @@ Android MQTT 客户端，用于接收 Notice Server 的推送通知。
 - ✅ 系统通知推送
 - ✅ 消息持久化（Room 数据库）
 - ✅ 消息分页加载（Paging 3）
-- ✅ 消息多选批量删除
-- ✅ 消息详情弹窗查看
+- ✅ 消息多选批量删除（点击消息任意部分可选中，删除模式下不触发查看详情）
+- ✅ 消息详情弹窗查看（点击整条消息任意位置可打开，内容截断时显示「更多」提示）
+- ✅ 回复可指定 topic：支持默认发送主题（与订阅主题分离）、从消息详情回复到该条 topic
+- ✅ 消息体 Markdown 渲染（列表、详情、最新消息卡片）
 - ✅ 智能时间显示（今天/今年/跨年）
 - ✅ 配置持久化（DataStore）
 - ✅ 日志查看、分享导出、下拉刷新
@@ -178,7 +180,8 @@ make clean          # 清理构建产物
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
 | Broker 地址 | `wss://mqtt.example.com` | MQTT Broker 地址 |
-| 订阅主题 | `notice/#` | 订阅的 MQTT 主题 |
+| 订阅主题 | `notice/#` | 接收消息的 MQTT 主题 |
+| 默认发送主题 | (空) | 回复/发送时使用的主题；留空则使用订阅主题转换后的值 |
 | 心跳间隔 | 30 秒 | MQTT KeepAlive |
 | 开机自启 | 开启 | 开机后自动连接 |
 | 认证 Token | (空) | 服务器认证令牌 |
@@ -248,6 +251,7 @@ app/src/main/
 ## 依赖库
 
 - [Eclipse Paho MQTT](https://github.com/eclipse/paho.mqtt.java) - MQTT 客户端
+- [Markwon](https://github.com/noties/Markwon) - 消息体 Markdown 渲染
 - AndroidX Room - 消息持久化存储
 - AndroidX Paging 3 - 消息分页加载
 - AndroidX DataStore - 配置存储

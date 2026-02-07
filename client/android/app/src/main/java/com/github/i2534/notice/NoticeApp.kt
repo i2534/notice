@@ -5,8 +5,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import com.github.i2534.notice.util.AppLogger
+import io.noties.markwon.Markwon
 
 class NoticeApp : Application() {
+
+    val markwon: Markwon by lazy { Markwon.create(this) }
 
     companion object {
         const val CHANNEL_SERVICE = "mqtt_service"

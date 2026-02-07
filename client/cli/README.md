@@ -5,6 +5,7 @@
 ## 功能
 
 - 📡 连接 MQTT Broker 订阅消息
+- 📤 **send 子命令**：通过 webhook 发送消息，**可指定 topic**（回复到指定主题）
 - 🔔 收到消息后显示系统通知 (跨平台)
 - 🔐 支持 Token 认证
 - 🔄 自动重连
@@ -133,6 +134,25 @@ start.bat tcp://localhost:9091 your-token
 # 收到消息时执行命令
 ./notice-cli -token=your-token -exec="./handler.sh"
 ```
+
+### send 子命令（发送消息，可指定 topic）
+
+通过服务端 webhook 发送一条消息，适合脚本或回复场景，**可指定发布到的 topic**：
+
+```bash
+# 必填：-token、-content；可选：-topic、-title、-server
+./notice-cli send -server=http://localhost:9090 -token=your-token -content="回复内容" -title="回复"
+./notice-cli send -server=http://localhost:9090 -token=your-token -topic=notice/alert -content="发到 alert 主题"
+```
+
+| 参数 | 默认值 | 说明 |
+|-----|--------|------|
+| -server | http://localhost:9090 | Notice 服务端 HTTP 地址（Webhook） |
+| -token | (必填) | 认证 Token |
+| -topic | (空) | 指定发布到的主题；不填则使用服务端默认主题 |
+| -content | (必填) | 消息内容 |
+| -title | CLI | 消息标题 |
+| -client | cli | 发送端标识 |
 
 ## Makefile 变量
 

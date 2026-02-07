@@ -99,6 +99,31 @@ jobs:
         working-directory: client/android
         run: ./gradlew assembleDebug --no-daemon
 
+  # 检查 Openclaw 插件
+  openclaw:
+    name: Openclaw Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Dependencies
+        working-directory: client/openclaw
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Verify Plugin Files
+        working-directory: client/openclaw
+        run: |
+          test -f openclaw.plugin.json
+          test -f index.ts
+          test -f package.json
+
   # 检查 Docker 构建
   docker:
     name: Docker Build

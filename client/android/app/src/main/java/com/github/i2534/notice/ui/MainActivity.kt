@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.inputmethod.EditorInfo
 import android.view.View
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -28,6 +29,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import com.github.i2534.notice.NoticeApp
 import com.github.i2534.notice.R
 import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.databinding.ActivityMainBinding
@@ -36,20 +38,20 @@ import com.github.i2534.notice.service.MqttService
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private val markwon get() = (application as NoticeApp).markwon
     private var mqttService: MqttService? = null
     private var serviceBound = false
+    /** 指定回复到的主题（从消息详情点「回复」时设置）；发送后清除 */
+    private var replyToTopicOverride: String? = null
 
-    private val messageAdapter = MessageAdapter(
-        onItemClick = { message ->
-            showMessageDetailDialog(message)
-        },
-        onEnterSelectMode = {
-            updateSelectModeUI()
-        },
-        onSelectionChanged = { count ->
-            updateSelectionCount(count)
-        }
-    )
+    private val messageAdapter by lazy {
+        MessageAdapter(
+            markwon,
+            onItemClick = { message -> showMessageDetailDialog(message) },
+            onEnterSelectMode = { updateSelectModeUI() },
+            onSelectionChanged = { count -> updateSelectionCount(count) }
+        )
+    }
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -157,6 +159,56 @@ class MainActivity : AppCompatActivity() {
         binding.latestMessageCard.setOnClickListener {
             mqttService?.clearUnreadCount()
         }
+
+        // 对话回复栏
+        binding.replyInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEND) {
+                sendReply()
+                true
+            } else false
+        }
+        binding.btnSendReply.setOnClickListener { sendReply() }
+        binding.btnClearReplyToTopic.setOnClickListener {
+            replyToTopicOverride = null
+            updateReplyToTopicUI()
+        }
+    }
+
+    private fun updateReplyToTopicUI() {
+        val topic = replyToTopicOverride
+        if (!topic.isNullOrBlank()) {
+            binding.replyToTopicRow.visibility = View.VISIBLE
+            binding.replyToTopicLabel.text = getString(R.string.reply_to_topic, topic)
+        } else {
+            binding.replyToTopicRow.visibility = View.GONE
+        }
+    }
+
+    private fun sendReply() {
+        val content = binding.replyInput.text?.toString()?.trim() ?: ""
+        if (content.isEmpty()) {
+            Snackbar.make(binding.root, R.string.reply_hint, Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val service = mqttService
+        if (service == null || service.connectionState.value != MqttService.ConnectionState.CONNECTED) {
+            Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val topicToUse = replyToTopicOverride?.trim()?.takeIf { it.isNotEmpty() }
+        if (topicToUse.isNullOrBlank() && service.getPublishTopic().isNullOrBlank()) {
+            Snackbar.make(binding.root, R.string.reply_failed_no_topic, Snackbar.LENGTH_SHORT).show()
+            return
+        }
+        val sent = service.publishReply(content, topicToUse)
+        if (sent) {
+            binding.replyInput.text?.clear()
+            replyToTopicOverride = null
+            updateReplyToTopicUI()
+            Snackbar.make(binding.root, R.string.reply_sent, Snackbar.LENGTH_SHORT).show()
+        } else {
+            Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
+        }
     }
 
     private fun checkNotificationPermission() {
@@ -247,12 +299,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // 观察最新消息
+            // 观察最新消息（支持 Markdown）
             lifecycleScope.launch {
                 service.latestMessage.collectLatest { message ->
                     binding.latestMessageCard.visibility = View.VISIBLE
                     binding.latestTitle.text = message.title
-                    binding.latestContent.text = message.content
+                    markwon.setMarkdown(binding.latestContent, message.content.ifBlank { " " })
                     binding.latestTime.text = message.getFormattedTime()
                 }
             }
@@ -346,9 +398,12 @@ class MainActivity : AppCompatActivity() {
     private fun showMessageDetailDialog(message: NoticeMessage) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_message_detail, null)
 
-        // 绑定数据
+        // 绑定数据（内容支持 Markdown）
         dialogView.findViewById<TextView>(R.id.dialogTitle).text = message.title
-        dialogView.findViewById<TextView>(R.id.dialogContent).text = message.content
+        markwon.setMarkdown(
+            dialogView.findViewById(R.id.dialogContent),
+            message.content.ifBlank { " " }
+        )
         dialogView.findViewById<TextView>(R.id.dialogTopic).text = message.topic
         dialogView.findViewById<TextView>(R.id.dialogTime).text = message.getFormattedTime()
 
@@ -359,6 +414,14 @@ class MainActivity : AppCompatActivity() {
         // 关闭按钮
         dialogView.findViewById<View>(R.id.btnClose).setOnClickListener {
             dialog.dismiss()
+        }
+
+        // 回复按钮：指定回复到该消息的主题并关闭弹窗、聚焦输入框
+        dialogView.findViewById<View>(R.id.btnReply).setOnClickListener {
+            replyToTopicOverride = message.topic
+            updateReplyToTopicUI()
+            dialog.dismiss()
+            binding.replyInput.requestFocus()
         }
 
         // 复制按钮

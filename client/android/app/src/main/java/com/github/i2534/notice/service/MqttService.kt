@@ -32,6 +32,7 @@ import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.receiver.KeepAliveReceiver
 import com.github.i2534.notice.ui.MainActivity
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 
 class MqttService : Service() {
@@ -58,6 +59,12 @@ class MqttService : Service() {
     private val messageDao by lazy { database.messageDao() }
 
     private val messageIdCounter = AtomicInteger(2000)
+
+    // 对话回复去重：刚发送的回复会经 MQTT 再收一次
+    @Volatile
+    private var lastSentReplyContent: String? = null
+    @Volatile
+    private var lastSentReplyTime: Long = 0
 
     // 重连控制
     private var reconnectJob: Job? = null
@@ -108,16 +115,21 @@ class MqttService : Service() {
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
     // 分页消息流
-    val messagesPaging: Flow<PagingData<NoticeMessage>> by lazy {
-        Pager(
-            config = PagingConfig(
-                pageSize = 20,
-                enablePlaceholders = false,
-                initialLoadSize = 40
-            ),
-            pagingSourceFactory = { messageDao.getMessagesPaging() }
-        ).flow.cachedIn(scope)
-    }
+    /** 收到新消息或列表需刷新时触发，使历史列表重新从 DB 加载 */
+    private val listRefreshTrigger = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+
+    val messagesPaging: Flow<PagingData<NoticeMessage>> = listRefreshTrigger
+        .onStart { emit(Unit) }
+        .flatMapLatest {
+            Pager(
+                config = PagingConfig(
+                    pageSize = 20,
+                    enablePlaceholders = false,
+                    initialLoadSize = 40
+                ),
+                pagingSourceFactory = { messageDao.getMessagesPaging() }
+            ).flow
+        }.cachedIn(scope)
 
     private val _latestMessage = MutableSharedFlow<NoticeMessage>(replay = 1)
     val latestMessage: SharedFlow<NoticeMessage> = _latestMessage.asSharedFlow()
@@ -144,6 +156,10 @@ class MqttService : Service() {
         loadLatestMessage()
         scheduleKeepAliveAlarm()
         registerDozeReceiver()
+        // 持续同步最新配置（保存设置后 getPublishTopic 等能立即用到新值，无需重连）
+        scope.launch {
+            configStore.settings.collect { currentSettings = it }
+        }
     }
 
     private fun loadLatestMessage() {
@@ -504,14 +520,23 @@ class MqttService : Service() {
             return
         }
 
+        // 去重：刚通过回复栏发送的消息会经 MQTT 再收一次，不重复入库
+        val sent = lastSentReplyContent
+        if (sent != null && message.title == "回复" && message.content == sent &&
+            (System.currentTimeMillis() - lastSentReplyTime) < 5000) {
+            lastSentReplyContent = null
+            AppLogger.d(TAG, "Ignoring duplicate reply from MQTT")
+            return
+        }
+
         lastMessageTime = System.currentTimeMillis()  // 更新收到消息的时间
         AppLogger.d(TAG, "Message received: ${message.title}")
 
-        // 保存到数据库
+        // 保存到数据库并刷新历史列表
         scope.launch {
             messageDao.insert(message)
-            // 保留最近 500 条消息
             messageDao.trimToSize(500)
+            listRefreshTrigger.emit(Unit)
         }
 
         // 增加未读计数
@@ -597,15 +622,24 @@ class MqttService : Service() {
 
     fun clearMessages() {
         clearUnreadCount()
-        scope.launch { messageDao.deleteAll() }
+        scope.launch {
+            messageDao.deleteAll()
+            listRefreshTrigger.emit(Unit)
+        }
     }
 
     fun deleteMessage(messageId: String) {
-        scope.launch { messageDao.delete(messageId) }
+        scope.launch {
+            messageDao.delete(messageId)
+            listRefreshTrigger.emit(Unit)
+        }
     }
 
     fun deleteMessages(messageIds: Set<String>) {
-        scope.launch { messageDao.deleteByIds(messageIds.toList()) }
+        scope.launch {
+            messageDao.deleteByIds(messageIds.toList())
+            listRefreshTrigger.emit(Unit)
+        }
     }
 
     fun clearUnreadCount() {
@@ -614,5 +648,73 @@ class MqttService : Service() {
         NotificationManagerCompat.from(this).cancelAll()
         // 重新显示服务通知
         startForeground(NOTIFICATION_ID, createServiceNotification())
+    }
+
+    /** 订阅主题转可发布主题（notice/# -> notice），与 server 一致 */
+    private fun topicForPublish(topic: String): String {
+        var t = topic.trim()
+        val hashIndex = t.indexOf('#')
+        if (hashIndex >= 0) {
+            t = t.substring(0, hashIndex).trim().trimEnd('/')
+            if (t.isEmpty()) t = "notice"
+        }
+        if (t.contains("+")) {
+            t = t.split("/").map { if (it == "+") "reply" else it }.joinToString("/")
+        }
+        return t
+    }
+
+    /** 当前用于发布的主题（已规范化）：优先用设置中的默认发送主题，为空则用订阅主题转换 */
+    fun getPublishTopic(): String? {
+        val s = currentSettings ?: return null
+        val raw = s.sendTopic.takeIf { it.isNotBlank() } ?: s.topic
+        return topicForPublish(raw)
+    }
+
+    /**
+     * 发送对话回复：发布到指定主题或当前配置主题，作为对话中的下一条消息。
+     * @param content 回复内容
+     * @param replyToTopic 可选，指定回复到的主题（如来信主题）；为空则使用设置中的订阅主题
+     * @return true 发送成功（或已加入队列），false 未连接或主题为空
+     */
+    fun publishReply(content: String, replyToTopic: String? = null): Boolean {
+        val topic = when {
+            !replyToTopic.isNullOrBlank() -> topicForPublish(replyToTopic)
+            else -> getPublishTopic()
+        } ?: return false
+        val client = mqttClient ?: return false
+        if (!client.isConnected) return false
+
+        lastSentReplyContent = content.trim()
+        lastSentReplyTime = System.currentTimeMillis()
+
+        val payload = JSONObject().apply {
+            put("title", "回复")
+            put("content", content)
+            put("timestamp", System.currentTimeMillis())
+            put("client", "android")
+        }.toString().toByteArray(Charsets.UTF_8)
+
+        scope.launch {
+            try {
+                client.publish(topic, payload, 1, false)
+                AppLogger.d(TAG, "Reply published to $topic")
+                // 乐观插入本地列表
+                val msg = NoticeMessage(
+                    topic = topic,
+                    title = "回复",
+                    content = content,
+                    timestamp = System.currentTimeMillis(),
+                    client = "android"
+                )
+                messageDao.insert(msg)
+                messageDao.trimToSize(500)
+                listRefreshTrigger.emit(Unit)
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Publish reply failed: ${e.message}")
+                lastSentReplyContent = null
+            }
+        }
+        return true
     }
 }

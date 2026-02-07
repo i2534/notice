@@ -19,7 +19,7 @@
 - 📡 内置 MQTT Broker（TCP + WebSocket）
 - 🔐 Token 认证（Webhook + MQTT）
 - 🛡️ IP 限流（防止暴力破解）
-- 🌐 内置 Web 管理界面（消息发送/接收）
+- 🌐 内置 Web 管理界面（消息发送/接收、消息体 Markdown 渲染）
 - 📝 日志轮转（按天分割、自动清理）
 - 📦 YAML 配置文件支持
 - 💾 离线消息支持（会话保持）
@@ -37,7 +37,8 @@ server/
 ├── broker/
 │   └── broker.go        # 内置 MQTT Broker
 ├── handlers/
-│   └── handlers.go      # HTTP 处理器（Webhook、消息历史等）
+│   ├── webhook.go       # Webhook 接收（支持 body.topic 指定发布主题）
+│   └── api.go           # API 与消息历史
 ├── store/
 │   ├── store.go         # 消息持久化存储
 │   └── store_test.go    # 存储单元测试
@@ -128,7 +129,7 @@ log:
 
 message:
   max_title_length: 50    # 标题最大长度，0 表示不限制
-  max_content_length: 250 # 内容最大长度，0 表示不限制
+  max_content_length: 1024 # 内容最大长度，0 表示不限制
 ```
 
 指定配置文件：
@@ -164,7 +165,7 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | 存储 | STORAGE_ENABLED | true | 是否启用持久化存储 |
 | 存储 | STORAGE_PATH | data | 数据存储路径 |
 | 消息 | MESSAGE_MAX_TITLE_LENGTH | 50 | 标题最大长度（字符） |
-| 消息 | MESSAGE_MAX_CONTENT_LENGTH | 250 | 内容最大长度（字符） |
+| 消息 | MESSAGE_MAX_CONTENT_LENGTH | 1024 | 内容最大长度（字符） |
 
 ## API 端点
 
@@ -184,11 +185,20 @@ X-Auth-Token: <token>
 
 **请求体：**
 
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| content | ✅ | 通知内容 |
+| title | | 标题，默认空 |
+| topic | | 指定发布到的 MQTT 主题；不传则使用服务端默认主题 |
+| extra | | 额外数据（对象） |
+| client | | 发送端标识（如 web / android / cli） |
+
 ```json
 {
   "title": "通知标题",
   "content": "通知内容（必填）",
-  "topic": "custom/topic",
+  "topic": "notice/alert",
+  "client": "web",
   "extra": {"key": "value"}
 }
 ```

@@ -112,7 +112,7 @@ func defaultConfig() *Config {
 		},
 		Message: MessageConfig{
 			MaxTitleLength:   50,  // 标题最大 50 字符
-			MaxContentLength: 250, // 内容最大 250 字符
+			MaxContentLength: 1024, // 内容最大 1024 字符
 		},
 	}
 }

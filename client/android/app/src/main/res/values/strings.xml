@@ -14,8 +14,12 @@
     <string name="message_history">消息历史</string>
     <string name="clear_history">清空</string>
     <string name="message_detail_copy">复制</string>
+    <string name="message_detail_reply">回复</string>
     <string name="message_detail_close">关闭</string>
     <string name="message_detail_copied">内容已复制</string>
+    <string name="message_content_more">更多</string>
+    <string name="reply_to_topic">回复到: %1$s</string>
+    <string name="reply_to_topic_clear">清除</string>
     <string name="message_delete_title">删除消息</string>
     <string name="message_delete_selected_confirm">确定删除选中的 %1$d 条消息吗？</string>
     <string name="message_delete_yes">删除</string>
@@ -28,6 +32,16 @@
     <string name="clear_all_title">清空消息</string>
     <string name="clear_all_confirm">确定清空所有消息吗？</string>
 
+    <!-- 消息发送端 -->
+    <string name="from_client">来自 %1$s</string>
+
+    <!-- 对话回复 -->
+    <string name="reply_hint">输入回复内容…</string>
+    <string name="btn_send_reply">发送</string>
+    <string name="reply_sent">回复已发送</string>
+    <string name="reply_failed_not_connected">未连接，请先连接</string>
+    <string name="reply_failed_no_topic">请先在设置中填写订阅主题</string>
+
     <!-- 设置界面 -->
     <string name="settings_title">设置</string>
     <string name="settings_connection">连接设置</string>
@@ -37,6 +51,8 @@
     <string name="settings_client_id_hint">留空自动生成</string>
     <string name="settings_topic">订阅主题</string>
     <string name="settings_topic_hint">notice/#</string>
+    <string name="settings_send_topic">默认发送主题</string>
+    <string name="settings_send_topic_hint">留空则使用订阅主题转换后的值（如 notice）</string>
     <string name="settings_auto_connect">开机自动连接</string>
     <string name="settings_keep_alive">心跳间隔 (秒)</string>
     <string name="settings_auth_token">认证 Token</string>

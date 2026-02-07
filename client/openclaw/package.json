@@ -1,0 +1,28 @@
+{
+  "name": "@notice/notice",
+  "version": "0.1.0",
+  "description": "Openclaw plugin: Notice channel - send and receive messages via Notice server",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "files": [
+    "openclaw.plugin.json",
+    "index.ts",
+    "package.json"
+  ],
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "channel": {
+    "id": "notice",
+    "label": "Notice",
+    "selectionLabel": "消息接收",
+    "docsPath": "/channels/notice",
+    "blurb": "通过 Notice Server 接收消息。"
+  },
+  "dependencies": {
+    "mqtt": "^5.3.0"
+  },
+  "scripts": {}
+}

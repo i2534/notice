@@ -5,10 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Notice - 消息中心</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&display=swap">
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@8.0.1/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&display=swap');
-
         * {
             margin: 0;
             padding: 0;
@@ -274,6 +275,37 @@
             padding: 0.5rem;
         }
 
+        /* 对话回复栏 */
+        .reply-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .reply-bar input {
+            flex: 1;
+            min-width: 0;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
+        .reply-bar input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .reply-bar input::placeholder {
+            color: var(--text-secondary);
+        }
+
         .message-item {
             background: var(--bg-card);
             border: 1px solid var(--border);
@@ -437,6 +469,11 @@
             font-size: 0.9rem;
         }
 
+        .message-client {
+            font-size: 0.65rem;
+            color: var(--text-hint);
+            margin-right: 0.35rem;
+        }
         .message-time {
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.65rem;
@@ -445,11 +482,29 @@
 
         .message-content {
             color: var(--text-primary);
-            line-height: 1.4;
+            line-height: 1.15;
             font-size: 0.85rem;
             word-break: break-word;
             white-space: pre-wrap;
         }
+
+        .message-content p { margin: 0; line-height: 1.15; }
+        .message-content p + p { margin-top: 0.15em; }
+        .message-content code { background: var(--bg-card); padding: 0.1em 0.35em; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+        .message-content pre { margin: 0.2em 0; padding: 0.35rem 0.5rem; background: var(--bg-card); border-radius: 6px; overflow-x: auto; white-space: pre-wrap; line-height: 1.25; }
+        .message-content pre code { padding: 0; background: none; }
+        .message-content ul, .message-content ol { margin: 0; padding: 0 0 0 1.2rem; line-height: 1.15; }
+        .message-content p + ul, .message-content p + ol, .message-content h1 + ul, .message-content h2 + ul, .message-content h3 + ul, .message-content strong + ul, .message-content strong + ol { margin-top: 0.08em; }
+        .message-content ul + p, .message-content ol + p, .message-content ul + h1, .message-content ul + h2, .message-content ul + h3 { margin-top: 0.08em; }
+        .message-content ul + ul, .message-content ol + ol, .message-content ul + ol, .message-content ol + ul { margin-top: 0.15em; }
+        .message-content li { margin: 0; padding: 0; line-height: 1.15; }
+        .message-content li p { margin: 0; line-height: 1.15; }
+        .message-content li + li { margin-top: 0.02em; }
+        .message-content a { color: var(--accent); text-decoration: none; }
+        .message-content a:hover { text-decoration: underline; }
+        .message-content blockquote { margin: 0.1em 0; padding-left: 0.75rem; border-left: 3px solid var(--border); color: var(--text-secondary); line-height: 1.15; }
+        .message-content h1, .message-content h2, .message-content h3 { margin: 0.2em 0 0.05em; font-size: 1em; font-weight: 700; line-height: 1.15; }
+        .message-content hr { border: none; border-top: 1px solid var(--border); margin: 0.25em 0; }
 
         .message-topic {
             font-family: 'JetBrains Mono', monospace;
@@ -941,6 +996,13 @@
                         <p>等待消息...</p>
                     </div>
                 </div>
+
+                <!-- 对话回复栏 -->
+                <div class="reply-bar">
+                    <input type="text" id="replyInput" placeholder="输入回复内容，发到当前主题..."
+                        onkeydown="if(event.key==='Enter')sendReply()">
+                    <button class="small" id="replyBtn" onclick="sendReply()">发送回复</button>
+                </div>
             </div>
 
             <!-- 发送消息标签页 -->
@@ -981,6 +1043,21 @@
         let messages = []; // 消息缓存数组
         const MAX_MESSAGES = 100; // 最大缓存消息数
         let confirmCallback = null; // 确认对话框回调
+        let lastSentContent = ''; // 用于 MQTT 去重：刚发送的回复内容
+        let lastSentTime = 0;
+
+        /** 与 server 一致：订阅主题转成可发布主题（notice/# -> notice），避免乐观更新与 MQTT 回显 topic 不同导致重复显示 */
+        function topicForPublish(topic) {
+            topic = topic.trim();
+            let i = topic.indexOf('#');
+            if (i >= 0) {
+                topic = topic.substring(0, i).trim().replace(/\/+$/, '') || 'notice';
+            }
+            if (topic.indexOf('+') >= 0) {
+                topic = topic.split('/').map(function (p) { return p === '+' ? 'reply' : p; }).join('/');
+            }
+            return topic;
+        }
 
         function generateClientId() {
             return 'web-' + Math.random().toString(16).substr(2, 8);
@@ -1011,12 +1088,26 @@
             }
         };
 
-        // 加载缓存的消息
+        // 加载缓存的消息（规范化 topic，并合并因 notice/# 与 notice 导致的重复回复）
         function loadCachedMessages() {
             try {
                 const cached = localStorage.getItem('cachedMessages');
                 if (cached) {
-                    messages = JSON.parse(cached);
+                    messages = JSON.parse(cached).filter(m => (m.content !== '__auth_check__'));
+                    messages.forEach(m => { m.topic = topicForPublish(m.topic || ''); });
+                    const deduped = [];
+                    for (let i = 0; i < messages.length; i++) {
+                        const m = messages[i];
+                        const prev = deduped[deduped.length - 1];
+                        if (prev && prev.title === '回复' && prev.content === m.content && prev.topic === m.topic) {
+                            const t = prev.timestamp ? new Date(prev.timestamp).getTime() : 0;
+                            const t2 = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+                            if (Math.abs(t - t2) < 15000) continue;
+                        }
+                        deduped.push(m);
+                    }
+                    messages = deduped;
+                    saveCachedMessages();
                     renderMessages();
                 }
             } catch (e) {
@@ -1031,6 +1122,45 @@
                 localStorage.setItem('cachedMessages', JSON.stringify(messages));
             } catch (e) {
                 console.error('保存缓存消息失败:', e);
+            }
+        }
+
+        /** 拉取服务端消息历史（离线期间未收到的消息），与本地缓存合并后渲染 */
+        async function fetchMessageHistory() {
+            if (!currentToken) return;
+            try {
+                const res = await fetch('/messages?page_size=50', {
+                    headers: { 'Authorization': 'Bearer ' + currentToken }
+                });
+                if (!res.ok) return;
+                const json = await res.json();
+                if (!json.success || !json.data || !Array.isArray(json.data.messages)) return;
+                const list = json.data.messages;
+                const toItem = function (m) {
+                    const t = (m.timestamp && typeof m.timestamp === 'string') ? m.timestamp : (m.timestamp ? new Date(m.timestamp * 1000).toISOString() : new Date().toISOString());
+                    const client = (m.extra && m.extra.client) ? m.extra.client : '';
+                    return { topic: topicForPublish(m.topic || ''), title: m.title || '通知', content: m.content || '', timestamp: t, client: client };
+                };
+                const fromHistory = list.map(toItem).filter(function (m) { return m.content !== '__auth_check__'; });
+                const seen = new Set();
+                function key(m) {
+                    const t = m.timestamp ? new Date(m.timestamp).getTime() : 0;
+                    return (m.topic || '') + '\n' + (m.content || '') + '\n' + (Math.floor(t / 10000));
+                }
+                messages.forEach(function (m) { seen.add(key(m)); });
+                fromHistory.forEach(function (m) {
+                    if (!seen.has(key(m))) { seen.add(key(m)); messages.push(m); }
+                });
+                messages.sort(function (a, b) {
+                    const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                    const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                    return tb - ta;
+                });
+                if (messages.length > MAX_MESSAGES) messages = messages.slice(0, MAX_MESSAGES);
+                saveCachedMessages();
+                renderMessages();
+            } catch (e) {
+                console.error('拉取消息历史失败:', e);
             }
         }
 
@@ -1061,6 +1191,7 @@
         // 创建单条消息的 HTML
         function createMessageHTML(msg, idx) {
             const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
+            const clientLabel = msg.client ? `来自 ${escapeHtml(msg.client)}` : '';
             return `
                 <div class="message-item" data-idx="${idx}">
                     <label class="custom-checkbox">
@@ -1070,9 +1201,9 @@
                     <div class="message-body">
                         <div class="message-header">
                             <span class="message-title">${escapeHtml(msg.title)}</span>
-                            <span class="message-time">${time}</span>
+                            <span class="message-meta">${clientLabel ? `<span class="message-client">${clientLabel}</span> ` : ''}<span class="message-time">${time}</span></span>
                         </div>
-                        <div class="message-content">${escapeHtml(msg.content)}</div>
+                        <div class="message-content">${renderMarkdown(msg.content)}</div>
                         <div class="message-topic">${escapeHtml(msg.topic)}</div>
                     </div>
                 </div>
@@ -1118,7 +1249,14 @@
 
                 loadServerStatus();
                 showToast('认证成功', 'success');
-
+                // 刷新后自动重连：若 localStorage 中曾保存过 broker 则恢复输入框并连接
+                const savedBroker = localStorage.getItem('brokerUrl');
+                if (savedBroker) {
+                    document.getElementById('brokerUrl').value = savedBroker;
+                    const savedT = localStorage.getItem('mqttTopic');
+                    if (savedT) document.getElementById('topic').value = savedT;
+                    setTimeout(function () { connect(); }, 0);
+                }
             } catch (e) {
                 showAuthError('连接失败: ' + e.message);
             }
@@ -1196,15 +1334,17 @@
                     if (err) showToast('订阅失败: ' + err.message, 'error');
                 });
                 loadServerStatus();
+                fetchMessageHistory();
             });
 
             client.on('message', (topic, payload) => {
+                const normTopic = topicForPublish(topic);
                 try {
                     const msg = JSON.parse(payload.toString());
                     if (msg.content === '__auth_check__') return;
-                    addMessage(topic, msg);
+                    addMessage(normTopic, msg);
                 } catch (e) {
-                    addMessage(topic, { content: payload.toString() });
+                    addMessage(normTopic, { content: payload.toString() });
                 }
             });
 
@@ -1256,16 +1396,33 @@
         }
 
         function addMessage(topic, msg) {
-            const title = msg.title || '通知';
-            const content = msg.content || JSON.stringify(msg);
+            const content = (msg.content !== undefined && msg.content !== null) ? String(msg.content).trim() : JSON.stringify(msg);
+            const title = (msg.title !== undefined && msg.title !== null) ? String(msg.title) : '通知';
+            // 去重1：刚通过回复栏发送的内容，MQTT 会再推一次
+            if (lastSentContent && content === lastSentContent.trim() && (Date.now() - lastSentTime) < 5000) {
+                lastSentContent = '';
+                return;
+            }
+            // 去重2：列表第一条若是刚加的「回复」且内容相同（主题规范化后一致），视为 MQTT 回显，跳过
+            const normTopic = topicForPublish(topic);
+            if (messages.length > 0) {
+                const first = messages[0];
+                const firstTime = first.timestamp ? new Date(first.timestamp).getTime() : 0;
+                const firstNormTopic = topicForPublish(first.topic || '');
+                if (first.title === '回复' && first.content === content && firstNormTopic === normTopic && (Date.now() - firstTime) < 5000) {
+                    return;
+                }
+            }
             const timestamp = msg.timestamp || new Date().toISOString();
+            const client = (msg.client !== undefined && msg.client !== null) ? String(msg.client).trim() : '';
 
-            // 添加到消息数组开头
+            // 添加到消息数组开头（主题统一用可发布形式，避免 notice/# 与 notice 各显示一条）
             messages.unshift({
-                topic: topic,
+                topic: normTopic,
                 title: title,
                 content: content,
-                timestamp: timestamp
+                timestamp: timestamp,
+                client: client
             });
 
             // 保持最多 MAX_MESSAGES 条消息
@@ -1402,6 +1559,69 @@
             hideConfirm();
         }
 
+        /** 发送对话回复：发到当前订阅主题，作为对话中的下一条消息 */
+        async function sendReply() {
+            const input = document.getElementById('replyInput');
+            const content = input.value.trim();
+            if (!content) {
+                showToast('请输入回复内容', 'error');
+                return;
+            }
+            const topic = document.getElementById('topic').value.trim();
+            if (!topic) {
+                showToast('请先填写主题', 'error');
+                return;
+            }
+            const btn = document.getElementById('replyBtn');
+            btn.disabled = true;
+            // 先标记“已发送”，避免 MQTT 先于响应到达时重复添加
+            lastSentContent = content;
+            lastSentTime = Date.now();
+            try {
+                const res = await fetch('/webhook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + currentToken
+                    },
+                    body: JSON.stringify({ title: '回复', content: content, topic: topic, client: 'web' })
+                });
+                if (res.status === 429) {
+                    lastSentContent = '';
+                    showToast('请求过于频繁', 'error');
+                    return;
+                }
+                if (res.status === 401) {
+                    lastSentContent = '';
+                    showToast('认证失败', 'error');
+                    logout();
+                    return;
+                }
+                if (!res.ok) {
+                    lastSentContent = '';
+                    const data = await res.json().catch(() => ({}));
+                    showToast(data.message || '发送失败', 'error');
+                    return;
+                }
+                input.value = '';
+                // 乐观更新：用可发布主题（与 MQTT 实际推送的 topic 一致），避免同一条显示两次
+                const publishTopic = topicForPublish(topic);
+                messages.unshift({
+                    topic: publishTopic,
+                    title: '回复',
+                    content: content,
+                    timestamp: new Date().toISOString(),
+                    client: 'web'
+                });
+                if (messages.length > MAX_MESSAGES) messages = messages.slice(0, MAX_MESSAGES);
+                saveCachedMessages();
+                renderMessages();
+                showToast('回复已发送', 'success');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         async function sendMessage() {
             const title = document.getElementById('sendTitle').value.trim();
             const content = document.getElementById('sendContent').value.trim();
@@ -1419,7 +1639,7 @@
             btn.textContent = '发送中...';
 
             try {
-                const body = { title: title || '通知', content };
+                const body = { title: title || '通知', content, client: 'web' };
                 if (topic) body.topic = topic;
 
                 const res = await fetch('/webhook', {
@@ -1475,6 +1695,18 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        /** 将消息内容按 Markdown 渲染为安全 HTML */
+        function renderMarkdown(text) {
+            if (text == null || text === '') return '';
+            if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return escapeHtml(text);
+            try {
+                const raw = marked.parse(String(text), { gfm: true, breaks: true });
+                return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'blockquote', 'h1', 'h2', 'h3', 'hr'] });
+            } catch (e) {
+                return escapeHtml(text);
+            }
         }
 
         function showToast(message, type = 'info') {

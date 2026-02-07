@@ -37,9 +37,10 @@ notice/
 │   └── config/          # 配置管理
 │
 ├── client/
-│   ├── cli/             # 跨平台命令行客户端 (Go) - Linux/Windows/macOS
+│   ├── cli/             # 跨平台命令行客户端 (Go) - Linux/Windows/macOS，支持 send -topic
 │   ├── gui/             # 跨平台桌面客户端 (Tauri) - Linux/Windows/macOS
-│   └── android/         # Android 客户端 (Kotlin)
+│   ├── android/         # Android 客户端 (Kotlin)，支持默认发送主题、回复指定 topic、Markdown
+│   └── openclaw/        # Openclaw 插件，收发可指定 topic，Agent 回信到同一 topic
 │
 └── README.md
 ```
@@ -79,9 +80,15 @@ make docker  # 使用 Docker 构建 APK
 ### 3. 发送消息
 
 ```bash
+# 发送到默认主题
 curl -X POST http://localhost:9090/webhook \
   -H "Authorization: Bearer <token>" \
   -d '{"title":"测试","content":"Hello World"}'
+
+# 指定发布主题（回复到指定 topic）
+curl -X POST http://localhost:9090/webhook \
+  -H "Authorization: Bearer <token>" \
+  -d '{"title":"测试","content":"Hello World","topic":"notice/alert"}'
 ```
 
 ## ⚠️ 公网部署安全须知
@@ -152,6 +159,8 @@ curl -X POST http://localhost:9090/webhook \
 | 后台运行 | - | - | ✅ | ✅ |
 | 开机自启 | - | - | - | ✅ |
 | 执行命令 | - | ✅ | - | - |
+| 发送可指定 topic | ✅ Webhook | ✅ send -topic | - | ✅ 设置+回复指定 |
+| 消息 Markdown 渲染 | ✅ Web | - | - | ✅ |
 | Linux | ✅ | ✅ | ✅ | - |
 | Windows | ✅ | ✅ | ✅ | - |
 | macOS | ✅ | ✅ | ✅ | - |
@@ -160,9 +169,10 @@ curl -X POST http://localhost:9090/webhook \
 ## 文档
 
 - [Server 文档](server/README.md) - 服务端部署和配置
-- [CLI Client 文档](client/cli/README.md) - 跨平台命令行客户端
+- [CLI Client 文档](client/cli/README.md) - 跨平台命令行客户端（含 send 子命令）
 - [GUI Client 文档](client/gui/README.md) - 跨平台桌面客户端
-- [Android Client 文档](client/android/README.md) - Android 客户端
+- [Android Client 文档](client/android/README.md) - Android 客户端（默认发送主题、回复指定 topic、Markdown）
+- [Openclaw 插件文档](client/openclaw/README.md) - Openclaw Channel 插件，收发可指定 topic
 
 ## License
 

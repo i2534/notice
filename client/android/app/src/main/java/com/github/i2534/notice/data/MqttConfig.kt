@@ -13,7 +13,10 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 data class MqttSettings(
     val brokerUrl: String = "wss://mqtt.example.com",
     val clientId: String = "",
+    /** 订阅主题（接收消息用，如 notice/#） */
     val topic: String = "notice/#",
+    /** 默认发送主题（回复/发送用，如 notice 或 notice/reply；留空则用订阅主题转换后的值） */
+    val sendTopic: String = "",
     val autoConnect: Boolean = true,
     val keepAlive: Int = 30,
     val authToken: String = ""  // 认证 Token
@@ -43,6 +46,7 @@ class MqttConfigStore(private val context: Context) {
         private val KEY_BROKER_URL = stringPreferencesKey("broker_url")
         private val KEY_CLIENT_ID = stringPreferencesKey("client_id")
         private val KEY_TOPIC = stringPreferencesKey("topic")
+        private val KEY_SEND_TOPIC = stringPreferencesKey("send_topic")
         private val KEY_AUTO_CONNECT = booleanPreferencesKey("auto_connect")
         private val KEY_KEEP_ALIVE = intPreferencesKey("keep_alive")
         private val KEY_AUTH_TOKEN = stringPreferencesKey("auth_token")
@@ -53,6 +57,7 @@ class MqttConfigStore(private val context: Context) {
             brokerUrl = prefs[KEY_BROKER_URL] ?: MqttSettings().brokerUrl,
             clientId = prefs[KEY_CLIENT_ID] ?: "",
             topic = prefs[KEY_TOPIC] ?: MqttSettings().topic,
+            sendTopic = prefs[KEY_SEND_TOPIC] ?: "",
             autoConnect = prefs[KEY_AUTO_CONNECT] ?: true,
             keepAlive = prefs[KEY_KEEP_ALIVE] ?: 30,
             authToken = prefs[KEY_AUTH_TOKEN] ?: ""
@@ -64,6 +69,7 @@ class MqttConfigStore(private val context: Context) {
             prefs[KEY_BROKER_URL] = settings.brokerUrl
             prefs[KEY_CLIENT_ID] = settings.clientId
             prefs[KEY_TOPIC] = settings.topic
+            prefs[KEY_SEND_TOPIC] = settings.sendTopic
             prefs[KEY_AUTO_CONNECT] = settings.autoConnect
             prefs[KEY_KEEP_ALIVE] = settings.keepAlive
             prefs[KEY_AUTH_TOKEN] = settings.authToken

@@ -49,6 +49,7 @@ class SettingsActivity : AppCompatActivity() {
             binding.inputBrokerUrl.setText(settings.brokerUrl)
             binding.inputClientId.setText(settings.clientId)
             binding.inputTopic.setText(settings.topic)
+            binding.inputSendTopic.setText(settings.sendTopic)
             binding.inputKeepAlive.setText(settings.keepAlive.toString())
             binding.inputAuthToken.setText(settings.authToken)
             binding.switchAutoConnect.isChecked = settings.autoConnect
@@ -59,6 +60,7 @@ class SettingsActivity : AppCompatActivity() {
         val brokerUrl = binding.inputBrokerUrl.text.toString().trim()
         val clientId = binding.inputClientId.text.toString().trim()
         val topic = binding.inputTopic.text.toString().trim()
+        val sendTopic = binding.inputSendTopic.text.toString().trim()
         val keepAlive = binding.inputKeepAlive.text.toString().toIntOrNull() ?: 30
         val authToken = binding.inputAuthToken.text.toString().trim()
         val autoConnect = binding.switchAutoConnect.isChecked
@@ -86,6 +88,7 @@ class SettingsActivity : AppCompatActivity() {
             brokerUrl = brokerUrl,
             clientId = clientId,
             topic = topic,
+            sendTopic = sendTopic,
             keepAlive = keepAlive,
             authToken = authToken,
             autoConnect = autoConnect

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -25,12 +27,43 @@ var (
 // 全局配置
 var globalExecCmd string
 
+// FlexTime 支持从 JSON 解析字符串(RFC3339)或数字(Unix 秒/毫秒)的时间类型
+type FlexTime struct{ time.Time }
+
+func (t *FlexTime) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		parsed, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return err
+		}
+		t.Time = parsed
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	v, err := n.Int64()
+	if err != nil {
+		return err
+	}
+	if v >= 1e12 {
+		// 毫秒
+		t.Time = time.UnixMilli(v)
+	} else {
+		t.Time = time.Unix(v, 0)
+	}
+	return nil
+}
+
 // Message 接收到的消息结构
 type Message struct {
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Extra     any       `json:"extra,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	Title     string   `json:"title"`
+	Content   string   `json:"content"`
+	Extra     any      `json:"extra,omitempty"`
+	Timestamp FlexTime `json:"timestamp"`
+	Client    string   `json:"client,omitempty"` // 发送端：web / android / cli / webhook
 }
 
 func main() {
@@ -42,7 +75,15 @@ func main() {
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	// 命令行参数
+	// 子命令 send：通过 webhook 发送消息，可指定 topic
+	if len(os.Args) >= 2 && os.Args[1] == "send" {
+		if err := runSend(os.Args[2:]); err != nil {
+			log.Fatalf("send: %v", err)
+		}
+		return
+	}
+
+	// 命令行参数（订阅模式）
 	broker := flag.String("broker", "tcp://localhost:9091", "MQTT Broker 地址")
 	topic := flag.String("topic", "notice/#", "订阅的主题")
 	clientID := flag.String("id", "cli-client", "客户端 ID")
@@ -150,6 +191,9 @@ func handleMessage(topic string, payload []byte) {
 	if title == "" {
 		title = "Notice"
 	}
+	if msg.Client != "" {
+		title = fmt.Sprintf("[%s] %s", msg.Client, title)
+	}
 	showNotification(title, msg.Content)
 
 	// 执行外部命令
@@ -160,7 +204,7 @@ func handleMessage(topic string, payload []byte) {
 
 // executeCommand 执行外部命令
 // 消息通过以下方式传递:
-// - 环境变量: NOTICE_TOPIC, NOTICE_TITLE, NOTICE_CONTENT, NOTICE_EXTRA, NOTICE_TIMESTAMP, NOTICE_RAW
+// - 环境变量: NOTICE_TOPIC, NOTICE_TITLE, NOTICE_CONTENT, NOTICE_EXTRA, NOTICE_TIMESTAMP, NOTICE_RAW, NOTICE_CLIENT(可选)
 // - stdin: 原始 JSON 消息
 func executeCommand(cmdStr, topic string, payload []byte, msg *Message) {
 	// 解析命令（支持带参数的命令）
@@ -180,6 +224,9 @@ func executeCommand(cmdStr, topic string, payload []byte, msg *Message) {
 		"NOTICE_TIMESTAMP="+msg.Timestamp.Format(time.RFC3339),
 		"NOTICE_RAW="+string(payload),
 	)
+	if msg.Client != "" {
+		cmd.Env = append(cmd.Env, "NOTICE_CLIENT="+msg.Client)
+	}
 
 	// Extra 字段转为 JSON 字符串
 	if msg.Extra != nil {
@@ -254,4 +301,58 @@ func parseCommand(cmdStr string) []string {
 	}
 
 	return parts
+}
+
+// runSend 通过 webhook 发送消息，可指定 topic（回复到指定主题）
+// 用法: notice-cli send -server=http://localhost:9090 -token=xxx -topic=notice/alert -content="内容" -title="标题"
+func runSend(args []string) error {
+	fs := flag.NewFlagSet("send", flag.ContinueOnError)
+	server := fs.String("server", "http://localhost:9090", "Notice 服务端地址（webhook 根 URL）")
+	token := fs.String("token", "", "认证 Token（必填）")
+	topic := fs.String("topic", "", "可选：指定发布到的主题，不填则使用服务端默认主题")
+	content := fs.String("content", "", "消息内容（必填）")
+	title := fs.String("title", "CLI", "消息标题")
+	client := fs.String("client", "cli", "发送端标识")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("未知参数: %s", strings.Join(fs.Args(), " "))
+	}
+	if *token == "" {
+		return fmt.Errorf("必须指定 -token")
+	}
+	if *content == "" {
+		return fmt.Errorf("必须指定 -content")
+	}
+	url := strings.TrimSuffix(*server, "/") + "/webhook"
+	body := map[string]interface{}{
+		"title":   *title,
+		"content": *content,
+		"client":  *client,
+	}
+	if *topic != "" {
+		body["topic"] = *topic
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+*token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("webhook 返回 %d: %s", resp.StatusCode, string(b))
+	}
+	log.Printf("发送成功: %s", strings.TrimSpace(string(b)))
+	return nil
 }

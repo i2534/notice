@@ -109,10 +109,10 @@ make docker-build-all VERSION=1.0.0
 
 ## 使用
 
-1. 启动 Notice Server
+1. 启动 Notice Server（HTTP 9090，MQTT TCP 9091 / WebSocket 9092）
 2. 运行 Notice Client (GUI)
-3. 填写服务器地址、端口和 Token
-4. 点击"连接"按钮
+3. 填写服务器地址、端口（MQTT 端口 9091 或 WebSocket 9092）和 Token
+4. 点击「连接」按钮
 5. 收到消息时会显示系统通知
 
 ## 技术栈

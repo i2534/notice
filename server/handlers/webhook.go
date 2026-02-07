@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -18,9 +19,10 @@ import (
 // Request Webhook 请求结构
 type Request struct {
 	Title   string `json:"title"`           // 消息标题
-	Content string `json:"content"`         // 消息内容（必填）
+	Content string `json:"content"`        // 消息内容（必填）
 	Topic   string `json:"topic,omitempty"` // 可选：指定主题
 	Extra   any    `json:"extra,omitempty"` // 可选：额外数据
+	Client  string `json:"client,omitempty"` // 可选：发送端标识，如 web / android / cli
 }
 
 // Response Webhook 响应
@@ -113,6 +115,12 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 仅做 Token 校验，不发布到 MQTT（Web 端登录时用）
+	if req.Content == "__auth_check__" {
+		h.sendSuccess(w, "认证成功", h.broker.ClientCount())
+		return
+	}
+
 	// 验证字段长度
 	if h.config.Message.MaxTitleLength > 0 && utf8.RuneCountInString(req.Title) > h.config.Message.MaxTitleLength {
 		logger.Warn("title 超出长度限制", "size", utf8.RuneCountInString(req.Title), "max", h.config.Message.MaxTitleLength)
@@ -127,18 +135,24 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 构建推送消息
+	client := strings.TrimSpace(req.Client)
+	if client == "" {
+		client = "webhook" // 经 Webhook 发送且未指定时
+	}
 	msg := broker.Message{
 		Title:     req.Title,
 		Content:   req.Content,
 		Extra:     req.Extra,
 		Timestamp: time.Now(),
+		Client:    client,
 	}
 
-	// 发布到 MQTT
+	// 发布到 MQTT（订阅可用通配符 notice/#，发布必须用具体主题）
 	topic := req.Topic
 	if topic == "" {
 		topic = h.config.MQTT.Topic
 	}
+	topic = topicForPublish(topic)
 
 	if err := h.broker.Publish(topic, msg); err != nil {
 		logger.Error("消息发布失败", "topic", topic, "error", err)
@@ -153,6 +167,27 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 成功响应
 	h.sendSuccess(w, "消息推送成功", clientCount)
+}
+
+// topicForPublish 将订阅用主题转为可发布主题（MQTT 禁止向含 #/+ 的主题发布）
+func topicForPublish(topic string) string {
+	topic = strings.TrimSpace(topic)
+	if i := strings.Index(topic, "#"); i >= 0 {
+		topic = strings.TrimSuffix(strings.TrimSpace(topic[:i]), "/")
+		if topic == "" {
+			topic = "notice"
+		}
+	}
+	if strings.Contains(topic, "+") {
+		parts := strings.Split(topic, "/")
+		for i, p := range parts {
+			if p == "+" {
+				parts[i] = "reply"
+			}
+		}
+		topic = strings.Join(parts, "/")
+	}
+	return topic
 }
 
 func (h *WebhookHandler) sendError(w http.ResponseWriter, status int, message string) {

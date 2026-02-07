@@ -44,13 +44,13 @@ help:
 
 # 运行（开发模式）
 run:
-	@go build -o /tmp/notice-client-dev main.go && \
+	@go build -o /tmp/notice-client-dev . && \
 	exec /tmp/notice-client-dev -broker=$(BROKER) -topic=$(TOPIC) -id=$(CLIENT_ID) $(if $(TOKEN),-token=$(TOKEN),) $(if $(EXEC),-exec=$(EXEC),)
 
 # 运行并使用示例脚本处理消息
 # MODE: env (默认) 或 stdin
 run-example:
-	@go build -o /tmp/notice-client-dev main.go && \
+	@go build -o /tmp/notice-client-dev . && \
 	exec /tmp/notice-client-dev -broker=$(BROKER) -topic=$(TOPIC) -id=$(CLIENT_ID) $(if $(TOKEN),-token=$(TOKEN),) -exec="bash ./scripts/example.sh $(if $(filter stdin,$(MODE)),--stdin,--env)"
 
 # 构建当前平台

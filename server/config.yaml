@@ -98,4 +98,4 @@ message:
 
   # 内容最大长度（字符），0 表示不限制
   # 环境变量: MESSAGE_MAX_CONTENT_LENGTH
-  max_content_length: 250
+  max_content_length: 1024

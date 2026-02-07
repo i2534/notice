@@ -83,17 +83,37 @@
 
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- Topic -->
+            <!-- 订阅主题 -->
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 android:hint="@string/settings_topic"
                 app:boxBackgroundColor="@color/surface"
+                app:helperText="@string/settings_topic_hint"
                 app:hintTextColor="@color/text_secondary">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/inputTopic"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:textColor="@color/text_primary" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- 默认发送主题 -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="@string/settings_send_topic"
+                app:boxBackgroundColor="@color/surface"
+                app:helperText="@string/settings_send_topic_hint"
+                app:hintTextColor="@color/text_secondary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/inputSendTopic"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="text"

@@ -10,8 +10,10 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.i2534.notice.R
 import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.databinding.ItemMessageBinding
+import io.noties.markwon.Markwon
 
 class MessageAdapter(
+    private val markwon: Markwon,
     private val onItemClick: ((NoticeMessage) -> Unit)? = null,
     private val onEnterSelectMode: (() -> Unit)? = null,
     private val onSelectionChanged: ((Int) -> Unit)? = null
@@ -55,17 +57,20 @@ class MessageAdapter(
         val binding = ItemMessageBinding.inflate(
             LayoutInflater.from(parent.context), parent, false
         )
-        return MessageViewHolder(binding)
+        return MessageViewHolder(binding, markwon)
     }
 
     override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
         val message = getItem(position) ?: return
         val isSelected = selectedIds.contains(message.id)
-        holder.bind(message, isSelectMode, isSelected) { msg ->
+        holder.bind(message, isSelectMode, isSelected)
+
+        // 点击时根据当前是否多选模式决定行为：多选时只切换选中，非多选时打开详情（删除时不能触发查看详情）
+        holder.itemView.setOnClickListener {
             if (isSelectMode) {
-                toggleSelection(msg)
+                toggleSelection(message)
             } else {
-                onItemClick?.invoke(msg)
+                onItemClick?.invoke(message)
             }
         }
         holder.itemView.setOnLongClickListener {
@@ -77,19 +82,32 @@ class MessageAdapter(
     }
 
     class MessageViewHolder(
-        private val binding: ItemMessageBinding
+        private val binding: ItemMessageBinding,
+        private val markwon: Markwon
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(
             message: NoticeMessage,
             isSelectMode: Boolean,
-            isSelected: Boolean,
-            onClick: (NoticeMessage) -> Unit
+            isSelected: Boolean
         ) {
             binding.messageTitle.text = message.title
-            binding.messageContent.text = message.content
+            markwon.setMarkdown(binding.messageContent, message.content.ifBlank { " " })
+            binding.messageContent.movementMethod = null
             binding.messageTime.text = message.getFormattedTime()
             binding.messageTopic.text = message.topic
+            val client = message.client
+            if (!client.isNullOrBlank()) {
+                binding.messageClient.text = binding.root.context.getString(R.string.from_client, client)
+                binding.messageClient.visibility = android.view.View.VISIBLE
+            } else {
+                binding.messageClient.visibility = android.view.View.GONE
+            }
+
+            // 内容可能被截断时显示「更多」提示（列表最多 2 行）
+            val content = message.content
+            val likelyTruncated = content.length > 100 || content.lines().size > 2
+            binding.messageContentMore.visibility = if (likelyTruncated) android.view.View.VISIBLE else android.view.View.GONE
 
             // 选中状态：使用边框和轻微的颜色变化
             val context = binding.root.context
@@ -106,9 +124,8 @@ class MessageAdapter(
                 )
             }
 
-            binding.root.setOnClickListener {
-                onClick(message)
-            }
+            binding.root.isClickable = true
+            binding.root.isFocusable = true
         }
     }
 

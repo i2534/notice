@@ -27,6 +27,7 @@ type Message struct {
 	Content   string    `json:"content"`
 	Extra     any       `json:"extra,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
+	Client    string    `json:"client,omitempty"` // 发送端标识：web / android / cli / webhook
 }
 
 // Config Broker 配置

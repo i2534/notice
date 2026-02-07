@@ -129,6 +129,36 @@ jobs:
           name: client-cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/
 
+  # 构建 Openclaw 插件（校验依赖并打包）
+  build-openclaw:
+    name: Build Openclaw Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Dependencies
+        working-directory: client/openclaw
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Pack Plugin
+        run: |
+          VERSION="${{ env.VERSION }}"
+          mkdir -p dist
+          (cd client/openclaw && zip -r ../../dist/notice-openclaw-${VERSION}.zip . -x "node_modules/*" -x ".git/*")
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-plugin
+          path: dist/notice-openclaw-*.zip
+
   # 构建 Android Client
   build-android:
     name: Build Android Client
@@ -235,7 +265,7 @@ jobs:
   # 创建 Release
   release:
     name: Create Release
-    needs: [build-server, build-cli-client, build-android, build-docker]
+    needs: [build-server, build-cli-client, build-android, build-openclaw, build-docker]
     # 允许 build-docker 被跳过时继续执行
     if: ${{ !cancelled() && !failure() }}
     runs-on: ubuntu-latest
@@ -263,6 +293,12 @@ jobs:
         with:
           path: artifacts
           pattern: android-*
+
+      - name: Download Openclaw Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: openclaw-*
 
       - name: Prepare Release Files
         run: |
@@ -370,7 +406,10 @@ jobs:
           
           # ========== Android APK ==========
           find artifacts -name "*.apk" -exec cp {} release/ \;
-          
+
+          # ========== Openclaw 插件 ==========
+          find artifacts -name "notice-openclaw-*.zip" -exec cp {} release/ \;
+
           ls -la release/
 
       - name: Create Release

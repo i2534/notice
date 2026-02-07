@@ -1,0 +1,41 @@
+{
+  "id": "notice",
+  "name": "Notice Channel",
+  "version": "0.1.0",
+  "description": "Notice channel (webhook+MQTT). Config: channels.notice.",
+  "channels": ["notice"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "serverUrl": {
+        "type": "string"
+      },
+      "token": {
+        "type": "string"
+      },
+      "brokerUrl": {
+        "type": "string"
+      },
+      "topic": {
+        "type": "string",
+        "default": "notice/#"
+      }
+    }
+  },
+  "uiHints": {
+    "serverUrl": {
+      "label": "Server URL"
+    },
+    "token": {
+      "label": "Token",
+      "sensitive": true
+    },
+    "brokerUrl": {
+      "label": "MQTT Broker URL"
+    },
+    "topic": {
+      "label": "Topic"
+    }
+  }
+}

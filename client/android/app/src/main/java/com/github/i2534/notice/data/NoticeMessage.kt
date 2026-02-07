@@ -13,7 +13,8 @@ data class NoticeMessage(
     val topic: String,
     val title: String,
     val content: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val client: String? = null  // 发送端标识：web / android / cli / webhook
 ) {
     companion object {
         private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -32,7 +33,8 @@ data class NoticeMessage(
                 NoticeMessage(
                     topic = topic,
                     title = json.optString("title", "通知"),
-                    content = json.optString("content", text)
+                    content = json.optString("content", text),
+                    client = json.optString("client").takeIf { it.isNotEmpty() }
                 )
             } catch (e: Exception) {
                 // 非 JSON 格式，使用纯文本
