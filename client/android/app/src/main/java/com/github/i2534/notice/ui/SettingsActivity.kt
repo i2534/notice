@@ -2,14 +2,14 @@ package com.github.i2534.notice.ui
 
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.snackbar.Snackbar
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import com.github.i2534.notice.R
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.databinding.ActivitySettingsBinding
+import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -65,22 +65,19 @@ class SettingsActivity : AppCompatActivity() {
         val authToken = binding.inputAuthToken.text.toString().trim()
         val autoConnect = binding.switchAutoConnect.isChecked
 
-        // 验证
         if (brokerUrl.isBlank()) {
-            binding.inputBrokerUrl.error = "请输入 Broker 地址"
+            binding.inputBrokerUrl.error = getString(R.string.settings_error_broker_required)
             return
         }
-
-        if (!brokerUrl.startsWith("tcp://") && 
+        if (!brokerUrl.startsWith("tcp://") &&
             !brokerUrl.startsWith("ssl://") &&
-            !brokerUrl.startsWith("ws://") && 
+            !brokerUrl.startsWith("ws://") &&
             !brokerUrl.startsWith("wss://")) {
-            binding.inputBrokerUrl.error = "地址格式错误，应以 tcp://, ssl://, ws:// 或 wss:// 开头"
+            binding.inputBrokerUrl.error = getString(R.string.settings_error_broker_format)
             return
         }
-
         if (topic.isBlank()) {
-            binding.inputTopic.error = "请输入订阅主题"
+            binding.inputTopic.error = getString(R.string.settings_error_topic_required)
             return
         }
 
@@ -96,7 +93,7 @@ class SettingsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             configStore.save(settings)
-            Snackbar.make(binding.root, "设置已保存", Snackbar.LENGTH_SHORT).show()
+            Snackbar.make(binding.root, R.string.settings_saved, Snackbar.LENGTH_SHORT).show()
             finish()
         }
     }

@@ -108,7 +108,7 @@ mqtt:
   tcp_port: "9091"
   ws_port: "9092"
   topic: "notice"
-  session_expiry: 86400  # 会话过期时间（秒）
+  session_expiry: 86400  # 会话过期时间（秒）；断联超过此时长的客户端会话会被自动清除
   message_expiry: 86400  # 消息过期时间（秒）
 
 auth:

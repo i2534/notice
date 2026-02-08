@@ -16,24 +16,29 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.inputmethod.EditorInfo
 import android.view.View
+import android.view.inputmethod.EditorInfo
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.paging.LoadState
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.android.material.snackbar.Snackbar
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import com.github.i2534.notice.NoticeApp
 import com.github.i2534.notice.R
 import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.databinding.ActivityMainBinding
 import com.github.i2534.notice.service.MqttService
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.snackbar.Snackbar
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -80,13 +85,21 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // 由我们自行处理系统栏和软键盘 insets，避免输入框被虚拟按键/键盘遮挡
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setupUI()
+        ViewCompat.requestApplyInsets(binding.root)
         checkNotificationPermission()
     }
 
     override fun onStart() {
         super.onStart()
         bindMqttService()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mqttService?.refreshSettings()
     }
 
     override fun onStop() {
@@ -171,6 +184,30 @@ class MainActivity : AppCompatActivity() {
         binding.btnClearReplyToTopic.setOnClickListener {
             replyToTopicOverride = null
             updateReplyToTopicUI()
+        }
+
+        // 根布局：预留状态栏（上）和导航栏（下），避免内容被系统栏遮挡
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(
+                systemBars.left,
+                systemBars.top,
+                systemBars.right,
+                systemBars.bottom
+            )
+            insets
+        }
+
+        // 主内容区：键盘弹出时底部 padding = 键盘高度，整块内容上移；键盘收起时 padding 恢复为 0，输入栏回到底部
+        ViewCompat.setOnApplyWindowInsetsListener(binding.mainContent) { view, insets ->
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            view.setPadding(
+                view.paddingLeft,
+                view.paddingTop,
+                view.paddingRight,
+                ime.bottom
+            )
+            insets
         }
     }
 
@@ -293,7 +330,7 @@ class MainActivity : AppCompatActivity() {
             // 观察列表是否为空
             lifecycleScope.launch {
                 messageAdapter.loadStateFlow.collectLatest { loadStates ->
-                    val isEmpty = loadStates.refresh is androidx.paging.LoadState.NotLoading &&
+                    val isEmpty = loadStates.refresh is LoadState.NotLoading &&
                             messageAdapter.itemCount == 0
                     binding.emptyText.visibility = if (isEmpty) View.VISIBLE else View.GONE
                 }
@@ -372,7 +409,7 @@ class MainActivity : AppCompatActivity() {
             .setView(dialogView)
             .create()
 
-        dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnPositive).apply {
+        dialogView.findViewById<MaterialButton>(R.id.btnPositive).apply {
             text = positiveText
             // 非破坏性操作使用主色调
             if (!isDestructive) {
@@ -385,7 +422,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         dialogView.findViewById<View>(R.id.btnNegative).apply {
-            (this as? com.google.android.material.button.MaterialButton)?.text = negativeText
+            (this as? MaterialButton)?.text = negativeText
             setOnClickListener {
                 dialog.dismiss()
             }

@@ -2,6 +2,7 @@ package com.github.i2534.notice.ui
 
 import android.content.res.ColorStateList
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.paging.PagingDataAdapter
@@ -99,15 +100,15 @@ class MessageAdapter(
             val client = message.client
             if (!client.isNullOrBlank()) {
                 binding.messageClient.text = binding.root.context.getString(R.string.from_client, client)
-                binding.messageClient.visibility = android.view.View.VISIBLE
+                binding.messageClient.visibility = View.VISIBLE
             } else {
-                binding.messageClient.visibility = android.view.View.GONE
+                binding.messageClient.visibility = View.GONE
             }
 
             // 内容可能被截断时显示「更多」提示（列表最多 2 行）
             val content = message.content
             val likelyTruncated = content.length > 100 || content.lines().size > 2
-            binding.messageContentMore.visibility = if (likelyTruncated) android.view.View.VISIBLE else android.view.View.GONE
+            binding.messageContentMore.visibility = if (likelyTruncated) View.VISIBLE else View.GONE
 
             // 选中状态：使用边框和轻微的颜色变化
             val context = binding.root.context

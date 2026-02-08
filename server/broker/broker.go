@@ -197,7 +197,8 @@ func (h *LogHook) Provides(b byte) bool {
 		b == mqtt.OnPublished ||
 		b == mqtt.OnSessionEstablished ||
 		b == mqtt.OnQosPublish ||
-		b == mqtt.OnQosComplete
+		b == mqtt.OnQosComplete ||
+		b == mqtt.OnClientExpired
 }
 
 func (h *LogHook) OnConnect(cl *mqtt.Client, pk packets.Packet) error {
@@ -232,6 +233,10 @@ func (h *LogHook) OnDisconnect(cl *mqtt.Client, err error, expire bool) {
 	} else {
 		logger.Info("MQTT 客户端断开", "client_id", cl.ID)
 	}
+}
+
+func (h *LogHook) OnClientExpired(cl *mqtt.Client) {
+	logger.Info("MQTT 会话已过期并清除", "client_id", cl.ID)
 }
 
 func (h *LogHook) OnSubscribed(cl *mqtt.Client, pk packets.Packet, reasonCodes []byte) {

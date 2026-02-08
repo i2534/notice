@@ -58,6 +58,10 @@
     <string name="settings_auth_token">认证 Token</string>
     <string name="settings_auth_token_hint">留空则不认证</string>
     <string name="settings_save">保存</string>
+    <string name="settings_saved">设置已保存</string>
+    <string name="settings_error_broker_required">请输入 Broker 地址</string>
+    <string name="settings_error_broker_format">地址格式错误，应以 tcp://, ssl://, ws:// 或 wss:// 开头</string>
+    <string name="settings_error_topic_required">请输入订阅主题</string>
 
     <!-- 通知 -->
     <string name="notification_channel_name">MQTT 服务</string>

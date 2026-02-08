@@ -13,25 +13,51 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
-import com.github.i2534.notice.util.AppLogger
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-import org.eclipse.paho.client.mqttv3.*
-import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
-import com.github.i2534.notice.NoticeApp
-import com.github.i2534.notice.R
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
+import com.github.i2534.notice.NoticeApp
+import com.github.i2534.notice.R
 import com.github.i2534.notice.data.AppDatabase
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.receiver.KeepAliveReceiver
 import com.github.i2534.notice.ui.MainActivity
+import com.github.i2534.notice.util.AppLogger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import org.eclipse.paho.client.mqttv3.IMqttActionListener
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
+import org.eclipse.paho.client.mqttv3.IMqttToken
+import org.eclipse.paho.client.mqttv3.MqttAsyncClient
+import org.eclipse.paho.client.mqttv3.MqttCallback
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions
+import org.eclipse.paho.client.mqttv3.MqttException
+import org.eclipse.paho.client.mqttv3.MqttMessage
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -667,8 +693,15 @@ class MqttService : Service() {
     /** 当前用于发布的主题（已规范化）：优先用设置中的默认发送主题，为空则用订阅主题转换 */
     fun getPublishTopic(): String? {
         val s = currentSettings ?: return null
-        val raw = s.sendTopic.takeIf { it.isNotBlank() } ?: s.topic
+        val raw = s.sendTopic.trim().takeIf { it.isNotBlank() } ?: s.topic.trim()
         return topicForPublish(raw)
+    }
+
+    /** 从 DataStore 拉取最新配置（从设置页返回后调用，确保默认发送主题等立即生效） */
+    fun refreshSettings() {
+        scope.launch {
+            configStore.settings.first().let { currentSettings = it }
+        }
     }
 
     /**
