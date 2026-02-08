@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"notice-server/broker"
 	"notice-server/config"
 	"notice-server/handlers"
 	"notice-server/logger"
+	"notice-server/ratelimit"
 	"notice-server/store"
 )
 
@@ -59,6 +61,13 @@ func main() {
 		logger.Info("消息存储已启用", "path", cfg.Storage.Path)
 	}
 
+	// 认证限流（Webhook 与 MQTT 共用，防暴力尝试）
+	authLimiter := ratelimit.New(ratelimit.Config{
+		MaxFailures: cfg.RateLimit.MaxFailures,
+		BlockTime:   time.Duration(cfg.RateLimit.BlockTime) * time.Second,
+		WindowTime:  time.Duration(cfg.RateLimit.WindowTime) * time.Second,
+	})
+
 	// 创建并启动 MQTT Broker
 	brokerCfg := broker.Config{
 		SessionExpiry:  cfg.MQTT.SessionExpiry,
@@ -66,6 +75,7 @@ func main() {
 		AuthToken:      cfg.Auth.Token,
 		StorageEnabled: cfg.Storage.Enabled,
 		StoragePath:    cfg.Storage.Path,
+		AuthLimiter:    authLimiter,
 	}
 	mqttBroker := broker.New(cfg.MQTT.Topic, brokerCfg, storeManager)
 
@@ -80,8 +90,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 注册 API 路由
-	http.Handle("/webhook", handlers.NewWebhookHandler(mqttBroker, cfg))
+	// 注册 API 路由（Webhook 与 MQTT 共用同一限流器）
+	http.Handle("/webhook", handlers.NewWebhookHandler(mqttBroker, cfg, authLimiter))
 	http.HandleFunc("/health", handlers.HealthHandler)
 	http.HandleFunc("/status", handlers.StatusHandler(mqttBroker, storeManager))
 	http.HandleFunc("/messages", handlers.MessagesHandler(storeManager, cfg))

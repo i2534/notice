@@ -1,10 +1,10 @@
 /**
  * Notice channel plugin for Openclaw.
- * - Sends messages to Notice server via webhook (POST /webhook).
- * - Receives messages by subscribing to MQTT; delivers to agent via runtime or hooks.
+ * - Receives messages by subscribing to MQTT.
+ * - Sends messages by publishing to MQTT (same broker, no webhook).
  *
  * Config: channels.notice
- *   serverUrl, token, brokerUrl (optional), topic (default notice/openclaw)
+ *   brokerUrl, token, topic (default notice/openclaw)
  */
 
 import mqtt from "mqtt";
@@ -44,50 +44,62 @@ function resolveAccount(cfg: Record<string, unknown>, accountId: string | undefi
     return { accountId: id, ...ch };
 }
 
-function getNoticeCredentials(cfg: Record<string, unknown>): { serverUrl: string; token: string } | null {
+function getBrokerCredentials(cfg: Record<string, unknown>): { brokerUrl: string; token: string } | null {
     const ch = getChannelConfig(cfg);
     const acc = resolveAccount(cfg, "default");
-    const serverUrl = ((ch?.serverUrl ?? acc?.serverUrl) as string)?.trim();
+    const brokerUrl = ((ch?.brokerUrl ?? acc?.brokerUrl) as string)?.trim();
     const token = ((ch?.token ?? acc?.token) as string)?.trim();
-    if (!serverUrl || !token) return null;
-    return { serverUrl, token };
+    if (!brokerUrl || !token) return null;
+    return { brokerUrl, token };
 }
 
-// ---------------------------------------------------------------------------
-// Webhook 发送与分片
-// ---------------------------------------------------------------------------
+// 模块级 MQTT 客户端，供订阅与发送共用
+let mqttClient: mqtt.MqttClient | null = null;
 
-async function sendToNotice(
-    serverUrl: string,
-    token: string,
-    text: string,
-    title?: string,
-    topic?: string
-): Promise<{ ok: boolean; error?: string }> {
-    const url = serverUrl.replace(/\/+$/, "") + "/webhook";
-    const body: Record<string, unknown> = {
-        content: text,
-        title: title ?? "Openclaw",
-        client: OUTBOUND_CLIENT_ID,
-    };
-    if (topic) body.topic = topic;
-    try {
-        const res = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-            const t = await res.text();
-            return { ok: false, error: `${res.status}: ${t}` };
-        }
-        return { ok: true };
-    } catch (e) {
-        return { ok: false, error: String(e) };
+// 插件 logger，在 register 时注入，供发送等逻辑打日志
+let pluginLogger: { info?: (msg: string, ...args: unknown[]) => void; warn?: (msg: string, ...args: unknown[]) => void } = {};
+
+/** 订阅主题转可发布主题（与 Notice Server topicForPublish 一致） */
+function topicForPublish(topic: string): string {
+    let t = topic.trim();
+    const hashIndex = t.indexOf("#");
+    if (hashIndex >= 0) {
+        t = t.substring(0, hashIndex).trim().replace(/\/+$/, "");
+        if (!t) t = "notice";
     }
+    if (t.includes("+")) {
+        t = t
+            .split("/")
+            .map((p) => (p === "+" ? "reply" : p))
+            .join("/");
+    }
+    return t;
+}
+
+/** 通过 MQTT 发布一条消息（不经过 webhook） */
+function sendViaMqtt(publishTopic: string, text: string, title?: string): Promise<{ ok: boolean; error?: string }> {
+    const c = mqttClient;
+    if (!c?.connected) {
+        pluginLogger.warn?.("[notice] Send skipped: MQTT not connected");
+        return Promise.resolve({ ok: false, error: "MQTT not connected" });
+    }
+    const payload = JSON.stringify({
+        title: title ?? "Openclaw",
+        content: text,
+        client: OUTBOUND_CLIENT_ID,
+        timestamp: Date.now(),
+    });
+    return new Promise((resolve) => {
+        c.publish(publishTopic, payload, { qos: 1 }, (err) => {
+            if (err) {
+                pluginLogger.warn?.("[notice] Send failed", "topic", publishTopic, "error", String(err));
+                resolve({ ok: false, error: String(err) });
+            } else {
+                pluginLogger.info?.("[notice] Sent", "topic", publishTopic, "length", text.length);
+                resolve({ ok: true });
+            }
+        });
+    });
 }
 
 function chunkTextForNotice(text: string, maxLen: number = NOTICE_MAX_CONTENT_LENGTH): string[] {
@@ -111,20 +123,20 @@ function chunkTextForNotice(text: string, maxLen: number = NOTICE_MAX_CONTENT_LE
 }
 
 async function sendReplyChunked(
-    serverUrl: string,
-    token: string,
-    topic: string,
+    rawTopic: string,
     text: string,
     log: { warn?: (msg: string) => void }
 ): Promise<boolean> {
+    const topic = topicForPublish(rawTopic);
     const chunks = chunkTextForNotice(text);
     for (const chunk of chunks) {
-        const ok = await sendToNotice(serverUrl, token, chunk, undefined, topic);
+        const ok = await sendViaMqtt(topic, chunk);
         if (!ok.ok) {
             log.warn?.("[notice] Reply send failed: " + (ok.error ?? ""));
             return false;
         }
     }
+    pluginLogger.info?.("[notice] Reply sent", "topic", topic, "chunks", chunks.length);
     return true;
 }
 
@@ -206,17 +218,15 @@ const noticeChannelConfigSchema = {
         type: "object" as const,
         additionalProperties: false,
         properties: {
-            serverUrl: { type: "string" },
             token: { type: "string" },
             brokerUrl: { type: "string" },
             topic: { type: "string", default: DEFAULT_TOPIC },
         },
     },
     uiHints: {
-        serverUrl: { label: "Server URL", placeholder: "https://notice.example.com" },
         token: { label: "Token", sensitive: true },
         brokerUrl: { label: "MQTT Broker URL", placeholder: "wss://... or tcp://..." },
-        topic: { label: "Topic", placeholder: DEFAULT_TOPIC },
+        topic: { label: "Topic (subscribe & publish)", placeholder: DEFAULT_TOPIC },
     },
 };
 
@@ -227,7 +237,7 @@ const noticeChannel = {
         label: "Notice",
         selectionLabel: "Notice (MQTT push)",
         docsPath: "/channels/notice",
-        blurb: "Send and receive messages through Notice server.",
+        blurb: "Send and receive messages via MQTT (Notice broker).",
         aliases: ["notice"],
     },
     capabilities: { chatTypes: ["direct"] as const },
@@ -237,16 +247,14 @@ const noticeChannel = {
     onboarding: {
         channel: CHANNEL_ID,
         getStatus: async ({ cfg }: { cfg: Record<string, unknown> }) => {
-            const ch = getChannelConfig(cfg);
-            const serverUrl = String(ch?.serverUrl ?? "").trim();
-            const token = String(ch?.token ?? "").trim();
-            const configured = Boolean(serverUrl && token);
+            const creds = getBrokerCredentials(cfg);
+            const configured = Boolean(creds);
             return {
                 channel: CHANNEL_ID,
                 configured,
                 statusLines: configured
-                    ? ["Notice: configured (server, token, broker URL, topic)"]
-                    : ["Notice: needs server URL and token"],
+                    ? ["Notice: configured (broker URL, token, topic)"]
+                    : ["Notice: needs broker URL and token"],
                 selectionHint: configured ? "configured" : "needs setup",
                 quickstartScore: configured ? 2 : 0,
             };
@@ -265,11 +273,11 @@ const noticeChannel = {
             };
         }) => {
             const ch = (getChannelConfig(cfg) ?? {}) as Record<string, unknown>;
-            const serverUrl = (
+            const brokerUrl = (
                 await prompter.text({
-                    message: "Notice server URL",
-                    placeholder: "https://notice.example.com",
-                    initialValue: String(ch.serverUrl ?? "").trim(),
+                    message: "MQTT broker URL",
+                    placeholder: "wss://... or tcp://...",
+                    initialValue: String(ch.brokerUrl ?? "").trim(),
                 })
             ).trim();
             const token = (
@@ -279,16 +287,9 @@ const noticeChannel = {
                     initialValue: String(ch.token ?? "").trim(),
                 })
             ).trim();
-            const brokerUrl = (
-                await prompter.text({
-                    message: "MQTT broker URL (optional, for receiving)",
-                    placeholder: "wss://... or tcp://...",
-                    initialValue: String(ch.brokerUrl ?? "").trim(),
-                })
-            ).trim();
             const topic = (
                 await prompter.text({
-                    message: "MQTT topic",
+                    message: "MQTT topic (subscribe & publish)",
                     placeholder: DEFAULT_TOPIC,
                     initialValue: String(ch.topic ?? DEFAULT_TOPIC).trim(),
                 })
@@ -301,7 +302,6 @@ const noticeChannel = {
                         [CHANNEL_ID]: {
                             ...ch,
                             enabled: true,
-                            serverUrl: serverUrl || (ch.serverUrl ?? ""),
                             token: token || (ch.token ?? ""),
                             brokerUrl: brokerUrl || (ch.brokerUrl ?? ""),
                             topic: topic || (ch.topic ?? DEFAULT_TOPIC),
@@ -322,16 +322,18 @@ const noticeChannel = {
             to?: string;
         }): Promise<{ ok: boolean; error?: string }> => {
             const cfg = ctx.config ?? {};
-            const creds = getNoticeCredentials(cfg);
-            if (!creds) return { ok: false, error: "Missing serverUrl or token in channels.notice" };
+            const creds = getBrokerCredentials(cfg);
+            if (!creds) return { ok: false, error: "Missing brokerUrl or token in channels.notice" };
             const acc = resolveAccount(cfg, ctx.accountId);
-            const topic =
+            const rawTopic =
                 (typeof ctx.to === "string" && ctx.to.trim() ? ctx.to.trim() : null) ??
                 (acc.topic as string) ??
-                (getChannelConfig(cfg)?.topic as string);
+                (getChannelConfig(cfg)?.topic as string) ??
+                DEFAULT_TOPIC;
+            const publishTopic = topicForPublish(rawTopic);
             const chunks = chunkTextForNotice(ctx.text);
             for (const chunk of chunks) {
-                const ok = await sendToNotice(creds.serverUrl, creds.token, chunk, undefined, topic);
+                const ok = await sendViaMqtt(publishTopic, chunk);
                 if (!ok.ok) return ok;
             }
             return { ok: true };
@@ -444,9 +446,8 @@ async function deliverInboundViaDispatch(
         OriginatingChannel: CHANNEL_ID,
         OriginatingTo: topicStr,
     });
-    const creds = getNoticeCredentials(cfg);
-    if (!creds) {
-        api.logger?.warn?.("[notice] Missing serverUrl or token, cannot deliver reply");
+    if (!mqttClient?.connected) {
+        api.logger?.warn?.("[notice] MQTT not connected, cannot deliver reply");
         return true; // consumed
     }
     api.logger?.info?.("[notice] Dispatching to agent sessionKey=" + route.sessionKey);
@@ -457,13 +458,7 @@ async function deliverInboundViaDispatch(
             deliver: async (payload) => {
                 const text = buildReplyText(payload);
                 if (!text.trim()) return;
-                await sendReplyChunked(
-                    creds.serverUrl,
-                    creds.token,
-                    topicStr,
-                    text,
-                    api.logger ?? {}
-                );
+                await sendReplyChunked(topicStr, text, api.logger ?? {});
             },
         },
     });
@@ -572,6 +567,7 @@ async function handleInboundMessage(
 // ---------------------------------------------------------------------------
 
 export default function register(api: RegisterApi): void {
+    pluginLogger = api.logger ?? {};
     api.registerChannel({ plugin: noticeChannel });
 
     const cfg = api.config ?? {};
@@ -581,19 +577,19 @@ export default function register(api: RegisterApi): void {
     const topic = (ch?.topic as string) ?? DEFAULT_TOPIC;
 
     if (brokerUrl && token && api.registerService) {
-        let client: mqtt.MqttClient | null = null;
         api.registerService({
             id: "notice-mqtt",
             start: () => {
-                client = mqtt.connect(brokerUrl, {
+                const client = mqtt.connect(brokerUrl, {
                     username: token,
                     password: token,
                     clientId: "openclaw-" + Math.random().toString(16).slice(2, 10),
                     reconnectPeriod: 5000,
                 });
+                mqttClient = client;
                 client.on("connect", () => {
                     api.logger?.info?.("[notice] MQTT connected, subscribing to " + topic);
-                    client!.subscribe(topic, (err) => {
+                    client.subscribe(topic, (err) => {
                         if (err) api.logger?.warn?.("[notice] Subscribe error", err);
                     });
                 });
@@ -613,9 +609,9 @@ export default function register(api: RegisterApi): void {
                 client.on("error", (err) => api.logger?.warn?.("[notice] MQTT error", err));
             },
             stop: async () => {
-                if (client) {
-                    client.end();
-                    client = null;
+                if (mqttClient) {
+                    mqttClient.end();
+                    mqttClient = null;
                 }
             },
         });

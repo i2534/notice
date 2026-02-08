@@ -3,7 +3,9 @@ package broker
 import (
 	"encoding/json"
 	"math"
+	"net"
 	"path/filepath"
+	"strings"
 	"time"
 
 	badgerdb "github.com/dgraph-io/badger/v4"
@@ -13,6 +15,7 @@ import (
 	"github.com/mochi-mqtt/server/v2/packets"
 
 	"notice-server/logger"
+	"notice-server/ratelimit"
 	"notice-server/store"
 )
 
@@ -32,11 +35,12 @@ type Message struct {
 
 // Config Broker 配置
 type Config struct {
-	SessionExpiry  uint32 // 会话过期时间（秒）
-	MessageExpiry  uint32 // 消息过期时间（秒）
-	AuthToken      string // 认证 Token，为空则不校验
-	StorageEnabled bool   // 是否启用持久化存储
-	StoragePath    string // 持久化存储路径
+	SessionExpiry  uint32             // 会话过期时间（秒）
+	MessageExpiry  uint32             // 消息过期时间（秒）
+	AuthToken      string             // 认证 Token，为空则不校验
+	StorageEnabled bool               // 是否启用持久化存储
+	StoragePath    string             // 持久化存储路径
+	AuthLimiter    *ratelimit.Limiter // 认证失败限流（与 Webhook 共用时可防暴力尝试），nil 则不限流
 }
 
 // Broker MQTT Broker 服务
@@ -97,11 +101,17 @@ func (b *Broker) Start(tcpAddr, wsAddr string) error {
 		logger.Info("MQTT 持久化存储已启用", "path", mqttPath)
 	}
 
-	// 启用 Token 认证
-	if err := b.server.AddHook(&AuthHook{token: b.config.AuthToken}, nil); err != nil {
+	// 启用 Token 认证（可选限流防暴力尝试）
+	if err := b.server.AddHook(&AuthHook{
+		token:   b.config.AuthToken,
+		limiter: b.config.AuthLimiter,
+	}, nil); err != nil {
 		return err
 	}
 	logger.Info("MQTT Token 认证已启用")
+	if b.config.AuthLimiter != nil {
+		logger.Info("MQTT 认证限流已启用")
+	}
 
 	// 添加日志钩子
 	if err := b.server.AddHook(new(LogHook), nil); err != nil {
@@ -252,7 +262,8 @@ func (h *LogHook) OnPublished(cl *mqtt.Client, pk packets.Packet) {
 // AuthHook Token 认证钩子
 type AuthHook struct {
 	mqtt.HookBase
-	token string
+	token   string
+	limiter *ratelimit.Limiter
 }
 
 func (h *AuthHook) ID() string {
@@ -263,30 +274,59 @@ func (h *AuthHook) Provides(b byte) bool {
 	return b == mqtt.OnConnectAuthenticate || b == mqtt.OnACLCheck
 }
 
+// mqttClientIP 从 MQTT 客户端连接取 IP（cl.Net.Remote 格式为 "host:port"）
+func mqttClientIP(remote string) string {
+	remote = strings.TrimSpace(remote)
+	if remote == "" {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		return remote
+	}
+	return host
+}
+
 // OnConnectAuthenticate 连接认证
-// MQTT 客户端通过 username 或 password 传入 token
+// MQTT 客户端通过 username 或 password 传入 token；若启用 limiter 则按 IP 限制失败次数
 func (h *AuthHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) bool {
+	ip := mqttClientIP(cl.Net.Remote)
+	if h.limiter != nil && ip != "" {
+		if h.limiter.IsBlocked(ip) {
+			logger.Warn("MQTT 认证拒绝，IP 已封禁", "client_id", cl.ID, "ip", ip)
+			return false
+		}
+	}
+
 	// 支持以下方式传入 token:
 	// 1. username = token
 	// 2. password = token
 	// 3. username = "token", password = <actual_token>
-
 	username := string(pk.Connect.Username)
 	password := string(pk.Connect.Password)
 
 	// 方式 1: username 直接是 token
 	if username == h.token {
+		if h.limiter != nil && ip != "" {
+			h.limiter.RecordSuccess(ip)
+		}
 		logger.Debug("MQTT 认证成功 (username)", "client_id", cl.ID)
 		return true
 	}
 
 	// 方式 2: password 是 token
 	if password == h.token {
+		if h.limiter != nil && ip != "" {
+			h.limiter.RecordSuccess(ip)
+		}
 		logger.Debug("MQTT 认证成功 (password)", "client_id", cl.ID)
 		return true
 	}
 
-	logger.Warn("MQTT 认证失败", "client_id", cl.ID, "username", username)
+	if h.limiter != nil && ip != "" {
+		h.limiter.RecordFailure(ip)
+	}
+	logger.Warn("MQTT 认证失败", "client_id", cl.ID, "ip", ip, "username", username)
 	return false
 }
 

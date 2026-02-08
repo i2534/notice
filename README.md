@@ -172,7 +172,7 @@ curl -X POST http://localhost:9090/webhook \
 - [CLI Client 文档](client/cli/README.md) - 跨平台命令行客户端（含 send 子命令）
 - [GUI Client 文档](client/gui/README.md) - 跨平台桌面客户端
 - [Android Client 文档](client/android/README.md) - Android 客户端（默认发送主题、回复指定 topic、Markdown）
-- [Openclaw 插件文档](client/openclaw/README.md) - Openclaw Channel 插件，收发可指定 topic
+- [Openclaw 插件文档](client/openclaw/README.md) - Openclaw Channel 插件（MQTT 收发），收发可指定 topic
 
 ## License
 

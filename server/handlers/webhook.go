@@ -39,14 +39,15 @@ type WebhookHandler struct {
 	limiter *ratelimit.Limiter
 }
 
-// NewWebhookHandler 创建新的 Webhook 处理器
-func NewWebhookHandler(b *broker.Broker, cfg *config.Config) *WebhookHandler {
-	limiter := ratelimit.New(ratelimit.Config{
-		MaxFailures: cfg.RateLimit.MaxFailures,
-		BlockTime:   time.Duration(cfg.RateLimit.BlockTime) * time.Second,
-		WindowTime:  time.Duration(cfg.RateLimit.WindowTime) * time.Second,
-	})
-
+// NewWebhookHandler 创建新的 Webhook 处理器。limiter 可与 MQTT 认证共用，传 nil 则内部新建一个。
+func NewWebhookHandler(b *broker.Broker, cfg *config.Config, limiter *ratelimit.Limiter) *WebhookHandler {
+	if limiter == nil {
+		limiter = ratelimit.New(ratelimit.Config{
+			MaxFailures: cfg.RateLimit.MaxFailures,
+			BlockTime:   time.Duration(cfg.RateLimit.BlockTime) * time.Second,
+			WindowTime:  time.Duration(cfg.RateLimit.WindowTime) * time.Second,
+		})
+	}
 	return &WebhookHandler{
 		broker:  b,
 		config:  cfg,

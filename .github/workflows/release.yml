@@ -147,6 +147,13 @@ jobs:
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
+      - name: Update version in package.json and openclaw.plugin.json
+        run: |
+          VERSION="${{ env.VERSION }}"
+          VERSION_NAME="${VERSION#v}"
+          sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"${VERSION_NAME}\"/" client/openclaw/package.json
+          sed -i "s/\"version\": *\"[^\"]*\"/\"version\": \"${VERSION_NAME}\"/" client/openclaw/openclaw.plugin.json
+
       - name: Pack Plugin
         run: |
           VERSION="${{ env.VERSION }}"

@@ -18,7 +18,7 @@
 - 📥 HTTP Webhook 接收消息
 - 📡 内置 MQTT Broker（TCP + WebSocket）
 - 🔐 Token 认证（Webhook + MQTT）
-- 🛡️ IP 限流（防止暴力破解）
+- 🛡️ IP 限流（Webhook 与 MQTT 认证共用，防止暴力尝试）
 - 🌐 内置 Web 管理界面（消息发送/接收、消息体 Markdown 渲染）
 - 📝 日志轮转（按天分割、自动清理）
 - 📦 YAML 配置文件支持
@@ -43,7 +43,7 @@ server/
 │   ├── store.go         # 消息持久化存储
 │   └── store_test.go    # 存储单元测试
 ├── ratelimit/
-│   └── ratelimit.go     # IP 限流
+│   └── ratelimit.go     # IP 限流（Webhook + MQTT 认证共用）
 ├── logger/
 │   └── logger.go        # 日志系统（轮转 + 过滤）
 ├── web/

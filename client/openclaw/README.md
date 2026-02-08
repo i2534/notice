@@ -1,6 +1,6 @@
 # Notice Channel Plugin for Openclaw
 
-提供 **notice** Channel，通过 Notice Server 发送和接收消息。
+提供 **notice** Channel，通过 MQTT 连接 Notice Broker 发送和接收消息（不经过 Webhook）。
 
 ## 安装
 
@@ -53,21 +53,18 @@ plugins:
 channels:
   notice:
     enabled: true
-    serverUrl: "https://your-notice-server.com"
-    token: "your-auth-token"
-    brokerUrl: "wss://..."   # 可选，用于接收
-    topic: "notice/#"       # 可选，订阅主题；若为 notice/openclaw 等子主题，发送时需带相同 topic 才能收到
+    brokerUrl: "wss://your-notice-broker.com"   # MQTT Broker 地址（订阅与发送共用）
+    token: "your-auth-token"                    # 与 Notice Server auth.token 一致
+    topic: "notice/openclaw"                     # 订阅主题，发送时转为可发布主题（如 notice/# → notice）
 ```
 
-## 收发 topic 一致
+## 收发方式
 
-- 插件 **订阅** 的 MQTT 主题由 `channels.notice.topic` 决定（如 `notice/#` 或 `notice/openclaw`）。
-- 服务端 **发布** 时使用的主题来自 webhook 请求里的 `topic`；若不传则用服务端默认（如 `notice`）。
-- **若你订阅的是 `notice/openclaw`，发送时必须带 `topic: "notice/openclaw"`**，服务端才会发布到该主题，同一客户端才能收到。否则服务端会发到默认主题（如 `notice`），只订阅 `notice/openclaw` 的客户端收不到。
-- 插件在调用 webhook 时应始终把当前通道配置的 `topic` 转成「可发布」形式（与服务端 `topicForPublish` 一致：去掉 `#` 及后缀、`+` 换成 `reply`）再传给 `body.topic`。
+- **接收**：MQTT 订阅 `channels.notice.topic`（可含通配符，如 `notice/#`）。
+- **发送**：同一 MQTT 连接上直接 `publish`，不经过 Webhook。发布主题由配置的 `topic` 经 `topicForPublish` 转换（去掉 `#` 及后缀、`+` 换为 `reply`），与 Notice Server 规则一致，保证自收自发。
 
 ## 功能
 
-- **发送**：通过 Webhook POST 到 Notice Server；**可指定 topic**（`ctx.to` 或通道 `topic`），请求体带 `topic` 与订阅一致才能自收自发。
+- **发送**：通过 MQTT 发布到同一 Broker，可指定 topic（`ctx.to` 或通道 `topic`）。
 - **接收**：MQTT 订阅，消息可通过 RPC `notice.getRecentMessages` 查询。
-- **回信**：在 Openclaw 中由 Agent 产生的回复可通过插件发回 Notice，并**发回来信同一 topic**，实现「收信 → 处理 → 回信」闭环。
+- **回信**：Agent 回复通过 MQTT 发回来信同一 topic，实现「收信 → 处理 → 回信」闭环。
