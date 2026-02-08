@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -63,9 +64,12 @@ func main() {
 
 	// 认证限流（Webhook 与 MQTT 共用，防暴力尝试）
 	authLimiter := ratelimit.New(ratelimit.Config{
-		MaxFailures: cfg.RateLimit.MaxFailures,
-		BlockTime:   time.Duration(cfg.RateLimit.BlockTime) * time.Second,
-		WindowTime:  time.Duration(cfg.RateLimit.WindowTime) * time.Second,
+		MaxFailures:            cfg.RateLimit.MaxFailures,
+		BlockTime:             time.Duration(cfg.RateLimit.BlockTime) * time.Second,
+		WindowTime:            time.Duration(cfg.RateLimit.WindowTime) * time.Second,
+		GlobalMaxPerMinute:     cfg.RateLimit.GlobalMaxPerMinute,
+		GlobalBlockTime:       time.Duration(cfg.RateLimit.GlobalBlockTime) * time.Second,
+		CredentialMaxFailures: cfg.RateLimit.CredentialMaxFailures,
 	})
 
 	// 创建并启动 MQTT Broker
@@ -96,9 +100,13 @@ func main() {
 	http.HandleFunc("/status", handlers.StatusHandler(mqttBroker, storeManager))
 	http.HandleFunc("/messages", handlers.MessagesHandler(storeManager, cfg))
 
-	// 注册 Web 页面路由
+	// 注册 Web 页面路由（拒绝路径穿越）
 	webContent, _ := fs.Sub(webFS, "web")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "..") || strings.Contains(r.URL.Path, "\\") {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
 		if r.URL.Path == "/" {
 			http.ServeFileFS(w, r, webContent, "index.html")
 			return

@@ -11,6 +11,10 @@ http:
   # 环境变量: HTTP_PORT
   port: "9090"
 
+  # 请求体最大字节数（防 DoS），0 表示默认 512KB
+  # 环境变量: HTTP_MAX_REQUEST_BODY_BYTES
+  max_request_body_bytes: 0
+
 # MQTT Broker 配置
 mqtt:
   # TCP 端口（内网使用）
@@ -40,11 +44,11 @@ auth:
   # 环境变量: AUTH_TOKEN
   token: ""
 
-# 限流配置（同时作用于 Webhook 与 MQTT 认证失败，按 IP 封禁）
+# 限流配置（同时作用于 Webhook 与 MQTT 认证失败）
 rate_limit:
-  # 最大失败次数
+  # 每 IP 最大失败次数，超过则封禁该 IP
   # 环境变量: RATE_LIMIT_MAX_FAILURES
-  max_failures: 5
+  max_failures: 10
 
   # 封禁时间（秒），默认 15 分钟
   # 环境变量: RATE_LIMIT_BLOCK_TIME
@@ -53,6 +57,19 @@ rate_limit:
   # 统计窗口（秒），默认 5 分钟
   # 环境变量: RATE_LIMIT_WINDOW_TIME
   window_time: 300
+
+  # ----- 防「换 IP 暴力破解」：以下为可选，设为 0 表示关闭 -----
+  # 每分钟全局认证失败次数上限，超过则短时拒绝所有认证（任一 IP 均 429/连接拒）
+  # 环境变量: RATE_LIMIT_GLOBAL_MAX_PER_MINUTE
+  global_max_per_minute: 60
+
+  # 全局触发封禁后的冷却时间（秒）
+  # 环境变量: RATE_LIMIT_GLOBAL_BLOCK_TIME
+  global_block_time: 300
+
+  # 同一错误 token 被尝试的最大次数（多 IP 累计），超过则临时封禁该凭证
+  # 环境变量: RATE_LIMIT_CREDENTIAL_MAX_FAILURES
+  credential_max_failures: 0
 
 # 日志配置
 log:

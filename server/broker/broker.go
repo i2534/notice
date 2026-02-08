@@ -191,6 +191,18 @@ func (b *Broker) Close() error {
 	return b.server.Close()
 }
 
+// TCPAddr 返回 TCP 监听地址（如 "127.0.0.1:12345"），用于测试。未启动或无 TCP 监听时返回空字符串。
+func (b *Broker) TCPAddr() string {
+	if b.server == nil {
+		return ""
+	}
+	l, ok := b.server.Listeners.Get("tcp")
+	if !ok {
+		return ""
+	}
+	return l.Address()
+}
+
 // LogHook 日志钩子
 type LogHook struct {
 	mqtt.HookBase
@@ -288,12 +300,19 @@ func mqttClientIP(remote string) string {
 }
 
 // OnConnectAuthenticate 连接认证
-// MQTT 客户端通过 username 或 password 传入 token；若启用 limiter 则按 IP 限制失败次数
+// MQTT 客户端通过 username 或 password 传入 token；限流支持按 IP、按错误凭证、全局
 func (h *AuthHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) bool {
 	ip := mqttClientIP(cl.Net.Remote)
-	if h.limiter != nil && ip != "" {
-		if h.limiter.IsBlocked(ip) {
-			logger.Warn("MQTT 认证拒绝，IP 已封禁", "client_id", cl.ID, "ip", ip)
+	username := string(pk.Connect.Username)
+	password := string(pk.Connect.Password)
+	attemptedCredential := username
+	if attemptedCredential == "" {
+		attemptedCredential = password
+	}
+
+	if h.limiter != nil {
+		if h.limiter.IsBlocked(ip, attemptedCredential) {
+			logger.Warn("MQTT 认证拒绝，已触发限流", "client_id", cl.ID, "ip", ip)
 			return false
 		}
 	}
@@ -302,10 +321,6 @@ func (h *AuthHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) boo
 	// 1. username = token
 	// 2. password = token
 	// 3. username = "token", password = <actual_token>
-	username := string(pk.Connect.Username)
-	password := string(pk.Connect.Password)
-
-	// 方式 1: username 直接是 token
 	if username == h.token {
 		if h.limiter != nil && ip != "" {
 			h.limiter.RecordSuccess(ip)
@@ -313,8 +328,6 @@ func (h *AuthHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) boo
 		logger.Debug("MQTT 认证成功 (username)", "client_id", cl.ID)
 		return true
 	}
-
-	// 方式 2: password 是 token
 	if password == h.token {
 		if h.limiter != nil && ip != "" {
 			h.limiter.RecordSuccess(ip)
@@ -323,8 +336,8 @@ func (h *AuthHook) OnConnectAuthenticate(cl *mqtt.Client, pk packets.Packet) boo
 		return true
 	}
 
-	if h.limiter != nil && ip != "" {
-		h.limiter.RecordFailure(ip)
+	if h.limiter != nil {
+		h.limiter.RecordFailure(ip, attemptedCredential)
 	}
 	logger.Warn("MQTT 认证失败", "client_id", cl.ID, "ip", ip, "username", username)
 	return false

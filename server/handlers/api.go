@@ -47,15 +47,22 @@ func MessagesHandler(m *store.Manager, cfg *config.Config) http.HandlerFunc {
 			return
 		}
 
-		// 解析分页参数
+		// 解析分页参数（校验防注入）
 		pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
-		if pageSize < 1 {
-			pageSize = 20
-		}
+		pageSize = ValidatePageSize(pageSize)
 
 		var beforeID uint64
 		if s := r.URL.Query().Get("before_id"); s != "" {
-			beforeID, _ = strconv.ParseUint(s, 10, 64)
+			var ok bool
+			beforeID, ok = ParseUintParam(s)
+			if !ok {
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]any{
+					"success": false,
+					"message": "参数 before_id 不合法",
+				})
+				return
+			}
 		}
 
 		// 使用 token 查询该用户的消息
@@ -77,27 +84,19 @@ func MessagesHandler(m *store.Manager, cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-// ExtractToken 从请求中提取 Token
+// ExtractToken 从请求中提取 Token（长度受限，防滥用）
 func ExtractToken(r *http.Request) string {
-	// Authorization: Bearer <token>
+	var token string
 	if auth := r.Header.Get("Authorization"); auth != "" {
 		if len(auth) > 7 && auth[:7] == "Bearer " {
-			return auth[7:]
+			token = auth[7:]
+		} else {
+			token = auth
 		}
-		return auth
+	} else if token = r.Header.Get("X-Auth-Token"); token == "" {
+		token = r.URL.Query().Get("token")
 	}
-
-	// X-Auth-Token: <token>
-	if token := r.Header.Get("X-Auth-Token"); token != "" {
-		return token
-	}
-
-	// ?token=<token>
-	if token := r.URL.Query().Get("token"); token != "" {
-		return token
-	}
-
-	return ""
+	return TruncateToken(token, MaxTokenLength)
 }
 
 // ValidateToken 校验 Token

@@ -37,7 +37,8 @@ type StorageConfig struct {
 
 // HTTPConfig HTTP 服务配置
 type HTTPConfig struct {
-	Port string `yaml:"port" env:"HTTP_PORT"`
+	Port                 string `yaml:"port" env:"HTTP_PORT"`
+	MaxRequestBodyBytes  int    `yaml:"max_request_body_bytes" env:"HTTP_MAX_REQUEST_BODY_BYTES"` // 请求体最大字节数，0 表示默认 512KB
 }
 
 // MQTTConfig MQTT Broker 配置
@@ -60,6 +61,11 @@ type RateLimitConfig struct {
 	MaxFailures int `yaml:"max_failures" env:"RATE_LIMIT_MAX_FAILURES"`
 	BlockTime   int `yaml:"block_time" env:"RATE_LIMIT_BLOCK_TIME"`
 	WindowTime  int `yaml:"window_time" env:"RATE_LIMIT_WINDOW_TIME"`
+
+	// 防「换 IP 暴力破解」：全局与按错误凭证限流（0 表示关闭）
+	GlobalMaxPerMinute     int `yaml:"global_max_per_minute" env:"RATE_LIMIT_GLOBAL_MAX_PER_MINUTE"`           // 每分钟全局限流失败次数，超过则短时拒绝所有认证
+	GlobalBlockTime        int `yaml:"global_block_time" env:"RATE_LIMIT_GLOBAL_BLOCK_TIME"`                    // 全局触发封禁后的冷却时间（秒）
+	CredentialMaxFailures  int `yaml:"credential_max_failures" env:"RATE_LIMIT_CREDENTIAL_MAX_FAILURES"`        // 同一错误凭证（如错误 token）被尝试的最大次数，超过则临时封禁该凭证
 }
 
 // LogConfig 日志配置
@@ -81,7 +87,8 @@ func (c *Config) HasAuth() bool {
 func defaultConfig() *Config {
 	return &Config{
 		HTTP: HTTPConfig{
-			Port: "9090",
+			Port:                "9090",
+			MaxRequestBodyBytes: 512 * 1024, // 512KB
 		},
 		MQTT: MQTTConfig{
 			TCPPort:       "9091",
@@ -94,9 +101,12 @@ func defaultConfig() *Config {
 			Token: "",
 		},
 		RateLimit: RateLimitConfig{
-			MaxFailures: 5,
-			BlockTime:   900,
-			WindowTime:  300,
+			MaxFailures:            5,
+			BlockTime:              900,
+			WindowTime:             300,
+			GlobalMaxPerMinute:     0,   // 0 关闭；建议 200–500 防分布式暴力破解
+			GlobalBlockTime:        60,  // 全局封禁冷却秒数
+			CredentialMaxFailures:  0,   // 0 关闭；建议 10–20，同一错误 token 被多 IP 试多次则封禁该凭证
 		},
 		Log: LogConfig{
 			ConsoleLevel: "info",

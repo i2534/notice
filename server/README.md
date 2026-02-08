@@ -18,7 +18,7 @@
 - 📥 HTTP Webhook 接收消息
 - 📡 内置 MQTT Broker（TCP + WebSocket）
 - 🔐 Token 认证（Webhook + MQTT）
-- 🛡️ IP 限流（Webhook 与 MQTT 认证共用，防止暴力尝试）
+- 🛡️ 认证限流：按 IP、按错误凭证、全局限流（防单 IP 与换 IP 暴力破解）
 - 🌐 内置 Web 管理界面（消息发送/接收、消息体 Markdown 渲染）
 - 📝 日志轮转（按天分割、自动清理）
 - 📦 YAML 配置文件支持
@@ -118,6 +118,10 @@ rate_limit:
   max_failures: 5
   block_time: 900
   window_time: 300
+  # 防换 IP 暴力破解（0=关闭）：global_max_per_minute / global_block_time / credential_max_failures
+  global_max_per_minute: 0
+  global_block_time: 60
+  credential_max_failures: 0
 
 log:
   console_level: "info"
@@ -140,6 +144,15 @@ message:
 CONFIG_PATH=/path/to/config.yaml ./notice-server
 ```
 
+#### 防「换 IP」暴力破解
+
+在仅按 IP 限流时，攻击者可通过代理/VPN 不断换 IP 尝试。可选启用：
+
+- **全局限流** `global_max_per_minute`：每分钟全站认证失败总次数上限，超过则短时拒绝所有认证（任一 IP 均 429/连接拒）。例如 200–500，可显著降低分布式暴力尝试速率。
+- **按错误凭证限流** `credential_max_failures`：同一错误 token（如 `password123`）被多 IP 尝试超过 N 次后，临时封禁该凭证，再试即拒。换 IP 无法绕过。
+
+两者可同时开启，与按 IP 限流一起生效。
+
 ### 环境变量
 
 所有配置项都可通过环境变量覆盖，详见 `config.yaml` 中的注释。
@@ -153,9 +166,12 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | MQTT | MQTT_SESSION_EXPIRY | 86400 | 会话过期时间（秒） |
 | MQTT | MQTT_MESSAGE_EXPIRY | 86400 | 消息过期时间（秒） |
 | 认证 | AUTH_TOKEN | (自动生成) | 访问令牌 |
-| 限流 | RATE_LIMIT_MAX_FAILURES | 5 | 最大失败次数 |
+| 限流 | RATE_LIMIT_MAX_FAILURES | 5 | 每 IP 最大失败次数 |
 | 限流 | RATE_LIMIT_BLOCK_TIME | 900 | 封禁时间（秒） |
 | 限流 | RATE_LIMIT_WINDOW_TIME | 300 | 统计窗口（秒） |
+| 限流 | RATE_LIMIT_GLOBAL_MAX_PER_MINUTE | 0 | 每分钟全局限流失败次数（防换 IP，0=关） |
+| 限流 | RATE_LIMIT_GLOBAL_BLOCK_TIME | 60 | 全局触发后冷却时间（秒） |
+| 限流 | RATE_LIMIT_CREDENTIAL_MAX_FAILURES | 0 | 同一错误 token 被尝试次数上限（0=关） |
 | 日志 | LOG_CONSOLE_LEVEL | info | 控制台日志级别 |
 | 日志 | LOG_FILE_LEVEL | debug | 文件日志级别 |
 | 日志 | LOG_FILE_PATH | (空) | 日志文件路径 |

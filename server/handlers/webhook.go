@@ -18,10 +18,10 @@ import (
 
 // Request Webhook 请求结构
 type Request struct {
-	Title   string `json:"title"`           // 消息标题
-	Content string `json:"content"`        // 消息内容（必填）
-	Topic   string `json:"topic,omitempty"` // 可选：指定主题
-	Extra   any    `json:"extra,omitempty"` // 可选：额外数据
+	Title   string `json:"title"`            // 消息标题
+	Content string `json:"content"`          // 消息内容（必填）
+	Topic   string `json:"topic,omitempty"`  // 可选：指定主题
+	Extra   any    `json:"extra,omitempty"`  // 可选：额外数据
 	Client  string `json:"client,omitempty"` // 可选：发送端标识，如 web / android / cli
 }
 
@@ -43,9 +43,12 @@ type WebhookHandler struct {
 func NewWebhookHandler(b *broker.Broker, cfg *config.Config, limiter *ratelimit.Limiter) *WebhookHandler {
 	if limiter == nil {
 		limiter = ratelimit.New(ratelimit.Config{
-			MaxFailures: cfg.RateLimit.MaxFailures,
-			BlockTime:   time.Duration(cfg.RateLimit.BlockTime) * time.Second,
-			WindowTime:  time.Duration(cfg.RateLimit.WindowTime) * time.Second,
+			MaxFailures:           cfg.RateLimit.MaxFailures,
+			BlockTime:             time.Duration(cfg.RateLimit.BlockTime) * time.Second,
+			WindowTime:            time.Duration(cfg.RateLimit.WindowTime) * time.Second,
+			GlobalMaxPerMinute:    cfg.RateLimit.GlobalMaxPerMinute,
+			GlobalBlockTime:       time.Duration(cfg.RateLimit.GlobalBlockTime) * time.Second,
+			CredentialMaxFailures: cfg.RateLimit.CredentialMaxFailures,
 		})
 	}
 	return &WebhookHandler{
@@ -61,9 +64,10 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	clientIP := ratelimit.GetClientIP(r)
 
-	// 检查 IP 是否被封禁
-	if h.limiter.IsBlocked(clientIP) {
-		logger.Warn("请求被拒绝，IP 已封禁", "ip", clientIP)
+	// 检查是否因限流被拒（按 IP、按尝试的凭证、全局）
+	attemptedToken := ExtractToken(r)
+	if h.limiter.IsBlocked(clientIP, attemptedToken) {
+		logger.Warn("请求被拒绝，已触发限流", "ip", clientIP)
 		h.sendError(w, http.StatusTooManyRequests, "请求过于频繁，请稍后再试")
 		return
 	}
@@ -77,7 +81,7 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Token 校验
 	if !ValidateToken(r, h.config.Auth.Token) {
-		h.limiter.RecordFailure(clientIP)
+		h.limiter.RecordFailure(clientIP, attemptedToken)
 		logger.Warn("Webhook Token 校验失败", "ip", clientIP)
 		h.sendError(w, http.StatusUnauthorized, "认证失败")
 		return
@@ -86,9 +90,20 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 认证成功，清除失败记录
 	h.limiter.RecordSuccess(clientIP)
 
+	// 请求体大小限制（防 DoS）
+	maxBody := h.config.HTTP.MaxRequestBodyBytes
+	if maxBody <= 0 {
+		maxBody = DefaultMaxBody
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, int64(maxBody))
+
 	// 读取请求体
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		if err.Error() == "http: request body too large" {
+			h.sendError(w, http.StatusRequestEntityTooLarge, "请求体过大")
+			return
+		}
 		logger.Error("读取请求体失败", "error", err)
 		h.sendError(w, http.StatusBadRequest, "读取请求体失败")
 		return
@@ -104,7 +119,11 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 解析消息
 	var req Request
 	if err := json.Unmarshal(body, &req); err != nil {
-		logger.Warn("JSON 解析失败", "error", err, "body", string(body))
+		bodyPreview := string(body)
+		if len(bodyPreview) > 200 {
+			bodyPreview = bodyPreview[:200] + "..."
+		}
+		logger.Warn("JSON 解析失败", "error", err, "body_preview", bodyPreview)
 		h.sendError(w, http.StatusBadRequest, "JSON 解析失败: "+err.Error())
 		return
 	}
@@ -115,6 +134,33 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.sendError(w, http.StatusBadRequest, "content 字段不能为空")
 		return
 	}
+
+	// 安全校验：主题禁止路径穿越与非法字符
+	if req.Topic != "" {
+		topic, ok := ValidateTopic(req.Topic, MaxTopicLength)
+		if !ok {
+			logger.Warn("非法 topic", "topic", req.Topic)
+			h.sendError(w, http.StatusBadRequest, "主题格式不合法")
+			return
+		}
+		req.Topic = topic
+	}
+	// 去除控制字符并限制长度（防 XSS/注入）
+	maxTitle := h.config.Message.MaxTitleLength
+	if maxTitle <= 0 {
+		maxTitle = 256
+	}
+	req.Title = SanitizeString(req.Title, maxTitle)
+	maxContent := h.config.Message.MaxContentLength
+	if maxContent <= 0 {
+		maxContent = 1024
+	}
+	req.Content = SanitizeContent(req.Content, maxContent)
+	if req.Content == "" {
+		h.sendError(w, http.StatusBadRequest, "content 字段不能为空")
+		return
+	}
+	req.Client = SanitizeString(req.Client, 64)
 
 	// 仅做 Token 校验，不发布到 MQTT（Web 端登录时用）
 	if req.Content == "__auth_check__" {
