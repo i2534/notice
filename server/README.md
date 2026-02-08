@@ -35,15 +35,20 @@ server/
 │   ├── config.go        # 配置管理（支持 YAML + 环境变量）
 │   └── config_test.go   # 配置单元测试
 ├── broker/
-│   └── broker.go        # 内置 MQTT Broker
+│   ├── broker.go        # 内置 MQTT Broker
+│   └── broker_test.go   # MQTT 认证限流等测试
 ├── handlers/
 │   ├── webhook.go       # Webhook 接收（支持 body.topic 指定发布主题）
-│   └── api.go           # API 与消息历史
+│   ├── api.go           # API 与消息历史
+│   ├── security.go      # 请求体/参数安全（限长、topic 校验、防 XSS/路径穿越）
+│   ├── webhook_test.go  # Webhook 与限流测试
+│   └── security_test.go # 安全校验单元测试
 ├── store/
 │   ├── store.go         # 消息持久化存储
 │   └── store_test.go    # 存储单元测试
 ├── ratelimit/
-│   └── ratelimit.go     # IP 限流（Webhook + MQTT 认证共用）
+│   ├── ratelimit.go     # 认证限流（按 IP / 按凭证 / 全局）
+│   └── ratelimit_test.go # 限流单元测试
 ├── logger/
 │   └── logger.go        # 日志系统（轮转 + 过滤）
 ├── web/
@@ -85,6 +90,9 @@ go run main.go
 ### 3. 测试
 
 ```bash
+# 单元测试（限流、安全校验、Webhook、Broker、Store 等）
+go test ./...
+
 # 终端1：订阅消息（需要 mosquitto-clients）
 make test-sub
 
@@ -103,6 +111,7 @@ make test-push
 ```yaml
 http:
   port: "9090"
+  max_request_body_bytes: 0   # 请求体最大字节数，0=默认 512KB，防 DoS
 
 mqtt:
   tcp_port: "9091"
@@ -153,6 +162,14 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 
 两者可同时开启，与按 IP 限流一起生效。
 
+#### 请求与参数安全
+
+- **请求体大小**：`http.max_request_body_bytes`（0 表示默认 512KB），超限返回 413。
+- **Topic**：仅允许字母、数字、`/`、`-`、`_`，禁止 `..`、`\`、控制字符，长度 ≤ 256；非法返回 400。
+- **标题/内容/client**：去除 NUL 及危险控制字符；正文（content）保留 `\n` `\t` `\r`，支持 Markdown。
+- **静态路由**：请求路径含 `..` 或 `\` 时返回 400，防路径穿越。
+- **API 查询参数**：`page_size` 限制 1～100，`before_id` 仅接受纯数字；token 长度截断以防滥用。
+
 ### 环境变量
 
 所有配置项都可通过环境变量覆盖，详见 `config.yaml` 中的注释。
@@ -160,6 +177,7 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | 分类 | 环境变量 | 默认值 | 说明 |
 |------|---------|--------|------|
 | HTTP | HTTP_PORT | 9090 | HTTP 服务端口 |
+| HTTP | HTTP_MAX_REQUEST_BODY_BYTES | 0 | 请求体最大字节数（0=512KB） |
 | MQTT | MQTT_TCP_PORT | 9091 | MQTT TCP 端口 |
 | MQTT | MQTT_WS_PORT | 9092 | MQTT WebSocket 端口 |
 | MQTT | MQTT_TOPIC | notice | 默认推送主题 |
@@ -189,25 +207,25 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 
 接收消息并推送到所有已连接的客户端。
 
-**请求头（认证）：**
+**请求头（认证，推荐）：**
 
 ```
 Authorization: Bearer <token>
 # 或
 X-Auth-Token: <token>
-# 或
-?token=<token>
 ```
 
-**请求体：**
+也可使用查询参数 `?token=<token>`（不推荐生产环境，易出现在日志/Referer 中）。
+
+**请求体：** 最大长度由 `http.max_request_body_bytes` 控制（默认 512KB），超限返回 413。
 
 | 字段 | 必填 | 说明 |
 |------|------|------|
 | content | ✅ | 通知内容 |
 | title | | 标题，默认空 |
-| topic | | 指定发布到的 MQTT 主题；不传则使用服务端默认主题 |
+| topic | | 指定发布到的 MQTT 主题（仅允许字母数字、`/`、`-`、`_`，禁止 `..` 等）；不传则使用服务端默认主题 |
 | extra | | 额外数据（对象） |
-| client | | 发送端标识（如 web / android / cli） |
+| client | | 发送端标识（如 web / android / cli），长度与内容受安全校验限制 |
 
 ```json
 {
@@ -231,19 +249,19 @@ X-Auth-Token: <token>
 
 ### GET /status
 
-```json
-{"status":"ok","clients":3}
-```
+无需认证，返回当前连接数。`{"status":"ok","clients":3}`
 
 ### GET /health
 
-```json
-{"status":"ok"}
-```
+无需认证。`{"status":"ok"}`
+
+### GET /messages
+
+消息历史（需认证）。查询参数：`page_size`（1～100，默认 20）、`before_id`（上一页最后一条 ID，纯数字）。认证方式同 Webhook。
 
 ### GET /
 
-Web 管理界面（需要认证）
+Web 管理界面。路径不允许包含 `..` 或 `\`。
 
 ## 客户端连接
 
