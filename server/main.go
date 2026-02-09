@@ -99,6 +99,12 @@ func main() {
 	http.HandleFunc("/health", handlers.HealthHandler)
 	http.HandleFunc("/status", handlers.StatusHandler(mqttBroker, storeManager))
 	http.HandleFunc("/messages", handlers.MessagesHandler(storeManager, cfg))
+	http.HandleFunc("/api/image", handlers.ImageHandler(cfg, cfg.Storage.Path))
+	http.HandleFunc("/api/upload", handlers.UploadHandler(cfg, cfg.Storage.Path, authLimiter))
+
+	// 过期图片自动清理（按配置间隔执行）
+	imageCleanupStop := make(chan struct{})
+	go handlers.RunImageCleanupLoop(cfg, cfg.Storage.Path, imageCleanupStop)
 
 	// 注册 Web 页面路由（拒绝路径穿越）
 	webContent, _ := fs.Sub(webFS, "web")
@@ -121,6 +127,7 @@ func main() {
 		<-sigChan
 
 		logger.Info("正在关闭服务...")
+		close(imageCleanupStop)
 		mqttBroker.Close()
 		storeManager.Close()
 		logger.Close() // 刷新并关闭日志文件

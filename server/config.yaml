@@ -117,3 +117,37 @@ message:
   # 内容最大长度（字符），0 表示不限制
   # 环境变量: MESSAGE_MAX_CONTENT_LENGTH
   max_content_length: 1024
+
+# 图片上传与缓存配置
+image:
+  # 图片存储子目录名（相对 storage.path）
+  # 环境变量: IMAGE_FOLDER
+  folder: "images"
+
+  # 签名 URL 有效期（秒），默认 24 小时
+  # 环境变量: IMAGE_URL_EXPIRY_SECONDS
+  url_expiry_seconds: 86400
+
+  # 是否启用过期图片自动清理
+  # 环境变量: IMAGE_CLEANUP_ENABLED
+  cleanup_enabled: true
+
+  # 清理任务执行间隔（秒），默认 1 小时
+  # 环境变量: IMAGE_CLEANUP_INTERVAL_SECONDS
+  cleanup_interval_seconds: 3600
+
+  # 单张图片最大字节数，默认 5MB
+  # 环境变量: IMAGE_MAX_UPLOAD_BYTES
+  max_upload_bytes: 5242880
+
+  # 单次请求（多图）总最大字节数，默认 20MB；0 表示与 max_upload_bytes 相同
+  # 环境变量: IMAGE_MAX_UPLOAD_TOTAL_BYTES
+  max_upload_total_bytes: 20971520
+
+  # 允许的图片扩展名（小写带点），空则使用默认
+  allowed_extensions:
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    - ".gif"
+    - ".webp"

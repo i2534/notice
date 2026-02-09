@@ -18,11 +18,11 @@ import (
 
 // Request Webhook 请求结构
 type Request struct {
-	Title   string `json:"title"`            // 消息标题
-	Content string `json:"content"`          // 消息内容（必填）
-	Topic   string `json:"topic,omitempty"`  // 可选：指定主题
-	Extra   any    `json:"extra,omitempty"`  // 可选：额外数据
-	Client  string `json:"client,omitempty"` // 可选：发送端标识，如 web / android / cli
+	Title   string `json:"title"`             // 消息标题
+	Content string `json:"content"`           // 消息内容（必填）；图片 URL 等可放在 content 中
+	Topic   string `json:"topic,omitempty"`   // 可选：指定主题
+	Extra   any    `json:"extra,omitempty"`   // 可选：额外数据
+	Client  string `json:"client,omitempty"`  // 可选：发送端标识，如 web / android / cli
 }
 
 // Response Webhook 响应

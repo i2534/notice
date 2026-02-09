@@ -19,6 +19,9 @@
       "topic": {
         "type": "string",
         "default": "notice/openclaw"
+      },
+      "serverUrl": {
+        "type": "string"
       }
     }
   },
@@ -32,6 +35,9 @@
     },
     "topic": {
       "label": "Topic (subscribe & publish)"
+    },
+    "serverUrl": {
+      "label": "Notice 服务器 URL (图片上传)"
     }
   }
 }

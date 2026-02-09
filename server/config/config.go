@@ -21,6 +21,25 @@ type Config struct {
 	Log       LogConfig       `yaml:"log"`
 	Storage   StorageConfig   `yaml:"storage"`
 	Message   MessageConfig   `yaml:"message"`
+	Image     ImageConfig     `yaml:"image"`
+}
+
+// ImageConfig 图片上传与缓存配置
+type ImageConfig struct {
+	// Folder 图片存储子目录名（相对 Storage.Path），默认 "images"
+	Folder string `yaml:"folder" env:"IMAGE_FOLDER"`
+	// URLExpirySeconds 签名 URL 有效期（秒），默认 86400（24 小时）
+	URLExpirySeconds int `yaml:"url_expiry_seconds" env:"IMAGE_URL_EXPIRY_SECONDS"`
+	// CleanupEnabled 是否启用过期图片自动清理
+	CleanupEnabled bool `yaml:"cleanup_enabled" env:"IMAGE_CLEANUP_ENABLED"`
+	// CleanupIntervalSeconds 清理任务执行间隔（秒），默认 3600（1 小时）
+	CleanupIntervalSeconds int `yaml:"cleanup_interval_seconds" env:"IMAGE_CLEANUP_INTERVAL_SECONDS"`
+	// MaxUploadBytes 单张图片最大字节数，默认 5MB
+	MaxUploadBytes int64 `yaml:"max_upload_bytes" env:"IMAGE_MAX_UPLOAD_BYTES"`
+	// MaxUploadTotalBytes 单次请求（多图）总最大字节数，默认 20MB；0 表示与 MaxUploadBytes 相同
+	MaxUploadTotalBytes int64 `yaml:"max_upload_total_bytes" env:"IMAGE_MAX_UPLOAD_TOTAL_BYTES"`
+	// AllowedExtensions 允许的图片扩展名（小写带点，如 .jpg），空则使用默认 [.jpg .jpeg .png .gif .webp]
+	AllowedExtensions []string `yaml:"allowed_extensions"`
 }
 
 // MessageConfig 消息配置
@@ -123,6 +142,15 @@ func defaultConfig() *Config {
 		Message: MessageConfig{
 			MaxTitleLength:   50,  // 标题最大 50 字符
 			MaxContentLength: 1024, // 内容最大 1024 字符
+		},
+		Image: ImageConfig{
+			Folder:                 "images",
+			URLExpirySeconds:       86400,  // 24 小时
+			CleanupEnabled:         true,
+			CleanupIntervalSeconds: 3600,   // 1 小时
+			MaxUploadBytes:         5 * 1024 * 1024,  // 5MB
+			MaxUploadTotalBytes:    20 * 1024 * 1024, // 20MB
+			AllowedExtensions:      []string{".jpg", ".jpeg", ".png", ".gif", ".webp"},
 		},
 	}
 }

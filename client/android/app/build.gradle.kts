@@ -99,8 +99,10 @@ dependencies {
     // SwipeRefreshLayout
     implementation(libs.androidx.swiperefreshlayout)
 
-    // Markdown 渲染（消息体）
+    // Markdown 渲染（消息体，含网络图片）
     implementation(libs.markwon.core)
+    implementation(libs.markwon.image.coil)
+    implementation(libs.coil)
 
     // Testing
     testImplementation(libs.junit)
