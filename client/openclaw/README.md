@@ -56,7 +56,11 @@ channels:
     brokerUrl: "wss://your-notice-broker.com"   # MQTT Broker 地址（订阅与发送共用）
     token: "your-auth-token"                    # 与 Notice Server auth.token 一致
     topic: "notice/openclaw"                     # 订阅主题，发送时转为可发布主题（如 notice/# → notice）
+    blockStreaming: true                         # 按块流式发送（默认逐条发出）
+    blockStreamingBreak: "text_end"              # text_end=逐条，message_end=整条结束后再发
 ```
+
+若主机不读取通道级 `blockStreamingBreak`，需在 openclaw 主配置中设置 `agents.defaults.blockStreamingBreak: "text_end"` 以实现逐条发送。
 
 ## 收发方式
 

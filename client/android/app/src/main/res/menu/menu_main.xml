@@ -3,6 +3,13 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_reply"
+        android:icon="@drawable/ic_reply"
+        android:title="@string/message_detail_reply"
+        app:iconTint="@color/text_primary"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_settings"
         android:icon="@drawable/ic_settings"
         android:title="@string/btn_settings"

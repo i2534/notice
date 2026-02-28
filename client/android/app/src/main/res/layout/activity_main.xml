@@ -195,6 +195,14 @@
 
     </androidx.core.widget.NestedScrollView>
 
+        <!-- 回复区域（标题栏「回复」按钮切换显示/隐藏） -->
+        <LinearLayout
+            android:id="@+id/replySection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
         <!-- 回复目标主题提示（指定回复到某主题时显示） -->
         <LinearLayout
             android:id="@+id/replyToTopicRow"
@@ -266,6 +274,8 @@
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
 
     </LinearLayout>
 

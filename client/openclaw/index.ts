@@ -257,6 +257,12 @@ const noticeChannelConfigSchema: ChannelConfigSchema = {
             brokerUrl: { type: "string" },
             topic: { type: "string", default: DEFAULT_TOPIC },
             serverUrl: { type: "string" },
+            blockStreaming: { type: "boolean", default: true },
+            blockStreamingBreak: {
+                type: "string",
+                enum: ["text_end", "message_end"],
+                default: "text_end",
+            },
         },
     },
     uiHints: {
@@ -264,6 +270,14 @@ const noticeChannelConfigSchema: ChannelConfigSchema = {
         brokerUrl: { label: "MQTT Broker URL", placeholder: "wss://... or tcp://..." },
         topic: { label: "Topic (subscribe & publish)", placeholder: DEFAULT_TOPIC },
         serverUrl: { label: "Notice 服务器 URL (图片上传)", placeholder: "https://notice.example.com" },
+        blockStreaming: {
+            label: "按块流式发送",
+            help: "启用后，Agent 回复在生成过程中按块通过 MQTT 发送；关闭则等整条消息结束后再发。",
+        },
+        blockStreamingBreak: {
+            label: "发送时机",
+            help: "text_end：每块产出即发送（逐条）；message_end：整条消息结束后再发送。",
+        },
     },
 };
 
@@ -350,6 +364,8 @@ const noticeChannel = {
                             brokerUrl: brokerUrl || (ch.brokerUrl ?? ""),
                             topic: topic || (ch.topic ?? DEFAULT_TOPIC),
                             serverUrl: serverUrl || (ch.serverUrl ?? ""),
+                            blockStreaming: ch.blockStreaming ?? true,
+                            blockStreamingBreak: ch.blockStreamingBreak ?? "text_end",
                         },
                     },
                 },

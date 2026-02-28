@@ -126,6 +126,10 @@ class MainActivity : AppCompatActivity() {
         // Toolbar
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_reply -> {
+                    toggleReplySection()
+                    true
+                }
                 R.id.action_settings -> {
                     startActivity(Intent(this, SettingsActivity::class.java))
                     true
@@ -208,6 +212,16 @@ class MainActivity : AppCompatActivity() {
                 ime.bottom
             )
             insets
+        }
+    }
+
+    private fun toggleReplySection() {
+        val isVisible = binding.replySection.visibility == View.VISIBLE
+        binding.replySection.visibility = if (isVisible) View.GONE else View.VISIBLE
+        if (!isVisible) {
+            binding.replyInput.requestFocus()
+        } else {
+            binding.replyInput.clearFocus()
         }
     }
 
@@ -453,11 +467,14 @@ class MainActivity : AppCompatActivity() {
             dialog.dismiss()
         }
 
-        // 回复按钮：指定回复到该消息的主题并关闭弹窗、聚焦输入框
+        // 回复按钮：指定回复到该消息的主题并关闭弹窗、显示回复区并聚焦输入框
         dialogView.findViewById<View>(R.id.btnReply).setOnClickListener {
             replyToTopicOverride = message.topic
             updateReplyToTopicUI()
             dialog.dismiss()
+            if (binding.replySection.visibility != View.VISIBLE) {
+                binding.replySection.visibility = View.VISIBLE
+            }
             binding.replyInput.requestFocus()
         }
 

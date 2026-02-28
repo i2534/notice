@@ -13,10 +13,11 @@ help:
 	@echo "  make clean          - 清理构建产物"
 	@echo ""
 	@echo "版本参数:"
-	@echo "  VERSION_NAME=1.0.0  - 版本名称"
+	@echo "  VERSION_NAME=1.0.0  - 版本名称（仅 make docker 未指定时默认为当前时间 YYYYMMDD-HHMMSS）"
 	@echo "  VERSION_CODE=1      - 版本号"
 	@echo ""
 	@echo "示例:"
+	@echo "  make docker         # Debug，未指定时 versionName 为当前时间"
 	@echo "  make docker-release KEYSTORE_PASSWORD=xxx VERSION_NAME=1.0.0 VERSION_CODE=1"
 	@echo ""
 
@@ -46,18 +47,27 @@ KOTLIN_CACHE ?= $(PWD)/.kotlin
 # 构建参数
 GRADLE_VERSION_ARGS := $(if $(VERSION_NAME),-PversionName=$(VERSION_NAME),) $(if $(VERSION_CODE),-PversionCode=$(VERSION_CODE),)
 
-# Docker 构建 (无需本地 Android SDK)
+# Docker 构建 (无需本地 Android SDK)，Debug 时未指定 VERSION_NAME 则用当前时间
 docker:
-	@echo "🐳 使用 Docker 构建..."
-	@if docker image inspect notice-android-builder >/dev/null 2>&1; then \
+	@if [ "$(VERSION_NAME)" = "0.0.0" ]; then \
+		DOCKER_DEBUG_VERSION_NAME=$$(date +%Y.%m%d.%H%M); \
+	else \
+		DOCKER_DEBUG_VERSION_NAME="$(VERSION_NAME)"; \
+	fi; \
+	DOCKER_DEBUG_GRADLE_ARGS="-PversionName=$$DOCKER_DEBUG_VERSION_NAME"; \
+	if [ -n "$(VERSION_CODE)" ]; then DOCKER_DEBUG_GRADLE_ARGS="$$DOCKER_DEBUG_GRADLE_ARGS -PversionCode=$(VERSION_CODE)"; fi; \
+	echo "🐳 使用 Docker 构建..."; \
+	echo "  VERSION_NAME=$$DOCKER_DEBUG_VERSION_NAME"; \
+	echo "  GRADLE_ARGS=$$DOCKER_DEBUG_GRADLE_ARGS"; \
+	if docker image inspect notice-android-builder >/dev/null 2>&1; then \
 		echo "✓ 镜像已存在，跳过构建"; \
 	else \
 		echo "→ 构建镜像..."; \
 		docker build -t notice-android-builder .; \
-	fi
-	@mkdir -p $(GRADLE_CACHE) $(PROJECT_GRADLE) $(ANDROID_HOME_CACHE) $(KOTLIN_CACHE)
-	@echo ""
-	@echo "📦 构建 APK (源码+缓存挂载)..."
+	fi; \
+	mkdir -p $(GRADLE_CACHE) $(PROJECT_GRADLE) $(ANDROID_HOME_CACHE) $(KOTLIN_CACHE); \
+	echo ""; \
+	echo "📦 构建 APK (源码+缓存挂载)..."; \
 	docker run --rm \
 		-u $(shell id -u):$(shell id -g) \
 		-e ANDROID_USER_HOME=/android-home \
@@ -69,10 +79,10 @@ docker:
 		-v "$(ANDROID_HOME_CACHE):/android-home" \
 		-v "$(KOTLIN_CACHE):/app/.kotlin" \
 		notice-android-builder \
-		./gradlew assembleDebug --no-daemon --console=plain $(GRADLE_VERSION_ARGS)
-	@echo ""
-	@echo "✅ Debug APK 已生成:"
-	@ls -lh app/build/outputs/apk/debug/*.apk
+		./gradlew assembleDebug --no-daemon --console=plain --info $$DOCKER_DEBUG_GRADLE_ARGS; \
+	echo ""; \
+	echo "✅ Debug APK 已生成 (versionName=$$DOCKER_DEBUG_VERSION_NAME):"; \
+	ls -lh app/build/outputs/apk/debug/*.apk
 
 # 签名配置 (通过环境变量传入，默认从 key 文件读取密码)
 KEYSTORE_PASSWORD ?= $(shell cat key 2>/dev/null || echo "")
