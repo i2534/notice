@@ -72,18 +72,14 @@
             android:clickable="false"
             android:focusable="false">
 
-            <TextView
-                android:id="@+id/messageContent"
-                android:clickable="false"
-                android:focusable="false"
+            <LinearLayout
+                android:id="@+id/messageContentContainer"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp"
-                tools:text="这是消息内容，可能会比较长，需要截断显示..." />
+                android:orientation="vertical"
+                android:clickable="false"
+                android:focusable="false" />
 
             <TextView
                 android:id="@+id/messageContentMore"

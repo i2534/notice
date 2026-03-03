@@ -93,8 +93,14 @@ class MessageAdapter(
             isSelected: Boolean
         ) {
             binding.messageTitle.text = message.title
-            markwon.setMarkdown(binding.messageContent, message.content.ifBlank { " " })
-            binding.messageContent.movementMethod = null
+            val blocks = ContentBlockParser.parse(message.content)
+            MessageContentRenderer.render(
+                binding.messageContentContainer,
+                blocks,
+                markwon,
+                maxTextLinesInList = 2,
+                touchThrough = true
+            )
             binding.messageTime.text = message.getFormattedTime()
             binding.messageTopic.text = message.topic
             val client = message.client
@@ -105,9 +111,8 @@ class MessageAdapter(
                 binding.messageClient.visibility = View.GONE
             }
 
-            // 内容可能被截断时显示「更多」提示（列表最多 2 行）
             val content = message.content
-            val likelyTruncated = content.length > 100 || content.lines().size > 2
+            val likelyTruncated = content.length > 100 || content.lines().size > 2 || blocks.size > 3
             binding.messageContentMore.visibility = if (likelyTruncated) View.VISIBLE else View.GONE
 
             // 选中状态：使用边框和轻微的颜色变化

@@ -18,6 +18,7 @@
     <string name="message_detail_close">关闭</string>
     <string name="message_detail_copied">内容已复制</string>
     <string name="message_content_more">更多</string>
+    <string name="image_url_fallback_label">图片地址</string>
     <string name="reply_to_topic">回复到: %1$s</string>
     <string name="reply_to_topic_clear">清除</string>
     <string name="message_delete_title">删除消息</string>

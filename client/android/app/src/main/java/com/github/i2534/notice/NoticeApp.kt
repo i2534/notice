@@ -6,14 +6,11 @@ import android.app.NotificationManager
 import android.content.Context
 import com.github.i2534.notice.util.AppLogger
 import io.noties.markwon.Markwon
-import io.noties.markwon.image.coil.CoilImagesPlugin
 
 class NoticeApp : Application() {
 
-    val markwon: Markwon by lazy {
-        val coilPlugin = CoilImagesPlugin.create(this)
-        Markwon.builder(this).usePlugin(coilPlugin).build()
-    }
+    /** 仅用于渲染文本块（粗体、链接等），图片由 MessageContentRenderer 单独用 ImageView 加载。 */
+    val markwon: Markwon by lazy { Markwon.builder(this).build() }
 
     companion object {
         const val CHANNEL_SERVICE = "mqtt_service"

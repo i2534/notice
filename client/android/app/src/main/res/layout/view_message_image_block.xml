@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 单张图片块：加载成功显示图片，失败则显示 URL 文本，避免占位重叠 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="48dp">
+
+    <ImageView
+        android:id="@+id/imageBlockImage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:contentDescription="@null"
+        tools:ignore="ContentDescription" />
+
+    <TextView
+        android:id="@+id/imageBlockUrlFallback"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="12dp"
+        android:paddingStart="14dp"
+        android:visibility="gone"
+        android:background="@drawable/bg_url_fallback"
+        android:textColor="@color/primary_light"
+        android:textSize="13sp"
+        android:lineSpacingMultiplier="1.2"
+        android:textIsSelectable="true"
+        tools:text="https://example.com/image.png"
+        tools:visibility="visible" />
+
+</FrameLayout>

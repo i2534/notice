@@ -13,9 +13,9 @@ Android MQTT 客户端，用于接收 Notice Server 的推送通知。
 - ✅ 消息持久化（Room 数据库）
 - ✅ 消息分页加载（Paging 3）
 - ✅ 消息多选批量删除（点击消息任意部分可选中，删除模式下不触发查看详情）
-- ✅ 消息详情弹窗查看（点击整条消息任意位置可打开，内容截断时显示「更多」提示）
+- ✅ 消息详情弹窗查看（点击整条消息任意位置可打开，含正文与图片区域；内容截断时显示「更多」提示）
 - ✅ 回复可指定 topic：支持默认发送主题（与订阅主题分离）、从消息详情回复到该条 topic
-- ✅ 消息体 Markdown 渲染（列表、详情、最新消息卡片）
+- ✅ 消息体「文本 + 图片」分块渲染：正文按 Markdown 渲染，图片单独加载；加载失败时显示「图片地址」+ URL 文本块（可长按全选复制），列表中点正文/URL 也可打开详情
 - ✅ 智能时间显示（今天/今年/跨年）
 - ✅ 配置持久化（DataStore）
 - ✅ 日志查看、分享导出、下拉刷新
@@ -202,6 +202,12 @@ tcp://192.168.1.100:9091 # TCP 明文（局域网）
 
 在设置页面输入服务器的 `AUTH_TOKEN`，应用会通过 MQTT username 传递 Token 进行认证。
 
+## 消息内容与展示
+
+- **内容格式**：支持 Markdown 文本与 `![](url)` 图片。展示时按「文本块」与「图片块」拆分：文本用 Markwon 渲染，图片用独立 ImageView（Coil）加载。
+- **图片加载失败**：若某张图加载失败，该块会显示为带样式的「图片地址」+ URL 文本，便于复制到浏览器打开；详情弹窗内 URL 可长按全选复制。
+- **列表点击**：点击标题、正文、图片或 URL 区域均可打开消息详情。
+
 ## 消息格式
 
 客户端支持两种消息格式:
@@ -239,19 +245,26 @@ app/src/main/
 │   ├── util/
 │   │   └── AppLogger.kt      # 应用日志（持久化 + 轮转）
 │   └── ui/
-│       ├── MainActivity.kt       # 主界面
-│       ├── SettingsActivity.kt   # 设置界面
-│       ├── AboutActivity.kt      # 关于页面
-│       ├── LogsActivity.kt       # 日志查看页面
-│       ├── LicensesActivity.kt   # 开源许可页面
-│       └── MessageAdapter.kt     # 消息列表适配器
-└── res/                      # 资源文件
+│       ├── MainActivity.kt           # 主界面
+│       ├── SettingsActivity.kt       # 设置界面
+│       ├── AboutActivity.kt          # 关于页面
+│       ├── LogsActivity.kt           # 日志查看页面
+│       ├── LicensesActivity.kt       # 开源许可页面
+│       ├── MessageAdapter.kt        # 消息列表适配器
+│       ├── ContentBlocks.kt         # 内容解析（文本块 / 图片块）
+│       └── MessageContentRenderer.kt # 文本+图片块渲染（Markwon + Coil）
+└── res/
+    ├── layout/
+    │   └── view_message_image_block.xml  # 单张图片块（成功显示图，失败显示 URL）
+    └── drawable/
+        └── bg_url_fallback.xml          # 图片失败时 URL 块背景样式
 ```
 
 ## 依赖库
 
 - [Eclipse Paho MQTT](https://github.com/eclipse/paho.mqtt.java) - MQTT 客户端
-- [Markwon](https://github.com/noties/Markwon) - 消息体 Markdown 渲染
+- [Markwon](https://github.com/noties/Markwon) - 消息正文 Markdown 渲染（仅文本，不含图片）
+- [Coil](https://github.com/coil-kt/coil) - 消息内图片加载（独立于 Markwon，失败时显示 URL 块）
 - AndroidX Room - 消息持久化存储
 - AndroidX Paging 3 - 消息分页加载
 - AndroidX DataStore - 配置存储

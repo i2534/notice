@@ -91,6 +91,22 @@ func imageSignKey(secret string) []byte {
 	return h[:imageSignKeyBytes]
 }
 
+// requestScheme 返回请求的协议（https 或 http）。在反向代理后优先读 X-Forwarded-Proto。
+func requestScheme(r *http.Request) string {
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		if strings.EqualFold(strings.TrimSpace(proto), "https") {
+			return "https"
+		}
+		if strings.EqualFold(strings.TrimSpace(proto), "http") {
+			return "http"
+		}
+	}
+	if r.TLS != nil {
+		return "https"
+	}
+	return "http"
+}
+
 // SignImageURL 生成带签名的图片 URL；n 为明文（仅做 query 转义），e 为明文时间戳，s 为 Base64 签名
 func SignImageURL(baseURL, name string, expires int64, secret string) string {
 	payload := imageSignPayload(name, expires)
@@ -244,10 +260,7 @@ func UploadHandler(cfg *config.Config, storagePath string, limiter *ratelimit.Li
 		}
 
 		expires := time.Now().Unix() + imageURLExpiry(cfg)
-		baseURL := "http://" + r.Host
-		if r.TLS != nil {
-			baseURL = "https://" + r.Host
-		}
+		baseURL := requestScheme(r) + "://" + r.Host
 
 		var imageURLs []string
 		for _, header := range files {

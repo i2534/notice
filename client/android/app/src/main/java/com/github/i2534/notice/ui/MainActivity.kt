@@ -350,12 +350,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // 观察最新消息（支持 Markdown）
+            // 观察最新消息（文本+图片块分别渲染，图片失败显示 URL）
             lifecycleScope.launch {
                 service.latestMessage.collectLatest { message ->
                     binding.latestMessageCard.visibility = View.VISIBLE
                     binding.latestTitle.text = message.title
-                    markwon.setMarkdown(binding.latestContent, message.content.ifBlank { " " })
+                    val blocks = ContentBlockParser.parse(message.content)
+                    MessageContentRenderer.render(binding.latestContentContainer, blocks, markwon)
                     binding.latestTime.text = message.getFormattedTime()
                 }
             }
@@ -449,11 +450,12 @@ class MainActivity : AppCompatActivity() {
     private fun showMessageDetailDialog(message: NoticeMessage) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_message_detail, null)
 
-        // 绑定数据（内容支持 Markdown）
         dialogView.findViewById<TextView>(R.id.dialogTitle).text = message.title
-        markwon.setMarkdown(
-            dialogView.findViewById(R.id.dialogContent),
-            message.content.ifBlank { " " }
+        val blocks = ContentBlockParser.parse(message.content)
+        MessageContentRenderer.render(
+            dialogView.findViewById(R.id.dialogContentContainer),
+            blocks,
+            markwon
         )
         dialogView.findViewById<TextView>(R.id.dialogTopic).text = message.topic
         dialogView.findViewById<TextView>(R.id.dialogTime).text = message.getFormattedTime()

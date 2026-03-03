@@ -124,10 +124,15 @@ function sendViaMqtt(publishTopic: string, text: string, title?: string): Promis
     });
 }
 
-/** Returns true if the string looks like a local path (no http(s) scheme). */
+/** Returns true if the string looks like a local path (not a URL). */
 function isLocalPath(s: string): boolean {
     const t = s.trim();
-    return t.length > 0 && !/^https?:\/\//i.test(t);
+    if (t.length === 0) return false;
+    // Absolute HTTP(S) URL
+    if (/^https?:\/\//i.test(t)) return false;
+    // Protocol-relative URL (//host/path or //host?query) — do not treat as local file
+    if (t.startsWith("//") && (t.includes("?") || /^\/\/[^/]*\.[^/]*(\/|$)/.test(t))) return false;
+    return true;
 }
 
 const IMAGE_EXT_REGEX = /\/[^\s:]+\.(?:png|jpe?g|gif|webp)/gi;

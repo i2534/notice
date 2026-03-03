@@ -124,14 +124,12 @@
                         android:textStyle="bold"
                         tools:text="测试通知" />
 
-                    <TextView
-                        android:id="@+id/latestContent"
+                    <LinearLayout
+                        android:id="@+id/latestContentContainer"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:textColor="@color/text_primary"
-                        android:textSize="14sp"
-                        tools:text="这是一条测试消息内容" />
+                        android:orientation="vertical" />
 
                     <TextView
                         android:id="@+id/latestTime"

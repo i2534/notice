@@ -17,8 +17,9 @@
 
 - 📥 HTTP Webhook 接收消息
 - 📡 内置 MQTT Broker（TCP + WebSocket）
-- 🔐 Token 认证（Webhook + MQTT）
+- 🔐 Token 认证（Webhook + MQTT + 图片上传/访问）
 - 🛡️ 认证限流：按 IP、按错误凭证、全局限流（防单 IP 与换 IP 暴力破解）
+- 🖼️ 图片上传（POST /api/upload）与签名 URL 访问（GET /api/image），支持反向代理 HTTPS
 - 🌐 内置 Web 管理界面（消息发送/接收、消息体 Markdown 渲染）
 - 📝 日志轮转（按天分割、自动清理）
 - 📦 YAML 配置文件支持
@@ -40,8 +41,10 @@ server/
 ├── handlers/
 │   ├── webhook.go       # Webhook 接收（支持 body.topic 指定发布主题）
 │   ├── api.go           # API 与消息历史
+│   ├── image.go         # 图片上传（/api/upload）与签名 URL 访问（/api/image）
 │   ├── security.go      # 请求体/参数安全（限长、topic 校验、防 XSS/路径穿越）
 │   ├── webhook_test.go  # Webhook 与限流测试
+│   ├── image_test.go    # 图片上传与签名校验测试
 │   └── security_test.go # 安全校验单元测试
 ├── store/
 │   ├── store.go         # 消息持久化存储
@@ -143,6 +146,16 @@ log:
 message:
   max_title_length: 50    # 标题最大长度，0 表示不限制
   max_content_length: 1024 # 内容最大长度，0 表示不限制
+
+# 图片上传与访问（可选）
+image:
+  folder: "images"           # 存储子目录（相对 storage.path）
+  url_expiry_seconds: 86400  # 签名 URL 有效期（秒）
+  cleanup_enabled: true     # 是否自动清理过期图片
+  cleanup_interval_seconds: 3600
+  max_upload_bytes: 5242880       # 单张最大 5MB
+  max_upload_total_bytes: 20971520 # 单次请求总最大 20MB
+  allowed_extensions: [".jpg", ".jpeg", ".png", ".gif", ".webp"]
 ```
 
 指定配置文件：
@@ -169,6 +182,14 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 - **标题/内容/client**：去除 NUL 及危险控制字符；正文（content）保留 `\n` `\t` `\r`，支持 Markdown。
 - **静态路由**：请求路径含 `..` 或 `\` 时返回 400，防路径穿越。
 - **API 查询参数**：`page_size` 限制 1～100，`before_id` 仅接受纯数字；token 长度截断以防滥用。
+
+#### 反向代理与图片 URL（HTTPS）
+
+服务放在 Nginx、Caddy 等反向代理后且对外使用 HTTPS 时，上传接口返回的图片地址会按「请求协议」生成。若代理未把原始协议传给后端，服务器会误用 `http://`。请务必在代理中设置：
+
+- **X-Forwarded-Proto**：`https` 或 `http`（如 Nginx：`proxy_set_header X-Forwarded-Proto $scheme;`）
+
+这样 `/api/upload` 返回的 `image_urls` 才会是 `https://...`，客户端和浏览器才能正常加载。
 
 ### 环境变量
 
@@ -200,6 +221,11 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | 存储 | STORAGE_PATH | data | 数据存储路径 |
 | 消息 | MESSAGE_MAX_TITLE_LENGTH | 50 | 标题最大长度（字符） |
 | 消息 | MESSAGE_MAX_CONTENT_LENGTH | 1024 | 内容最大长度（字符） |
+| 图片 | IMAGE_FOLDER | images | 图片存储子目录名 |
+| 图片 | IMAGE_URL_EXPIRY_SECONDS | 86400 | 签名 URL 有效期（秒） |
+| 图片 | IMAGE_CLEANUP_ENABLED | true | 是否启用过期图片清理 |
+| 图片 | IMAGE_MAX_UPLOAD_BYTES | 5242880 | 单张图片最大字节数 |
+| 图片 | IMAGE_MAX_UPLOAD_TOTAL_BYTES | 20971520 | 单次请求总最大字节数 |
 
 ## API 端点
 
@@ -246,6 +272,35 @@ X-Auth-Token: <token>
   "clients": 3
 }
 ```
+
+### POST /api/upload
+
+上传图片（需 Bearer Token），支持单图或多图。用于 Openclaw 等客户端把本地图片上传后得到可公网访问的 URL，再写入消息内容。
+
+**请求头：** `Authorization: Bearer <token>`（或 `X-Auth-Token`）
+
+**请求体：** `multipart/form-data`，字段名 `file`（可多个）。允许扩展名由配置 `image.allowed_extensions` 控制，默认 `.jpg/.jpeg/.png/.gif/.webp`。单张与总大小限制见 `image.max_upload_bytes` / `image.max_upload_total_bytes`。
+
+**响应：**
+
+```json
+{
+  "success": true,
+  "image_urls": [
+    "https://your-server/api/image?n=xxx.png&e=过期时间戳&s=签名"
+  ]
+}
+```
+
+返回的 URL 为带签名的访问地址，有效期由 `image.url_expiry_seconds` 控制。**若服务部署在反向代理（Nginx/Caddy）后且对外为 HTTPS**，代理需设置 `X-Forwarded-Proto: https`，否则返回的 URL 会错误地使用 `http://`，客户端可能无法加载。例如 Nginx：
+
+```nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+### GET /api/image
+
+通过签名 URL 访问已上传图片。参数：`n`（文件名）、`e`（过期时间戳）、`s`（Base64 签名）。无需在请求头带 Token；签名错误或过期返回 403。
 
 ### GET /status
 
