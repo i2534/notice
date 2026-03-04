@@ -95,6 +95,11 @@ jobs:
         working-directory: client/android
         run: chmod +x gradlew
 
+      - name: Use official Gradle URL (no mirror in CI)
+        working-directory: client/android
+        run: |
+          sed -i 's|mirrors.cloud.tencent.com/gradle|services.gradle.org/distributions|g' gradle/wrapper/gradle-wrapper.properties
+
       - name: Build
         working-directory: client/android
         run: ./gradlew assembleDebug --no-daemon
