@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Notice" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- 标题栏高度（默认 56dp，略缩减为 48dp） -->
+        <item name="actionBarSize">48dp</item>
         <!-- 主色调 - 深蓝绿色 -->
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryDark">@color/primary_dark</item>

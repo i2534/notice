@@ -19,10 +19,10 @@
     <color name="text_secondary">#B3B3B3</color>
     <color name="text_hint">#666666</color>
 
-    <!-- 状态颜色 -->
+    <!-- 状态颜色：成功=绿，连接中=黄，失败=红 -->
     <color name="status_connected">#4CAF50</color>
     <color name="status_disconnected">#F44336</color>
-    <color name="status_connecting">#FF9800</color>
+    <color name="status_connecting">#FFC107</color>
 
     <!-- 错误/警告色 -->
     <color name="error">#CF6679</color>
@@ -35,4 +35,6 @@
     <!-- 交互色 -->
     <color name="ripple">#33FFFFFF</color>
     <color name="selected_background">#1A0D7377</color>
+    <!-- 本机发送的消息卡片背景（略浅于选中态，避免长按选中时无变化） -->
+    <color name="message_outgoing_bg">#120D7377</color>
 </resources>

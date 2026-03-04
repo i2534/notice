@@ -732,13 +732,14 @@ class MqttService : Service() {
             try {
                 client.publish(topic, payload, 1, false)
                 AppLogger.d(TAG, "Reply published to $topic")
-                // 乐观插入本地列表
+                // 乐观插入本地列表（标记为本机发送）
                 val msg = NoticeMessage(
                     topic = topic,
                     title = "回复",
                     content = content,
                     timestamp = System.currentTimeMillis(),
-                    client = "android"
+                    client = "android",
+                    isOutgoing = true
                 )
                 messageDao.insert(msg)
                 messageDao.trimToSize(500)

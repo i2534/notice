@@ -3,6 +3,12 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_connection"
+        android:icon="@drawable/ic_status_disconnected"
+        android:title="@string/status_disconnected"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_reply"
         android:icon="@drawable/ic_reply"
         android:title="@string/message_detail_reply"

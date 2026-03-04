@@ -92,7 +92,22 @@ class MessageAdapter(
             isSelectMode: Boolean,
             isSelected: Boolean
         ) {
-            binding.messageTitle.text = message.title
+            // 本机回复不显示标题，也不显示「来自 xxx」
+            if (message.isOutgoing) {
+                binding.messageTitle.visibility = View.GONE
+                binding.messageClient.visibility = View.GONE
+            } else {
+                binding.messageTitle.visibility = View.VISIBLE
+                binding.messageTitle.text = message.title
+                val client = message.client
+                if (!client.isNullOrBlank()) {
+                    binding.messageClient.text = binding.root.context.getString(R.string.from_client, client)
+                    binding.messageClient.visibility = View.VISIBLE
+                } else {
+                    binding.messageClient.visibility = View.GONE
+                }
+            }
+            binding.messageSentByMe.visibility = if (message.isOutgoing) View.VISIBLE else View.GONE
             val blocks = ContentBlockParser.parse(message.content)
             MessageContentRenderer.render(
                 binding.messageContentContainer,
@@ -103,19 +118,12 @@ class MessageAdapter(
             )
             binding.messageTime.text = message.getFormattedTime()
             binding.messageTopic.text = message.topic
-            val client = message.client
-            if (!client.isNullOrBlank()) {
-                binding.messageClient.text = binding.root.context.getString(R.string.from_client, client)
-                binding.messageClient.visibility = View.VISIBLE
-            } else {
-                binding.messageClient.visibility = View.GONE
-            }
 
             val content = message.content
             val likelyTruncated = content.length > 100 || content.lines().size > 2 || blocks.size > 3
             binding.messageContentMore.visibility = if (likelyTruncated) View.VISIBLE else View.GONE
 
-            // 选中状态：使用边框和轻微的颜色变化
+            // 选中状态 / 本机发送：使用边框和背景色区分
             val context = binding.root.context
             if (isSelectMode && isSelected) {
                 binding.root.strokeWidth = 2
@@ -125,9 +133,12 @@ class MessageAdapter(
                 )
             } else {
                 binding.root.strokeWidth = 0
-                binding.root.setCardBackgroundColor(
-                    ColorStateList.valueOf(ContextCompat.getColor(context, R.color.surface_variant))
-                )
+                val bgColor = if (message.isOutgoing) {
+                    ContextCompat.getColor(context, R.color.message_outgoing_bg)
+                } else {
+                    ContextCompat.getColor(context, R.color.surface_variant)
+                }
+                binding.root.setCardBackgroundColor(ColorStateList.valueOf(bgColor))
             }
 
             binding.root.isClickable = true

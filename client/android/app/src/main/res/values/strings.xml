@@ -35,6 +35,7 @@
 
     <!-- 消息发送端 -->
     <string name="from_client">来自 %1$s</string>
+    <string name="message_sent_by_me">我发送</string>
 
     <!-- 对话回复 -->
     <string name="reply_hint">输入回复内容…</string>

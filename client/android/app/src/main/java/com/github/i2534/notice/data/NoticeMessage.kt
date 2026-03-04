@@ -14,7 +14,8 @@ data class NoticeMessage(
     val title: String,
     val content: String,
     val timestamp: Long = System.currentTimeMillis(),
-    val client: String? = null  // 发送端标识：web / android / cli / webhook
+    val client: String? = null,  // 发送端标识：web / android / cli / webhook
+    val isOutgoing: Boolean = false  // true=本机回复发送的消息，false=收到的消息
 ) {
     companion object {
         private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())

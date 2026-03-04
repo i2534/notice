@@ -9,7 +9,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -126,6 +125,16 @@ class MainActivity : AppCompatActivity() {
         // Toolbar
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_connection -> {
+                    mqttService?.let { service ->
+                        when (service.connectionState.value) {
+                            MqttService.ConnectionState.DISCONNECTED -> service.connect()
+                            MqttService.ConnectionState.CONNECTED -> service.disconnect()
+                            MqttService.ConnectionState.CONNECTING -> { }
+                        }
+                    }
+                    true
+                }
                 R.id.action_reply -> {
                     toggleReplySection()
                     true
@@ -150,17 +159,6 @@ class MainActivity : AppCompatActivity() {
         binding.messageList.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = messageAdapter
-        }
-
-        // 连接按钮
-        binding.btnConnect.setOnClickListener {
-            mqttService?.let { service ->
-                when (service.connectionState.value) {
-                    MqttService.ConnectionState.DISCONNECTED -> service.connect()
-                    MqttService.ConnectionState.CONNECTED -> service.disconnect()
-                    MqttService.ConnectionState.CONNECTING -> { /* 忽略 */ }
-                }
-            }
         }
 
         // 清空按钮（正常模式：清空全部，多选模式：删除选中）
@@ -450,7 +448,19 @@ class MainActivity : AppCompatActivity() {
     private fun showMessageDetailDialog(message: NoticeMessage) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_message_detail, null)
 
-        dialogView.findViewById<TextView>(R.id.dialogTitle).text = message.title
+        val dialogTitleView = dialogView.findViewById<TextView>(R.id.dialogTitle)
+        if (message.isOutgoing) {
+            dialogTitleView.visibility = View.GONE
+        } else {
+            dialogTitleView.visibility = View.VISIBLE
+            dialogTitleView.text = message.title
+        }
+        dialogView.findViewById<View>(R.id.dialogSentByMe).visibility =
+            if (message.isOutgoing) View.VISIBLE else View.GONE
+        dialogView.findViewById<View>(R.id.dialogHeader).setBackgroundColor(
+            if (message.isOutgoing) ContextCompat.getColor(this, R.color.message_outgoing_bg)
+            else ContextCompat.getColor(this, R.color.surface_variant)
+        )
         val blocks = ContentBlockParser.parse(message.content)
         MessageContentRenderer.render(
             dialogView.findViewById(R.id.dialogContentContainer),
@@ -493,45 +503,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateConnectionUI(state: MqttService.ConnectionState) {
-        val (statusText, statusColor, buttonText, buttonEnabled) = when (state) {
-            MqttService.ConnectionState.DISCONNECTED -> {
-                arrayOf(
-                    getString(R.string.status_disconnected),
-                    ContextCompat.getColor(this, R.color.status_disconnected),
-                    getString(R.string.btn_connect),
-                    true
-                )
-            }
-            MqttService.ConnectionState.CONNECTING -> {
-                arrayOf(
-                    getString(R.string.status_connecting),
-                    ContextCompat.getColor(this, R.color.status_connecting),
-                    getString(R.string.status_connecting),
-                    false
-                )
-            }
-            MqttService.ConnectionState.CONNECTED -> {
-                arrayOf(
-                    getString(R.string.status_connected),
-                    ContextCompat.getColor(this, R.color.status_connected),
-                    getString(R.string.btn_disconnect),
-                    true
-                )
-            }
+        val (statusTitleRes, iconRes) = when (state) {
+            MqttService.ConnectionState.DISCONNECTED ->
+                R.string.status_disconnected to R.drawable.ic_status_disconnected
+            MqttService.ConnectionState.CONNECTING ->
+                R.string.status_connecting to R.drawable.ic_status_connecting
+            MqttService.ConnectionState.CONNECTED ->
+                R.string.status_connected to R.drawable.ic_status_connected
         }
-
-        binding.statusText.text = statusText as String
-        binding.btnConnect.text = buttonText as String
-        binding.btnConnect.isEnabled = buttonEnabled as Boolean
-
-        // 更新状态指示器颜色
-        (binding.statusIndicator.background as? GradientDrawable)?.setColor(statusColor as Int)
-            ?: run {
-                val drawable = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(statusColor as Int)
-                }
-                binding.statusIndicator.background = drawable
-            }
+        binding.toolbar.menu.findItem(R.id.action_connection)?.let { item ->
+            item.title = getString(statusTitleRes)
+            item.setIcon(iconRes)
+        }
     }
 }
