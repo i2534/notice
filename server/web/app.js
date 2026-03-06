@@ -7,6 +7,7 @@ const MAX_MESSAGES = 100; // 最大缓存消息数
 let confirmCallback = null; // 确认对话框回调
 let lastSentContent = ''; // 用于 MQTT 去重：刚发送的回复内容
 let lastSentTime = 0;
+let disconnectIntentional = false; // 用户点击「断开」时为 true，避免自动重连循环
 
 /** 与 server 一致：订阅主题转成可发布主题（notice/# -> notice），避免乐观更新与 MQTT 回显 topic 不同导致重复显示 */
 function topicForPublish(topic) {
@@ -26,10 +27,15 @@ function generateClientId() {
 }
 
 window.onload = function () {
-    clientId = localStorage.getItem('mqttClientId');
+    // 使用 sessionStorage 保证每个标签页独立 clientId，避免多标签同 id 导致互相踢线、反复重连
+    try {
+        clientId = sessionStorage.getItem('mqttClientId');
+    } catch (e) { clientId = null; }
     if (!clientId) {
         clientId = generateClientId();
-        localStorage.setItem('mqttClientId', clientId);
+        try {
+            sessionStorage.setItem('mqttClientId', clientId);
+        } catch (e) { }
     }
 
     const savedBrokerUrl = localStorage.getItem('brokerUrl');
@@ -56,6 +62,7 @@ function loadCachedMessages() {
         const cached = localStorage.getItem('cachedMessages');
         if (cached) {
             messages = JSON.parse(cached).filter(m => (m.content !== '__auth_check__'));
+            messages = messages.map(normalizeMessagePayload);
             messages.forEach(m => { m.topic = topicForPublish(m.topic || ''); });
             const deduped = [];
             for (let i = 0; i < messages.length; i++) {
@@ -258,14 +265,6 @@ async function loadServerStatus() {
     }
 }
 
-function switchTab(tab) {
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
-    document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
-    document.getElementById('tab-' + tab).classList.add('active');
-}
-
 function toggleConnection() {
     if (client && client.connected) {
         disconnect();
@@ -275,15 +274,28 @@ function toggleConnection() {
 }
 
 function connect() {
+    disconnectIntentional = false;
+
+    if (client) {
+        try {
+            client.end();
+        } catch (e) { /* ignore */ }
+        client = null;
+    }
+
     const brokerUrl = document.getElementById('brokerUrl').value;
     const topic = document.getElementById('topic').value;
 
     updateStatus('connecting', '连接中');
 
+    // 每次连接使用新的 clientId，避免多标签/重复连接时服务端「同 id 踢线」导致反复重连
+    var connectClientId = generateClientId();
+
     client = mqtt.connect(brokerUrl, {
-        clientId: clientId,
+        clientId: connectClientId,
         username: currentToken,
-        reconnectPeriod: 5000,
+        reconnectPeriod: 0, // 关闭库内自动重连，由我们在 close 时按需延迟重连，避免循环
+        clean: true,
     });
 
     client.on('connect', () => {
@@ -301,13 +313,19 @@ function connect() {
 
     client.on('message', (topic, payload) => {
         const normTopic = topicForPublish(topic);
-        try {
-            const msg = JSON.parse(payload.toString());
-            if (msg.content === '__auth_check__') return;
-            addMessage(normTopic, msg);
-        } catch (e) {
-            addMessage(normTopic, { content: payload.toString() });
+        var msg;
+        if (payload != null && typeof payload === 'object' && !Array.isArray(payload) && ('content' in payload || 'title' in payload)) {
+            msg = payload;
+        } else {
+            var str = typeof payload === 'string' ? payload : (payload && payload.toString && payload.toString());
+            try {
+                msg = JSON.parse(str);
+            } catch (e) {
+                msg = { content: str };
+            }
         }
+        if (msg.content === '__auth_check__') return;
+        addMessage(normTopic, msg);
     });
 
     client.on('error', (err) => {
@@ -324,6 +342,10 @@ function connect() {
 
     client.on('close', () => {
         updateStatus('disconnected', '离线');
+        if (!disconnectIntentional) {
+            client = null;
+            setTimeout(function () { if (!disconnectIntentional) connect(); }, 3000);
+        }
     });
 
     client.on('reconnect', () => {
@@ -332,6 +354,7 @@ function connect() {
 }
 
 function disconnect() {
+    disconnectIntentional = true;
     if (client) {
         client.end();
         client = null;
@@ -357,7 +380,34 @@ function updateStatus(status, text) {
     }
 }
 
+/** 若 content 是整段 JSON 字符串（未正确解析的回显），解析出 title/content/client/timestamp，保留原 topic */
+function normalizeMessagePayload(msg) {
+    var c = msg.content;
+    if (c !== undefined && c !== null && typeof c === 'object' && (c.title !== undefined || c.content !== undefined)) {
+        var out = { title: c.title, content: c.content, client: c.client, timestamp: c.timestamp };
+        if (msg.topic !== undefined) out.topic = msg.topic;
+        return out;
+    }
+    var raw = (c !== undefined && c !== null) ? String(c).trim().replace(/^\uFEFF/, '') : '';
+    if (raw.length < 10) return msg;
+    var start = raw.indexOf('{');
+    if (start === -1) return msg;
+    var end = raw.lastIndexOf('}');
+    if (end === -1 || end <= start) return msg;
+    raw = raw.substring(start, end + 1);
+    if (raw.indexOf('"content"') === -1 && raw.indexOf('"title"') === -1) return msg;
+    try {
+        var parsed = JSON.parse(raw);
+        if (parsed && (parsed.title !== undefined || parsed.content !== undefined)) {
+            if (msg.topic !== undefined) parsed.topic = msg.topic;
+            return parsed;
+        }
+    } catch (e) { /* ignore */ }
+    return msg;
+}
+
 function addMessage(topic, msg) {
+    msg = normalizeMessagePayload(msg);
     const content = (msg.content !== undefined && msg.content !== null) ? String(msg.content).trim() : JSON.stringify(msg);
     const title = (msg.title !== undefined && msg.title !== null) ? String(msg.title) : '通知';
     // 去重1：刚通过回复栏发送的内容，MQTT 会再推一次
@@ -375,7 +425,11 @@ function addMessage(topic, msg) {
             return;
         }
     }
-    const timestamp = msg.timestamp || new Date().toISOString();
+    var timestamp = msg.timestamp != null ? msg.timestamp : new Date().toISOString();
+    if (typeof timestamp === 'number') {
+        if (timestamp < 1e12) timestamp = timestamp * 1000;
+        timestamp = new Date(timestamp).toISOString();
+    }
     const client = (msg.client !== undefined && msg.client !== null) ? String(msg.client).trim() : '';
 
     // 添加到消息数组开头（主题统一用可发布形式，避免 notice/# 与 notice 各显示一条）
@@ -521,73 +575,15 @@ function executeConfirm() {
     hideConfirm();
 }
 
-/** 发送对话回复：发到当前订阅主题，作为对话中的下一条消息 */
-async function sendReply() {
-    const input = document.getElementById('replyInput');
-    const content = input.value.trim();
-    if (!content) {
-        showToast('请输入回复内容', 'error');
-        return;
-    }
-    const topic = document.getElementById('topic').value.trim();
-    if (!topic) {
-        showToast('请先填写主题', 'error');
-        return;
-    }
-    const btn = document.getElementById('replyBtn');
-    btn.disabled = true;
-    // 先标记“已发送”，避免 MQTT 先于响应到达时重复添加
-    lastSentContent = content;
-    lastSentTime = Date.now();
-    try {
-        const res = await fetch('/webhook', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + currentToken
-            },
-            body: JSON.stringify({ title: '回复', content: content, topic: topic, client: 'web' })
-        });
-        if (res.status === 429) {
-            lastSentContent = '';
-            showToast('请求过于频繁', 'error');
-            return;
-        }
-        if (res.status === 401) {
-            lastSentContent = '';
-            showToast('认证失败', 'error');
-            logout();
-            return;
-        }
-        if (!res.ok) {
-            lastSentContent = '';
-            const data = await res.json().catch(() => ({}));
-            showToast(data.message || '发送失败', 'error');
-            return;
-        }
-        input.value = '';
-        // 乐观更新：用可发布主题（与 MQTT 实际推送的 topic 一致），避免同一条显示两次
-        const publishTopic = topicForPublish(topic);
-        messages.unshift({
-            topic: publishTopic,
-            title: '回复',
-            content: content,
-            timestamp: new Date().toISOString(),
-            client: 'web'
-        });
-        if (messages.length > MAX_MESSAGES) messages = messages.slice(0, MAX_MESSAGES);
-        saveCachedMessages();
-        renderMessages();
-        showToast('回复已发送', 'success');
-    } finally {
-        btn.disabled = false;
-    }
-}
-
+/** 发送消息：主题为空时使用连接栏当前订阅主题 */
 async function sendMessage() {
     const title = document.getElementById('sendTitle').value.trim();
     const content = document.getElementById('sendContent').value.trim();
-    const topic = document.getElementById('sendTopic').value.trim();
+    let topic = document.getElementById('sendTopic').value.trim();
+    if (!topic) {
+        topic = document.getElementById('topic').value.trim();
+        if (topic) topic = topicForPublish(topic);
+    }
 
     if (!content) {
         showToast('请输入消息内容', 'error');
@@ -599,6 +595,9 @@ async function sendMessage() {
 
     btn.disabled = true;
     btn.textContent = '发送中...';
+
+    lastSentContent = content;
+    lastSentTime = Date.now();
 
     try {
         const body = { title: title || '通知', content, client: 'web' };
@@ -613,15 +612,17 @@ async function sendMessage() {
             body: JSON.stringify(body)
         });
 
-        responseBox.style.display = 'block';
-
         if (res.status === 429) {
+            lastSentContent = '';
+            responseBox.style.display = 'block';
             responseBox.className = 'response-box error';
             responseBox.textContent = '❌ 请求过于频繁';
             return;
         }
 
         if (res.status === 401) {
+            lastSentContent = '';
+            responseBox.style.display = 'block';
             responseBox.className = 'response-box error';
             responseBox.textContent = '❌ 认证失败';
             logout();
@@ -631,12 +632,23 @@ async function sendMessage() {
         const data = await res.json();
 
         if (data.success) {
-            responseBox.className = 'response-box success';
-            responseBox.textContent = `✅ ${data.message} (${data.clients} 客户端)`;
-            showToast('发送成功', 'success');
+            responseBox.style.display = 'none';
+            showToast('消息已发送', 'success');
 
             document.getElementById('sendTitle').value = '';
             document.getElementById('sendContent').value = '';
+
+            const publishTopic = topic ? topicForPublish(topic) : topicForPublish(document.getElementById('topic').value.trim() || '');
+            messages.unshift({
+                topic: publishTopic,
+                title: title || '通知',
+                content: content,
+                timestamp: new Date().toISOString(),
+                client: 'web'
+            });
+            if (messages.length > MAX_MESSAGES) messages = messages.slice(0, MAX_MESSAGES);
+            saveCachedMessages();
+            renderMessages();
 
             loadServerStatus();
         } else {
@@ -681,9 +693,7 @@ function showToast(message, type = 'info') {
 
 document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') {
-        if (document.getElementById('tab-send').classList.contains('active')) {
-            sendMessage();
-        }
+        sendMessage();
     }
 });
 

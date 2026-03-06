@@ -251,6 +251,11 @@ func (h *LogHook) OnQosComplete(cl *mqtt.Client, pk packets.Packet) {
 
 func (h *LogHook) OnDisconnect(cl *mqtt.Client, err error, expire bool) {
 	if err != nil {
+		// 客户端主动关闭（如刷新、关页）时常见 "use of closed network connection"，降为 Debug 减少噪音
+		if strings.Contains(err.Error(), "closed network connection") {
+			logger.Debug("MQTT 客户端断开", "client_id", cl.ID, "error", err)
+			return
+		}
 		logger.Info("MQTT 客户端断开", "client_id", cl.ID, "error", err)
 	} else {
 		logger.Info("MQTT 客户端断开", "client_id", cl.ID)
