@@ -4,13 +4,30 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import androidx.core.content.ContextCompat
+import com.github.i2534.notice.R
 import com.github.i2534.notice.util.AppLogger
 import io.noties.markwon.Markwon
+import io.noties.markwon.ext.tables.TablePlugin
 
 class NoticeApp : Application() {
 
-    /** 仅用于渲染文本块（粗体、链接等），图片由 MessageContentRenderer 单独用 ImageView 加载。 */
-    val markwon: Markwon by lazy { Markwon.builder(this).build() }
+    /** 仅用于渲染文本块（粗体、链接、表格等），图片由 MessageContentRenderer 单独用 ImageView 加载。 */
+    val markwon: Markwon by lazy {
+        val density = resources.displayMetrics.density
+        val surfaceVariant = ContextCompat.getColor(this, R.color.surface_variant)
+        val cellPadding = (8 * density).toInt()
+        Markwon.builder(this)
+            .usePlugin(TablePlugin.create { builder ->
+                builder
+                    .tableBorderColor(surfaceVariant)
+                    .tableBorderWidth(density.toInt().coerceAtLeast(1))
+                    .tableHeaderRowBackgroundColor(surfaceVariant)
+                    .tableCellPadding(cellPadding)
+                    .build()
+            })
+            .build()
+    }
 
     companion object {
         const val CHANNEL_SERVICE = "mqtt_service"

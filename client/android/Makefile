@@ -73,15 +73,16 @@ docker:
 		-e ANDROID_USER_HOME=/android-home \
 		-v "$(PWD)/app:/app/app" \
 		-v "$(PWD)/build.gradle.kts:/app/build.gradle.kts:ro" \
+		-v "$(PWD)/settings.gradle.kts:/app/settings.gradle.kts:ro" \
 		-v "$(PWD)/gradle:/app/gradle:ro" \
 		-v "$(GRADLE_CACHE):/gradle-cache" \
 		-v "$(PROJECT_GRADLE):/app/.gradle" \
 		-v "$(ANDROID_HOME_CACHE):/android-home" \
 		-v "$(KOTLIN_CACHE):/app/.kotlin" \
 		notice-android-builder \
-		./gradlew assembleDebug --no-daemon --console=plain --info $$DOCKER_DEBUG_GRADLE_ARGS; \
-	echo ""; \
-	echo "✅ Debug APK 已生成 (versionName=$$DOCKER_DEBUG_VERSION_NAME):"; \
+		./gradlew assembleDebug --no-daemon --console=plain --info $$DOCKER_DEBUG_GRADLE_ARGS && \
+	echo "" && \
+	echo "✅ Debug APK 已生成 (versionName=$$DOCKER_DEBUG_VERSION_NAME):" && \
 	ls -lh app/build/outputs/apk/debug/*.apk
 
 # 签名配置 (通过环境变量传入，默认从 key 文件读取密码)
@@ -115,6 +116,7 @@ docker-release:
 		-e KEY_ALIAS="$(KEY_ALIAS)" \
 		-v "$(PWD)/app:/app/app" \
 		-v "$(PWD)/build.gradle.kts:/app/build.gradle.kts:ro" \
+		-v "$(PWD)/settings.gradle.kts:/app/settings.gradle.kts:ro" \
 		-v "$(PWD)/gradle:/app/gradle:ro" \
 		-v "$(PWD)/release.keystore:/app/release.keystore:ro" \
 		-v "$(GRADLE_CACHE):/gradle-cache" \
@@ -122,10 +124,10 @@ docker-release:
 		-v "$(ANDROID_HOME_CACHE):/android-home" \
 		-v "$(KOTLIN_CACHE):/app/.kotlin" \
 		notice-android-builder \
-		./gradlew assembleRelease --no-daemon --console=plain $(GRADLE_VERSION_ARGS)
-	@echo ""
-	@echo "✅ Release APK 已生成:"
-	@ls -lh app/build/outputs/apk/release/*.apk
+		./gradlew assembleRelease --no-daemon --console=plain $(GRADLE_VERSION_ARGS) && \
+	echo "" && \
+	echo "✅ Release APK 已生成:" && \
+	ls -lh app/build/outputs/apk/release/*.apk
 
 # 强制重新构建 Docker 镜像 (不使用缓存)
 docker-rebuild:
