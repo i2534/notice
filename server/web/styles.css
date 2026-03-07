@@ -598,6 +598,43 @@ body {
     margin: 0.25em 0;
 }
 
+/* Markdown 表格：边框与表头样式 */
+.message-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.4em 0;
+    font-size: 0.9em;
+    background: var(--bg-card);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.message-content thead {
+    background: var(--border);
+}
+
+.message-content th,
+.message-content td {
+    border: 1px solid var(--border);
+    padding: 0.4em 0.6em;
+    text-align: left;
+    line-height: 1.3;
+}
+
+.message-content th {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.message-content tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.message-content tbody tr:hover {
+    background: var(--accent-dim);
+}
+
 .message-topic {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.65rem;

@@ -677,7 +677,7 @@ function renderMarkdown(text) {
     if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return escapeHtml(text);
     try {
         const raw = marked.parse(String(text), { gfm: true, breaks: true });
-        return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'h1', 'h2', 'h3', 'hr'], ALLOWED_ATTR: ['href', 'title', 'src', 'alt'] });
+        return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'h1', 'h2', 'h3', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td'], ALLOWED_ATTR: ['href', 'title', 'src', 'alt'] });
     } catch (e) {
         return escapeHtml(text);
     }

@@ -99,8 +99,9 @@ dependencies {
     // SwipeRefreshLayout
     implementation(libs.androidx.swiperefreshlayout)
 
-    // Markdown 渲染（仅文本块）；图片由 Coil 在 MessageContentRenderer 中单独加载
+    // Markdown 渲染（仅文本块）；图片由 Coil 在 MessageContentRenderer 中单独加载；表格由 ext-tables 渲染
     implementation(libs.markwon.core)
+    implementation(libs.markwon.ext.tables)
     implementation(libs.coil)
 
     // Testing
