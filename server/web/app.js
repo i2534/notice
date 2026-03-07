@@ -8,6 +8,7 @@ let confirmCallback = null; // 确认对话框回调
 let lastSentContent = ''; // 用于 MQTT 去重：刚发送的回复内容
 let lastSentTime = 0;
 let disconnectIntentional = false; // 用户点击「断开」时为 true，避免自动重连循环
+let sendPanelExpanded = false; // 发送面板展开状态，与 localStorage 同步
 
 /** 与 server 一致：订阅主题转成可发布主题（notice/# -> notice），避免乐观更新与 MQTT 回显 topic 不同导致重复显示 */
 function topicForPublish(topic) {
@@ -215,6 +216,13 @@ async function authenticate() {
         document.getElementById('mainContent').classList.add('active');
         document.getElementById('topbarRight').style.display = 'flex';
         document.getElementById('tokenDisplay').textContent = token.substring(0, 6) + '**';
+
+        // 恢复发送面板展开状态（仅当主内容显示时）
+        try {
+            if (localStorage.getItem('sendPanelExpanded') === 'true') {
+                openSendPanel();
+            }
+        } catch (e) { }
 
         loadServerStatus();
         showToast('认证成功', 'success');
@@ -573,6 +581,26 @@ function executeConfirm() {
         confirmCallback();
     }
     hideConfirm();
+}
+
+/** 打开发送面板（隐藏悬浮图标） */
+function openSendPanel() {
+    sendPanelExpanded = true;
+    try { localStorage.setItem('sendPanelExpanded', 'true'); } catch (e) { }
+    const panel = document.getElementById('sendPanel');
+    const fab = document.getElementById('sendFab');
+    if (panel) panel.classList.remove('collapsed');
+    if (fab) fab.classList.add('hidden');
+}
+
+/** 收起发送面板（显示左下角悬浮图标） */
+function closeSendPanel() {
+    sendPanelExpanded = false;
+    try { localStorage.setItem('sendPanelExpanded', 'false'); } catch (e) { }
+    const panel = document.getElementById('sendPanel');
+    const fab = document.getElementById('sendFab');
+    if (panel) panel.classList.add('collapsed');
+    if (fab) fab.classList.remove('hidden');
 }
 
 /** 发送消息：主题为空时使用连接栏当前订阅主题 */

@@ -147,8 +147,12 @@
             </div>
 
             <!-- 发送面板（固定底部） -->
-            <div class="send-panel">
+            <div class="send-panel collapsed" id="sendPanel">
                 <div class="send-form">
+                    <div class="send-panel-header">
+                        <span class="send-panel-title">发送消息</span>
+                        <button type="button" class="secondary small send-panel-collapse" id="sendPanelCollapse" onclick="closeSendPanel()" title="收起">收起</button>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <input type="text" id="sendTitle" placeholder="消息标题">
@@ -177,6 +181,14 @@
                     <div class="response-box" id="sendResponse"></div>
                 </div>
             </div>
+
+            <!-- 左下角悬浮：打开发送面板 -->
+            <button type="button" class="send-fab" id="sendFab" onclick="openSendPanel()" title="发送消息" aria-label="打开发送面板">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
         </div>
     </div>
 

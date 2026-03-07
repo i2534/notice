@@ -671,6 +671,70 @@ body {
     overflow-y: auto;
 }
 
+.send-panel.collapsed {
+    display: none;
+}
+
+.send-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    flex-shrink: 0;
+}
+
+.send-panel-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.send-panel-collapse {
+    flex-shrink: 0;
+}
+
+/* 左下角悬浮图标 - 打开发送面板 */
+.send-fab {
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 100;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: var(--bg-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.send-fab:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.send-fab svg {
+    width: 22px;
+    height: 22px;
+}
+
+.send-fab.hidden {
+    display: none;
+}
+
+.main-content:not(.active) .send-fab {
+    display: none;
+}
+
+.main-content.active .send-fab.hidden {
+    display: none;
+}
+
 .send-form {
     max-width: 600px;
     width: 100%;
