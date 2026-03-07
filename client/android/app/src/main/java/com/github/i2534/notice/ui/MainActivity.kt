@@ -16,8 +16,8 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
-import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -33,8 +33,9 @@ import com.github.i2534.notice.NoticeApp
 import com.github.i2534.notice.R
 import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.databinding.ActivityMainBinding
+import com.github.i2534.notice.databinding.DialogConfirmBinding
+import com.github.i2534.notice.databinding.DialogMessageDetailBinding
 import com.github.i2534.notice.service.MqttService
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -414,17 +415,16 @@ class MainActivity : AppCompatActivity() {
         isDestructive: Boolean = true,
         onConfirm: () -> Unit
     ) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_confirm, null)
-        dialogView.findViewById<TextView>(R.id.dialogTitle).text = title
-        dialogView.findViewById<TextView>(R.id.dialogMessage).text = message
+        val confirmBinding = DialogConfirmBinding.inflate(layoutInflater)
+        confirmBinding.dialogTitle.text = title
+        confirmBinding.dialogMessage.text = message
 
         val dialog = AlertDialog.Builder(this, R.style.Theme_Notice_Dialog)
-            .setView(dialogView)
+            .setView(confirmBinding.root)
             .create()
 
-        dialogView.findViewById<MaterialButton>(R.id.btnPositive).apply {
+        confirmBinding.btnPositive.apply {
             text = positiveText
-            // 非破坏性操作使用主色调
             if (!isDestructive) {
                 backgroundTintList = ContextCompat.getColorStateList(context, R.color.primary)
             }
@@ -433,12 +433,9 @@ class MainActivity : AppCompatActivity() {
                 dialog.dismiss()
             }
         }
-
-        dialogView.findViewById<View>(R.id.btnNegative).apply {
-            (this as? MaterialButton)?.text = negativeText
-            setOnClickListener {
-                dialog.dismiss()
-            }
+        confirmBinding.btnNegative.apply {
+            text = negativeText
+            setOnClickListener { dialog.dismiss() }
         }
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -446,52 +443,39 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMessageDetailDialog(message: NoticeMessage) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_message_detail, null)
+        val detailBinding = DialogMessageDetailBinding.inflate(layoutInflater)
 
-        val dialogTitleView = dialogView.findViewById<TextView>(R.id.dialogTitle)
         if (message.isOutgoing) {
-            dialogTitleView.visibility = View.GONE
+            detailBinding.dialogTitle.visibility = View.GONE
         } else {
-            dialogTitleView.visibility = View.VISIBLE
-            dialogTitleView.text = message.title
+            detailBinding.dialogTitle.visibility = View.VISIBLE
+            detailBinding.dialogTitle.text = message.title
         }
-        dialogView.findViewById<View>(R.id.dialogSentByMe).visibility =
+        detailBinding.dialogSentByMe.visibility =
             if (message.isOutgoing) View.VISIBLE else View.GONE
-        dialogView.findViewById<View>(R.id.dialogHeader).setBackgroundColor(
-            if (message.isOutgoing) ContextCompat.getColor(this, R.color.message_outgoing_bg)
-            else ContextCompat.getColor(this, R.color.surface_variant)
+        detailBinding.dialogHeader.setBackgroundResource(
+            if (message.isOutgoing) R.drawable.bg_dialog_message_header_outgoing
+            else R.drawable.bg_dialog_message_header
         )
         val blocks = ContentBlockParser.parse(message.content)
         MessageContentRenderer.render(
-            dialogView.findViewById(R.id.dialogContentContainer),
+            detailBinding.dialogContentContainer,
             blocks,
-            markwon
+            markwon,
+            textSelectable = true
         )
-        dialogView.findViewById<TextView>(R.id.dialogTopic).text = message.topic
-        dialogView.findViewById<TextView>(R.id.dialogTime).text = message.getFormattedTime()
+        detailBinding.dialogTopic.text = message.topic
+        detailBinding.dialogTime.text = message.getFormattedTime()
 
         val dialog = AlertDialog.Builder(this, R.style.Theme_Notice_Dialog)
-            .setView(dialogView)
+            .setView(detailBinding.root)
             .create()
 
-        // 关闭按钮
-        dialogView.findViewById<View>(R.id.btnClose).setOnClickListener {
+        detailBinding.btnClose.setOnClickListener {
             dialog.dismiss()
         }
 
-        // 回复按钮：指定回复到该消息的主题并关闭弹窗、显示回复区并聚焦输入框
-        dialogView.findViewById<View>(R.id.btnReply).setOnClickListener {
-            replyToTopicOverride = message.topic
-            updateReplyToTopicUI()
-            dialog.dismiss()
-            if (binding.replySection.visibility != View.VISIBLE) {
-                binding.replySection.visibility = View.VISIBLE
-            }
-            binding.replyInput.requestFocus()
-        }
-
-        // 复制按钮
-        dialogView.findViewById<View>(R.id.btnCopy).setOnClickListener {
+        detailBinding.btnCopy.setOnClickListener {
             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val clip = ClipData.newPlainText(message.title, message.content)
             clipboard.setPrimaryClip(clip)
@@ -499,6 +483,14 @@ class MainActivity : AppCompatActivity() {
             dialog.dismiss()
         }
 
+        dialog.window?.apply {
+            setBackgroundDrawableResource(android.R.color.transparent)
+            val maxHeight = (resources.displayMetrics.heightPixels * 0.85).toInt()
+            setLayout(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                maxHeight
+            )
+        }
         dialog.show()
     }
 

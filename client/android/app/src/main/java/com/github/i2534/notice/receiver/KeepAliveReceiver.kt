@@ -15,11 +15,10 @@ class KeepAliveReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "KeepAliveReceiver"
-        const val ACTION_KEEP_ALIVE = "com.github.i2534.notice.KEEP_ALIVE"
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action == ACTION_KEEP_ALIVE) {
+        if (intent?.action == MqttService.ACTION_KEEP_ALIVE) {
             AppLogger.d(TAG, "Keep-alive alarm triggered, checking MQTT connection...")
             
             // 发送 Intent 让 MqttService 检查连接状态

@@ -17,6 +17,8 @@
     <string name="message_detail_reply">回复</string>
     <string name="message_detail_close">关闭</string>
     <string name="message_detail_copied">内容已复制</string>
+    <string name="message_detail_close_content_description">关闭消息详情</string>
+    <string name="message_detail_copy_content_description">复制消息内容</string>
     <string name="message_content_more">更多</string>
     <string name="image_url_fallback_label">图片地址</string>
     <string name="reply_to_topic">回复到: %1$s</string>

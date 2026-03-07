@@ -112,7 +112,7 @@ class MqttService : Service() {
     private val powerManager by lazy { getSystemService(Context.POWER_SERVICE) as PowerManager }
     private val keepAlivePendingIntent by lazy {
         val intent = Intent(this, KeepAliveReceiver::class.java).apply {
-            action = KeepAliveReceiver.ACTION_KEEP_ALIVE
+            action = ACTION_KEEP_ALIVE
         }
         PendingIntent.getBroadcast(
             this, 0, intent,

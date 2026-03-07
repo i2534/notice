@@ -37,6 +37,6 @@ object ContentBlockParser {
         if (after.isNotEmpty()) {
             results.add(ContentBlock.Text(after))
         }
-        return if (results.isEmpty()) listOf(ContentBlock.Text(t)) else results
+        return results
     }
 }

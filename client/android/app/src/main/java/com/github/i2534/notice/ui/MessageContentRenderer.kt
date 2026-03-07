@@ -8,9 +8,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import coil.load
-import coil.request.ErrorResult
-import coil.request.ImageRequest
-import coil.request.SuccessResult
 import com.github.i2534.notice.R
 import io.noties.markwon.Markwon
 
@@ -21,13 +18,15 @@ object MessageContentRenderer {
 
     /**
      * @param touchThrough 为 true 时，文本与 URL 块不消费触摸，点击会传递到父 View（如列表项），用于历史列表
+     * @param textSelectable 为 true 时，文本块可长按选择，用于详情弹窗
      */
     fun render(
         container: ViewGroup,
         blocks: List<ContentBlock>,
         markwon: Markwon,
         maxTextLinesInList: Int? = null,
-        touchThrough: Boolean = false
+        touchThrough: Boolean = false,
+        textSelectable: Boolean = false
     ) {
         container.removeAllViews()
         val inflater = LayoutInflater.from(container.context)
@@ -43,8 +42,9 @@ object MessageContentRenderer {
                         if (maxTextLinesInList != null) {
                             maxLines = maxTextLinesInList
                         }
-                        isClickable = false
-                        isFocusable = false
+                        isClickable = !textSelectable
+                        isFocusable = textSelectable
+                        setTextIsSelectable(textSelectable)
                     }
                     val text = block.text.ifBlank { " " }
                     markwon.setMarkdown(textView, text)

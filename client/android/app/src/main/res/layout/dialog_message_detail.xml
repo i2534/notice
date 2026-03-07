@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 根布局 match_parent 配合窗口固定高度，ScrollView weight=1 占满中间，保证底部按钮始终可见 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:background="@color/surface">
+    android:layout_height="match_parent"
+    android:background="@drawable/dialog_background"
+    android:orientation="vertical">
 
-    <!-- 标题区域 -->
+    <!-- 标题区域（圆角头部） -->
     <LinearLayout
         android:id="@+id/dialogHeader"
         android:layout_width="match_parent"
@@ -14,7 +15,7 @@
         android:orientation="vertical"
         android:paddingHorizontal="16dp"
         android:paddingVertical="12dp"
-        android:background="@color/surface_variant">
+        android:background="@drawable/bg_dialog_message_header">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -30,6 +31,7 @@
                 android:textColor="@color/text_primary"
                 android:textSize="16sp"
                 android:textStyle="bold"
+                android:accessibilityHeading="true"
                 tools:text="消息标题" />
 
             <TextView
@@ -44,31 +46,42 @@
                 tools:visibility="visible" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/dialogTime"
-            android:layout_width="wrap_content"
+        <!-- 时间与主题同一行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/text_hint"
-            android:textSize="11sp"
-            tools:text="01-10 15:30" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
 
-        <TextView
-            android:id="@+id/dialogTopic"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/primary_light"
-            android:textSize="11sp"
-            tools:text="notice/alert" />
+            <TextView
+                android:id="@+id/dialogTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_hint"
+                android:textSize="11sp"
+                tools:text="01-10 15:30" />
 
+            <TextView
+                android:id="@+id/dialogTopic"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/primary_light"
+                android:textSize="11sp"
+                tools:text="notice/alert" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- 内容区域 -->
+    <!-- 内容区域：占满中间空间，底部按钮固定可见 -->
     <ScrollView
+        android:id="@+id/dialogScrollView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:maxHeight="350dp">
+        android:layout_weight="1">
 
         <LinearLayout
             android:id="@+id/dialogContentContainer"
@@ -77,17 +90,17 @@
             android:orientation="vertical"
             android:paddingHorizontal="16dp"
             android:paddingVertical="12dp" />
-
     </ScrollView>
 
     <!-- 按钮区域 -->
     <LinearLayout
+        android:id="@+id/dialogButtons"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="end"
         android:orientation="horizontal"
         android:paddingHorizontal="12dp"
-        android:paddingTop="4dp"
+        android:paddingTop="8dp"
         android:paddingBottom="12dp">
 
         <com.google.android.material.button.MaterialButton
@@ -97,20 +110,9 @@
             android:layout_height="wrap_content"
             android:minHeight="40dp"
             android:minWidth="56dp"
+            android:contentDescription="@string/message_detail_close_content_description"
             android:text="@string/message_detail_close"
             android:textColor="@color/text_secondary" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnReply"
-            style="@style/Widget.Material3.Button.TonalButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:minHeight="40dp"
-            android:minWidth="56dp"
-            android:text="@string/message_detail_reply"
-            android:backgroundTint="@color/primary"
-            android:textColor="@color/white" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCopy"
@@ -120,10 +122,9 @@
             android:layout_marginStart="8dp"
             android:minHeight="40dp"
             android:minWidth="56dp"
+            android:contentDescription="@string/message_detail_copy_content_description"
             android:text="@string/message_detail_copy"
             android:backgroundTint="@color/primary"
             android:textColor="@color/white" />
-
     </LinearLayout>
-
 </LinearLayout>

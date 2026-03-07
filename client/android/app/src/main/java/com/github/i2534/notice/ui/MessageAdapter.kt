@@ -45,11 +45,8 @@ class MessageAdapter(
     fun getSelectedCount(): Int = selectedIds.size
 
     private fun toggleSelection(message: NoticeMessage) {
-        if (selectedIds.contains(message.id)) {
-            selectedIds.remove(message.id)
-        } else {
-            selectedIds.add(message.id)
-        }
+        if (message.id in selectedIds) selectedIds.remove(message.id)
+        else selectedIds.add(message.id)
         notifyDataSetChanged()
         onSelectionChanged?.invoke(selectedIds.size)
     }
