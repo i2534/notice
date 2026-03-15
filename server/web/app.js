@@ -111,7 +111,7 @@ async function fetchMessageHistory() {
             const client = (m.extra && m.extra.client) ? m.extra.client : '';
             return { topic: topicForPublish(m.topic || ''), title: m.title || '通知', content: m.content || '', timestamp: t, client: client };
         };
-        const fromHistory = list.map(toItem).filter(function (m) { return m.content !== '__auth_check__'; });
+        const fromHistory = list.map(toItem).map(normalizeMessagePayload).filter(function (m) { return m.content !== '__auth_check__'; });
         const seen = new Set();
         function key(m) {
             const t = m.timestamp ? new Date(m.timestamp).getTime() : 0;
@@ -158,8 +158,9 @@ function renderMessages() {
     updateDeleteSelectedBtn();
 }
 
-// 创建单条消息的 HTML
+// 创建单条消息的 HTML（展示时解析 content 内嵌套 JSON，避免直接显示整段 JSON）
 function createMessageHTML(msg, idx) {
+    const display = getDisplayMessage(msg);
     const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
     const clientLabel = msg.client ? `来自 ${escapeHtml(msg.client)}` : '';
     return `
@@ -170,10 +171,10 @@ function createMessageHTML(msg, idx) {
                     </label>
                     <div class="message-body">
                         <div class="message-header">
-                            <span class="message-title">${escapeHtml(msg.title)}</span>
+                            <span class="message-title">${escapeHtml(display.title)}</span>
                             <span class="message-meta">${clientLabel ? `<span class="message-client">${clientLabel}</span> ` : ''}<span class="message-time">${time}</span></span>
                         </div>
-                        <div class="message-content">${renderMarkdown(msg.content)}</div>
+                        <div class="message-content">${renderMarkdown(display.content)}</div>
                         <div class="message-topic">${escapeHtml(msg.topic)}</div>
                     </div>
                 </div>
@@ -386,6 +387,32 @@ function updateStatus(status, text) {
         btn.textContent = '连接';
         btn.classList.remove('danger');
     }
+}
+
+/** 展示时用：若 content 为嵌套 JSON 字符串，解析出内部的 title/content 用于显示，避免直接显示整段 JSON */
+function getDisplayMessage(msg) {
+    if (!msg) return { title: '通知', content: '' };
+    var c = msg.content;
+    var raw = (c !== undefined && c !== null) ? String(c).trim().replace(/^\uFEFF/, '') : '';
+    if (raw.length >= 10 && raw.indexOf('{') !== -1 && (raw.indexOf('"content"') !== -1 || raw.indexOf('"title"') !== -1)) {
+        var start = raw.indexOf('{');
+        var end = raw.lastIndexOf('}');
+        if (end > start) {
+            try {
+                var parsed = JSON.parse(raw.substring(start, end + 1));
+                if (parsed && (parsed.title !== undefined || parsed.content !== undefined)) {
+                    return {
+                        title: (parsed.title !== undefined && parsed.title !== null) ? String(parsed.title) : (msg.title != null ? String(msg.title) : '通知'),
+                        content: (parsed.content !== undefined && parsed.content !== null) ? String(parsed.content) : raw
+                    };
+                }
+            } catch (e) { /* ignore */ }
+        }
+    }
+    return {
+        title: (msg.title !== undefined && msg.title !== null) ? String(msg.title) : '通知',
+        content: (c !== undefined && c !== null) ? String(c) : ''
+    };
 }
 
 /** 若 content 是整段 JSON 字符串（未正确解析的回显），解析出 title/content/client/timestamp，保留原 topic */
