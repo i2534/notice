@@ -32,6 +32,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.paging.LoadState
+import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.i2534.notice.NoticeApp
 import com.github.i2534.notice.R
@@ -99,6 +100,18 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
                 }
+            }
+        )
+    }
+
+    private val headerAdapter by lazy {
+        MessageListHeaderAdapter(
+            context = this,
+            markwon = markwon,
+            onLatestCardClick = { mqttService?.clearUnreadCount() },
+            onClearClick = {
+                if (messageAdapter.isSelectMode) deleteSelectedMessages()
+                else showClearAllDialog()
             }
         )
     }
@@ -210,24 +223,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // RecyclerView
+        // RecyclerView：头部（最新消息+历史标题）+ 消息列表，整页单区滚动
         binding.messageList.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = messageAdapter
-        }
-
-        // 清空按钮（正常模式：清空全部，多选模式：删除选中）
-        binding.btnClear.setOnClickListener {
-            if (messageAdapter.isSelectMode) {
-                deleteSelectedMessages()
-            } else {
-                showClearAllDialog()
-            }
-        }
-
-        // 点击最新消息卡片清除未读计数
-        binding.latestMessageCard.setOnClickListener {
-            mqttService?.clearUnreadCount()
+            adapter = ConcatAdapter(headerAdapter, messageAdapter)
         }
 
         // 对话回复栏：不按圆角 outline 裁切子 View，避免麦克风图标被裁
@@ -547,29 +546,10 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            // 观察最新消息（无缓存时从 URL 下载并写入缓存，再按有缓存逻辑渲染）
+            // 观察最新消息（头部在 MessageListHeaderAdapter 内渲染）
             lifecycleScope.launch {
                 service.latestMessage.collectLatest { message ->
-                    binding.latestMessageCard.visibility = View.VISIBLE
-                    binding.latestTitle.text = message.title
-                    val blocks = ContentBlockParser.parse(message.content)
-                    MessageContentRenderer.render(
-                        binding.latestContentContainer,
-                        blocks,
-                        markwon,
-                        mediaCachePathByUrl = null,
-                        showUrlWhenNoCache = false
-                    )
-                    val map = MediaCacheLoader.ensureMediaAndImageCache(applicationContext, message.content)
-                    MessageContentRenderer.render(
-                        binding.latestContentContainer,
-                        blocks,
-                        markwon,
-                        mediaCachePathByUrl = if (map.isEmpty()) null else map,
-                        showUrlWhenNoCache = true
-                    )
-                    MessageContentRenderer.requestFocusOnFirstVisiblePlayRow(binding.latestContentContainer)
-                    binding.latestTime.text = message.getFormattedTime()
+                    headerAdapter.latestMessage = message
                 }
             }
 
@@ -577,7 +557,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSelectModeUI() {
-        binding.btnClear.text = getString(R.string.btn_delete_selected)
+        headerAdapter.isSelectMode = true
         binding.toolbar.title = getString(R.string.select_mode_title, messageAdapter.getSelectedCount())
     }
 
@@ -587,7 +567,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun exitSelectMode() {
         messageAdapter.exitSelectMode()
-        binding.btnClear.text = getString(R.string.clear_history)
+        headerAdapter.isSelectMode = false
         binding.toolbar.title = getString(R.string.app_name)
     }
 
@@ -615,7 +595,7 @@ class MainActivity : AppCompatActivity() {
             message = getString(R.string.clear_all_confirm),
             onConfirm = {
                 mqttService?.clearMessages()
-                binding.latestMessageCard.visibility = View.GONE
+                headerAdapter.latestMessage = null
             }
         )
     }
