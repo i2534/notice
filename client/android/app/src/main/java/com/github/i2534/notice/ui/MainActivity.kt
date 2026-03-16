@@ -431,6 +431,7 @@ class MainActivity : AppCompatActivity() {
             isRecording = true
             voiceRecordingStartMs = System.currentTimeMillis()
             binding.voiceHoldToTalk.text = getString(R.string.voice_recording)
+            binding.voiceHoldToTalk.setBackgroundResource(R.drawable.bg_hold_to_talk_recording)
         } catch (e: Exception) {
             currentRecordFile = null
             file.delete()
@@ -445,6 +446,7 @@ class MainActivity : AppCompatActivity() {
         currentRecordFile = null
         isRecording = false
         binding.voiceHoldToTalk.text = getString(R.string.voice_hold_to_talk)
+        binding.voiceHoldToTalk.setBackgroundResource(R.drawable.bg_hold_to_talk)
         if (recorder == null || file == null) return
         try {
             recorder.stop()

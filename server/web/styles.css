@@ -25,7 +25,7 @@ body {
 }
 
 body {
-    font-family: 'Noto Sans SC', -apple-system, sans-serif;
+    font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     background-image:
@@ -76,7 +76,7 @@ body {
     padding: 0.3rem 0.6rem;
     background: var(--bg-secondary);
     border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.75rem;
     color: var(--text-secondary);
 }
@@ -86,7 +86,7 @@ body {
     gap: 0.75rem;
     font-size: 0.75rem;
     color: var(--text-secondary);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
 }
 
 /* 认证区域 */
@@ -187,7 +187,7 @@ body {
     border: 1px solid var(--border);
     border-radius: 4px;
     color: var(--text-primary);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.8rem;
 }
 
@@ -465,7 +465,7 @@ body {
 }
 
 .message-time {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.65rem;
     color: var(--text-secondary);
 }
@@ -491,7 +491,7 @@ body {
     background: var(--bg-card);
     padding: 0.1em 0.35em;
     border-radius: 4px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.9em;
 }
 
@@ -656,7 +656,7 @@ body {
 }
 
 .message-topic {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.65rem;
     color: var(--text-secondary);
     margin-top: 0.3rem;
@@ -791,7 +791,7 @@ body {
     border: 1px solid var(--border);
     border-radius: 4px;
     color: var(--text-primary);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.8rem;
 }
 
@@ -805,7 +805,7 @@ body {
     resize: vertical;
     min-height: 56px;
     max-height: 120px;
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 .form-group {
@@ -838,7 +838,7 @@ textarea {
     border: 1px solid var(--border);
     border-radius: 6px;
     color: var(--text-primary);
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.85rem;
 }
 
@@ -851,7 +851,7 @@ textarea:focus {
 textarea {
     resize: vertical;
     min-height: 120px;
-    font-family: 'Noto Sans SC', sans-serif;
+    font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 /* 按钮 */
@@ -967,7 +967,7 @@ button.full {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 6px;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.8rem;
     display: none;
 }
@@ -1101,7 +1101,7 @@ button.full {
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 0.75rem;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
     font-size: 0.75rem;
     color: var(--accent);
     white-space: pre-wrap;

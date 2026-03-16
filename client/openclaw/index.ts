@@ -9,7 +9,9 @@
  *   brokerUrl, token, topic (default notice/openclaw), serverUrl (optional, for image upload)
  */
 import fs from "fs/promises";
+import { existsSync } from "fs";
 import path from "path";
+import { spawn } from "node:child_process";
 import type {
     ChannelConfigSchema,
     OpenClawPluginApi,
@@ -366,6 +368,81 @@ async function sendReplyChunked(
     return true;
 }
 
+/** 若 STT 在此时长（毫秒）内返回且结果为空，则尝试用 models 中的 CLI 直接调用 */
+const FAST_EMPTY_THRESHOLD_MS = 2000;
+
+interface CliModel {
+    command: string;
+    args: string[];
+    timeoutSeconds: number;
+}
+
+function getFirstCliModel(cfg: Record<string, unknown>): CliModel | null {
+    const tools = cfg?.tools as Record<string, unknown> | undefined;
+    const media = tools?.media as Record<string, unknown> | undefined;
+    const audio = media?.audio as Record<string, unknown> | undefined;
+    if (!audio || audio.enabled === false) return null;
+    const models = audio.models as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(models)) return null;
+    for (const m of models) {
+        if (m?.type === "cli" && typeof m?.command === "string") {
+            const args = Array.isArray(m.args)
+                ? (m.args as string[]).map((a) => String(a))
+                : [];
+            const timeoutSeconds =
+                typeof m.timeoutSeconds === "number" && m.timeoutSeconds > 0
+                    ? m.timeoutSeconds
+                    : 60;
+            return { command: m.command, args, timeoutSeconds };
+        }
+    }
+    return null;
+}
+
+/** 使用配置中的 CLI 直接转写；占位符 {{MediaPath}} 替换为 filePath；结果从 stdout 读取。command 需为绝对路径。 */
+function runCliTranscribe(filePath: string, model: CliModel): Promise<string> {
+    const timeoutMs = model.timeoutSeconds * 1000;
+    const args = model.args.map((a) =>
+        a === "{{MediaPath}}" || a === "{filePath}" ? filePath : a
+    );
+    return new Promise((resolve) => {
+        const child = spawn(model.command, args, {
+            stdio: ["ignore", "pipe", "pipe"],
+        });
+        let stdout = "";
+        let stderr = "";
+        child.stdout?.setEncoding("utf8");
+        child.stdout?.on("data", (chunk) => {
+            stdout += chunk;
+        });
+        child.stderr?.setEncoding("utf8");
+        child.stderr?.on("data", (chunk) => {
+            stderr += chunk;
+        });
+        const timer = setTimeout(() => {
+            child.kill("SIGTERM");
+            try {
+                child.kill("SIGKILL");
+            } catch {
+                /* ignore */
+            }
+            resolve(stdout.trim());
+        }, timeoutMs);
+        child.once("close", () => {
+            clearTimeout(timer);
+            if (stderr) {
+                pluginLogger.info("[notice] runCliTranscribe stderr: " + stderr.slice(0, 200));
+            }
+            resolve(stdout.trim());
+        });
+        child.once("error", (err) => {
+            clearTimeout(timer);
+            pluginLogger.warn("[notice] runCliTranscribe error " + String(err));
+            resolve("");
+        });
+    });
+}
+
 /** 发送「请确认语音转写」到 client（content 为 JSON：type asr_confirm_request, text） */
 async function sendAsrConfirmRequest(publishTopic: string, draftText: string): Promise<boolean> {
     const content = JSON.stringify({ type: "asr_confirm_request", text: draftText });
@@ -383,19 +460,44 @@ async function processOneVoiceUrl(
 ): Promise<void> {
     const key = pendingKey(topicStr, clientId);
     const tmpPath = await downloadMediaToTemp(audioUrl);
+
     let draftText = "";
-    if (tmpPath) {
+    if (tmpPath && existsSync(tmpPath)) {
         try {
             const transcribe = api.runtime?.stt?.transcribeAudioFile;
             if (transcribe) {
+                pluginLogger.info("[notice] processOneVoiceUrl transcribing path=" + tmpPath);
+                const t0 = Date.now();
                 const result = await transcribe({ filePath: tmpPath, cfg });
-                draftText = (result?.text?.trim() ?? "") || "[语音识别失败]";
+                const raw = result?.text?.trim() ?? "";
+                const elapsed = Date.now() - t0;
+                if (raw) {
+                    draftText = raw;
+                    pluginLogger.info("[notice] processOneVoiceUrl transcribe ok len=" + raw.length + " preview=" + (raw.slice(0, 40) + (raw.length > 40 ? "..." : "")));
+                } else if (elapsed < FAST_EMPTY_THRESHOLD_MS) {
+                    const cliModel = getFirstCliModel(cfg);
+                    if (cliModel) {
+                        pluginLogger.info("[notice] processOneVoiceUrl fallback: running CLI (empty in " + elapsed + "ms)");
+                        const cliText = await runCliTranscribe(tmpPath, cliModel);
+                        draftText = cliText || "[语音识别失败]";
+                        if (cliText) {
+                            pluginLogger.info("[notice] processOneVoiceUrl fallback ok len=" + cliText.length);
+                        }
+                    } else {
+                        draftText = "[语音识别失败]";
+                        pluginLogger.warn("[notice] processOneVoiceUrl transcribe returned empty text (no CLI fallback in config)");
+                    }
+                } else {
+                    draftText = "[语音识别失败]";
+                    pluginLogger.warn("[notice] processOneVoiceUrl transcribe returned empty text");
+                }
             } else {
+                pluginLogger.warn("[notice] processOneVoiceUrl STT not configured (no runtime.stt.transcribeAudioFile)");
                 draftText =
                     "[语音消息，未配置转写] 请在 Openclaw 主配置（如 ~/.openclaw/openclaw.json）中配置 tools.media.audio 以启用语音转写。详见：https://openclaw.dev/docs#tools-media";
             }
         } catch (e) {
-            pluginLogger.warn("[notice] transcribeAudioFile error " + String(e));
+            pluginLogger.warn("[notice] processOneVoiceUrl transcribeAudioFile error " + String(e));
             draftText = "[语音识别失败]";
         } finally {
             try {
@@ -407,12 +509,15 @@ async function processOneVoiceUrl(
     } else {
         draftText = "[语音下载失败]";
     }
+
     const pubTopic = topicForPublish(topicStr);
+    pluginLogger.info("[notice] processOneVoiceUrl sending asr_confirm_request draftLen=" + draftText.length + " topic=" + pubTopic);
     const sendOk = await sendAsrConfirmRequest(pubTopic, draftText);
     if (sendOk) {
         pendingAsrConfirm.set(key, { draftText, at: Date.now() });
+        pluginLogger.info("[notice] processOneVoiceUrl sent ok pending key=" + key);
     } else {
-        pluginLogger.warn("[notice] Send asr_confirm_request failed, skipping pending for key");
+        pluginLogger.warn("[notice] processOneVoiceUrl send asr_confirm_request failed, skipping pending for key=" + key);
         await processNextInQueue(api, key);
     }
 }

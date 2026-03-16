@@ -74,3 +74,19 @@ channels:
 - **回信**：Agent 回复通过 MQTT 发回来信同一 topic，实现「收信 → 处理 → 回信」闭环。
 - **媒体/图片**：回信时可带 `mediaUrl` 或 `mediaUrls`（或正文中的本地路径）。配置 `serverUrl` 与 `token` 后，本地图片会先上传到 Notice 的 `POST /api/upload`，返回的图片 URL 以 Markdown `![](url)` 写入内容；已是 `http(s):` 或协议相对 `//host/path` 的 URL 会直接使用，不再当成本地文件上传。
 - **语音消息**：收到语音（消息内容为音频 URL）时，插件会下载音频并调用 Openclaw 的 `runtime.stt.transcribeAudioFile` 做转写，再通过 MQTT 发送「请确认语音转写」给客户端；用户确认后转写文本才投递给 Agent。语音转写依赖 Openclaw 主配置中的 **`tools.media.audio`**（如 `~/.openclaw/openclaw.json`），详见 [Openclaw 文档](https://openclaw.dev/docs#tools-media)。未配置时用户端会看到提示文案并附带配置说明。
+
+## Openclaw STT 处理流程（源码说明）
+
+插件调用 `api.runtime.stt.transcribeAudioFile({ filePath, cfg })` 时，Openclaw 内部流程如下（基于 `openclaw/openclaw` 仓库 `src/media-understanding/`）：
+
+1. **入口** `transcribe-audio.ts`：接收 `cfg`（应为完整 OpenClawConfig），调用 `runAudioTranscription({ ctx, cfg, agentDir })`。
+2. **runner** `audio-transcription-runner.ts`：用 `ctx` 构造附件列表，然后调用 `runCapability({ capability: "audio", cfg, config: cfg.tools?.media?.audio, ... })`。即 **config 来自 `cfg.tools.media.audio`**。
+3. **runCapability**（`runner.ts`）：
+   - 若 `config?.enabled === false` 或 scope 拒绝，直接返回无输出。
+   - **entries 来源**：先 `resolveModelEntries({ cfg, capability, config })` 得到 `config?.models` 与 `cfg.tools?.media?.models` 中带 `audio` capability 的条目；若 **entries 为空**，再 `resolveAutoEntries(...)` 自动检测：本地 CLI（sherpa-onnx → whisper-cli → whisper）→ Gemini CLI → 按 `AUTO_AUDIO_KEY_PROVIDERS` 顺序用各 provider 的 key。
+   - 对每个 attachment 调用 **runAttachmentEntries**：按 entries 顺序依次尝试，直到某个 entry 返回非 null 结果。
+4. **runAttachmentEntries**（`runner.ts`）：遍历 `entries`，对每条调用 `runProviderEntry` 或 `runCliEntry`。**只要 `result` 非 null，就立即 `return { output: result, attempts }`，不再尝试后续 entry。** 若 result 为 null，会 push 一条 `outcome: "skipped", reason: "empty output"` 并继续下一个 entry。
+5. **runProviderEntry**（`runner.entries.ts`，audio 分支）：调用 provider 的 `transcribeAudio`，然后 **无条件** `return { kind: "audio.transcription", text: trimOutput(result.text, maxChars), ... }`。**即使 `result.text` 为空字符串，也返回该对象（truthy），不会返回 null。**
+6. **runCliEntry**（`runner.entries.ts`）：CLI 输出解析后若 `text` 为空会 **`return null`**，从而触发对下一个 entry 的回退。
+
+因此：**当第一个尝试的是 provider（如 OpenAI）且该 provider 返回空文本时，Openclaw 会认为本次转写“成功”并返回空字符串，不会回退到 `tools.media.audio.models` 中的下一个或 auto 检测到的下一个。** 只有抛错、或走 CLI 且 CLI 输出为空时才会试下一个。若需“空结果也回退”，需在 Openclaw 的 `runProviderEntry` 中对 audio 的 `result.text` 做空判断并返回 null（与 `runCliEntry` 一致）。
