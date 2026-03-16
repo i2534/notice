@@ -40,6 +40,12 @@ interface MessageDao {
     suspend fun insertAll(messages: List<NoticeMessage>)
 
     /**
+     * 按 id 列表查询消息（用于删除前提取 content 做语音缓存清理）
+     */
+    @Query("SELECT * FROM messages WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<String>): List<NoticeMessage>
+
+    /**
      * 删除单条消息
      */
     @Query("DELETE FROM messages WHERE id = :messageId")

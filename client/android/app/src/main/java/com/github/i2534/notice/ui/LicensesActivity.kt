@@ -72,9 +72,12 @@ class LicensesActivity : AppCompatActivity() {
             }
 
             val content = inflater.inflate(R.layout.item_license, card, false)
-            content.findViewById<TextView>(R.id.licenseName).text = license.name
-            content.findViewById<TextView>(R.id.licenseAuthor).text = license.author
-            content.findViewById<TextView>(R.id.licenseType).text = license.license
+            val nameView = content.findViewById<TextView>(R.id.licenseName)
+            val authorView = content.findViewById<TextView>(R.id.licenseAuthor)
+            val typeView = content.findViewById<TextView>(R.id.licenseType)
+            nameView.text = license.name
+            authorView.text = license.author
+            typeView.text = license.license
 
             card.addView(content)
             binding.licensesContainer.addView(card)

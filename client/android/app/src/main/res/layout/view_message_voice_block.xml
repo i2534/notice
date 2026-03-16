@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 语音块：有缓存显示播放，无缓存显示链接（与图片地址同款样式） -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="48dp">
+
+    <TextView
+        android:id="@+id/voiceBlockUrlFallback"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="12dp"
+        android:paddingStart="14dp"
+        android:visibility="gone"
+        android:background="@drawable/bg_url_fallback"
+        android:textColor="@color/primary_light"
+        android:textSize="13sp"
+        android:lineSpacingMultiplier="1.2"
+        android:textIsSelectable="true"
+        tools:text="https://example.com/api/media?n=..."
+        tools:visibility="visible" />
+
+    <LinearLayout
+        android:id="@+id/voiceBlockPlayRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:paddingStart="14dp"
+        android:visibility="gone"
+        android:background="@drawable/bg_voice_play_row"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        tools:visibility="visible">
+
+        <ImageView
+            android:id="@+id/voiceBlockPlayIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_play"
+            android:contentDescription="@null"
+            tools:ignore="ContentDescription" />
+
+        <TextView
+            android:id="@+id/voiceBlockPlayLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/voice_play_label"
+            android:textColor="@color/primary_light"
+            android:textSize="13sp" />
+    </LinearLayout>
+</FrameLayout>

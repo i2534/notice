@@ -25,6 +25,7 @@ import com.github.i2534.notice.data.AppDatabase
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.data.NoticeMessage
+import com.github.i2534.notice.ui.ContentBlockParser
 import com.github.i2534.notice.receiver.KeepAliveReceiver
 import com.github.i2534.notice.ui.MainActivity
 import com.github.i2534.notice.util.AppLogger
@@ -72,6 +73,9 @@ class MqttService : Service() {
         
         // Doze 保活闹钟间隔（10 分钟）
         private const val KEEP_ALIVE_INTERVAL = 10 * 60 * 1000L
+
+        private const val PAGING_PAGE_SIZE = 20
+        private const val PAGING_INITIAL_LOAD_SIZE = 40
     }
 
     private val binder = LocalBinder()
@@ -83,6 +87,7 @@ class MqttService : Service() {
     private val configStore by lazy { MqttConfigStore(this) }
     private val database by lazy { AppDatabase.getInstance(this) }
     private val messageDao by lazy { database.messageDao() }
+    private val mediaCacheDao by lazy { database.mediaCacheDao() }
 
     private val messageIdCounter = AtomicInteger(2000)
 
@@ -149,9 +154,9 @@ class MqttService : Service() {
         .flatMapLatest {
             Pager(
                 config = PagingConfig(
-                    pageSize = 20,
+                    pageSize = PAGING_PAGE_SIZE,
                     enablePlaceholders = false,
-                    initialLoadSize = 40
+                    initialLoadSize = PAGING_INITIAL_LOAD_SIZE
                 ),
                 pagingSourceFactory = { messageDao.getMessagesPaging() }
             ).flow
@@ -649,6 +654,9 @@ class MqttService : Service() {
     fun clearMessages() {
         clearUnreadCount()
         scope.launch {
+            val paths = mediaCacheDao.getAllLocalPaths()
+            paths.forEach { path -> java.io.File(path).delete() }
+            mediaCacheDao.deleteAll()
             messageDao.deleteAll()
             listRefreshTrigger.emit(Unit)
         }
@@ -663,6 +671,13 @@ class MqttService : Service() {
 
     fun deleteMessages(messageIds: Set<String>) {
         scope.launch {
+            val messages = messageDao.getByIds(messageIds.toList())
+            val urls = messages.flatMap { ContentBlockParser.extractMediaUrls(it.content) }.distinct()
+            if (urls.isNotEmpty()) {
+                val entities = mediaCacheDao.getByUrls(urls)
+                entities.forEach { java.io.File(it.localPath).delete() }
+                mediaCacheDao.deleteByUrls(urls)
+            }
             messageDao.deleteByIds(messageIds.toList())
             listRefreshTrigger.emit(Unit)
         }

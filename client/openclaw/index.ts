@@ -13,6 +13,7 @@ import path from "path";
 import type {
     ChannelConfigSchema,
     OpenClawPluginApi,
+    PluginLogger,
     PluginRuntime,
 } from "openclaw/plugin-sdk";
 import mqtt from "mqtt";
@@ -26,6 +27,34 @@ const DEFAULT_TOPIC = "notice/openclaw";
 const OUTBOUND_CLIENT_ID = "openclaw";
 const NOTICE_MAX_CONTENT_LENGTH = 1024;
 const MAX_RECENT_MESSAGES = 50;
+const PENDING_ASR_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
+const MAX_VOICE_QUEUE_PER_KEY = 20;
+
+/** key 分隔符（topic/client 中不会出现），避免 topic 含 \n 时反解错误 */
+const PENDING_KEY_SEP = "\x00";
+
+/** 待确认语音转写：key = topic + SEP + client，同一 key 同时只有一条在等待确认 */
+const pendingAsrConfirm = new Map<string, { draftText: string; at: number }>();
+
+/** 同一 (topic, client) 下连续多条语音 URL 排队，当前条确认或超时后处理下一条 */
+const voiceQueueByKey = new Map<string, string[]>();
+
+function pendingKey(topic: string, client: string): string {
+    return topic + PENDING_KEY_SEP + (client || "unknown");
+}
+
+/** 清理超时的待确认项，返回被清理的 key 列表，便于后续处理该 key 的队列下一项 */
+function prunePendingAsrConfirm(): string[] {
+    const now = Date.now();
+    const pruned: string[] = [];
+    for (const [k, v] of pendingAsrConfirm.entries()) {
+        if (now - v.at > PENDING_ASR_TIMEOUT_MS) {
+            pendingAsrConfirm.delete(k);
+            pruned.push(k);
+        }
+    }
+    return pruned;
+}
 
 // ---------------------------------------------------------------------------
 // 配置与账号
@@ -75,10 +104,10 @@ function getServerBaseUrl(cfg: Record<string, unknown>): string | null {
 let mqttClient: mqtt.MqttClient | null = null;
 
 // 插件 logger，在 register 时注入，供发送等逻辑打日志
-type PluginLog = (msg: string, ...args: unknown[]) => void;
-let pluginLogger: { info: PluginLog; warn: PluginLog } = {
+let pluginLogger: PluginLogger = {
     info: (msg, ...args) => console.log("[notice]", msg, ...args),
     warn: (msg, ...args) => console.warn("[notice]", msg, ...args),
+    error: (msg, ...args) => console.error("[notice]", msg, ...args),
 };
 
 /** 订阅主题转可发布主题（与 Notice Server topicForPublish 一致） */
@@ -137,6 +166,98 @@ function isLocalPath(s: string): boolean {
 
 const IMAGE_EXT_REGEX = /\/[^\s:]+\.(?:png|jpe?g|gif|webp)/gi;
 
+/** 匹配 Notice 多媒体签名 URL（/api/media?n=...&e=...&s=...） */
+const MEDIA_URL_REGEX = /https?:\/\/[^\s"'<>]+\/api\/media\?[^\s"'<>]+/gi;
+
+/** 音频扩展名（与 server 的 media 允许扩展名及 web isAudioUrl 一致） */
+const AUDIO_EXT = /\.(m4a|mp3|webm|ogg|wav|aac|opus|weba)$/i;
+
+/** 从 /api/media URL 的 n= 参数或 path 中解析音频扩展名（含点，如 .m4a），无法推断时返回 .m4a */
+function getAudioExtensionFromUrl(url: string): string {
+    if (!url || typeof url !== "string") return ".m4a";
+    const decoded = url.replace(/&amp;/gi, "&");
+    const pathPart = decoded.split("#")[0].split("?")[0];
+    const pathMatch = pathPart.match(AUDIO_EXT);
+    if (pathMatch) return pathMatch[0].toLowerCase();
+    const qs = decoded.split("#")[0];
+    const qi = qs.indexOf("?");
+    if (qi >= 0) {
+        for (const part of qs.slice(qi + 1).split("&")) {
+            const eq = part.indexOf("=");
+            if (eq > 0 && part.slice(0, eq).toLowerCase() === "n") {
+                try {
+                    const val = decodeURIComponent(part.slice(eq + 1));
+                    const m = val.match(AUDIO_EXT);
+                    if (m) return m[0].toLowerCase();
+                } catch {
+                    /* ignore */
+                }
+                break;
+            }
+        }
+    }
+    return ".m4a";
+}
+
+/** 判断 /api/media URL 是否为音频（根据 n= 参数或 path 的扩展名） */
+function isAudioMediaUrl(url: string): boolean {
+    if (!url || typeof url !== "string") return false;
+    const decoded = url.replace(/&amp;/gi, "&");
+    const pathPart = decoded.split("#")[0].split("?")[0];
+    if (AUDIO_EXT.test(pathPart)) return true;
+    const qs = decoded.split("#")[0];
+    const qi = qs.indexOf("?");
+    if (qi >= 0) {
+        for (const part of qs.slice(qi + 1).split("&")) {
+            const eq = part.indexOf("=");
+            if (eq > 0 && part.slice(0, eq).toLowerCase() === "n") {
+                try {
+                    const val = decodeURIComponent(part.slice(eq + 1));
+                    if (AUDIO_EXT.test(val)) return true;
+                } catch {
+                    /* ignore */
+                }
+                break;
+            }
+        }
+    }
+    return false;
+}
+
+function extractMediaUrls(text: string): string[] {
+    if (!text || typeof text !== "string") return [];
+    const out: string[] = [];
+    let m: RegExpExecArray | null;
+    MEDIA_URL_REGEX.lastIndex = 0;
+    while ((m = MEDIA_URL_REGEX.exec(text)) !== null) {
+        const u = m[0];
+        if (!out.includes(u)) out.push(u);
+    }
+    return out;
+}
+
+/** 下载 URL 到临时文件，返回临时文件路径；失败返回 null。带扩展名便于 ASR 识别格式。 */
+async function downloadMediaToTemp(url: string): Promise<string | null> {
+    const os = await import("os");
+    const tmpDir = os.tmpdir();
+    const ext = getAudioExtensionFromUrl(url);
+    const name = "notice_media_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10) + ext;
+    const tmpPath = path.join(tmpDir, name);
+    try {
+        const res = await fetch(url);
+        if (!res.ok) {
+            pluginLogger.warn("[notice] Download media failed url=" + url.slice(0, 80) + " status=" + res.status);
+            return null;
+        }
+        const buf = Buffer.from(await res.arrayBuffer());
+        await fs.writeFile(tmpPath, buf);
+        return tmpPath;
+    } catch (e) {
+        pluginLogger.warn("[notice] Download media error " + String(e));
+        return null;
+    }
+}
+
 /** 从文本中提取可能是本地图片的绝对路径（如 /home/.../xxx.png）。 */
 function extractLocalImagePathsFromText(text: string): string[] {
     if (!text || typeof text !== "string") return [];
@@ -158,7 +279,7 @@ async function uploadImagesToNotice(
     serverBaseUrl: string,
     token: string,
     filePaths: string[],
-    log: { info: PluginLog; warn: PluginLog }
+    log: PluginLogger
 ): Promise<string[]> {
     const toUpload: { buffer: Buffer; filename: string }[] = [];
     for (const p of filePaths) {
@@ -230,7 +351,7 @@ function chunkTextForNotice(text: string, maxLen: number = NOTICE_MAX_CONTENT_LE
 async function sendReplyChunked(
     rawTopic: string,
     text: string,
-    log: { warn: PluginLog }
+    log: Pick<PluginLogger, "warn">
 ): Promise<boolean> {
     const topic = topicForPublish(rawTopic);
     const chunks = chunkTextForNotice(text);
@@ -243,6 +364,73 @@ async function sendReplyChunked(
     }
     pluginLogger.info("[notice] Reply sent topic=" + topic + " chunks=" + chunks.length);
     return true;
+}
+
+/** 发送「请确认语音转写」到 client（content 为 JSON：type asr_confirm_request, text） */
+async function sendAsrConfirmRequest(publishTopic: string, draftText: string): Promise<boolean> {
+    const content = JSON.stringify({ type: "asr_confirm_request", text: draftText });
+    const ok = await sendViaMqtt(publishTopic, content, "请确认语音转写");
+    return ok.ok;
+}
+
+/** 处理单条语音 URL：下载 → 使用 Openclaw runtime.stt.transcribeAudioFile 转写 → 发送请确认成功后才写入 pending */
+async function processOneVoiceUrl(
+    api: OpenClawPluginApi,
+    cfg: Record<string, unknown>,
+    topicStr: string,
+    clientId: string,
+    audioUrl: string
+): Promise<void> {
+    const key = pendingKey(topicStr, clientId);
+    const tmpPath = await downloadMediaToTemp(audioUrl);
+    let draftText = "";
+    if (tmpPath) {
+        try {
+            const transcribe = api.runtime?.stt?.transcribeAudioFile;
+            if (transcribe) {
+                const result = await transcribe({ filePath: tmpPath, cfg });
+                draftText = (result?.text?.trim() ?? "") || "[语音识别失败]";
+            } else {
+                draftText =
+                    "[语音消息，未配置转写] 请在 Openclaw 主配置（如 ~/.openclaw/openclaw.json）中配置 tools.media.audio 以启用语音转写。详见：https://openclaw.dev/docs#tools-media";
+            }
+        } catch (e) {
+            pluginLogger.warn("[notice] transcribeAudioFile error " + String(e));
+            draftText = "[语音识别失败]";
+        } finally {
+            try {
+                await fs.unlink(tmpPath);
+            } catch {
+                /* ignore */
+            }
+        }
+    } else {
+        draftText = "[语音下载失败]";
+    }
+    const pubTopic = topicForPublish(topicStr);
+    const sendOk = await sendAsrConfirmRequest(pubTopic, draftText);
+    if (sendOk) {
+        pendingAsrConfirm.set(key, { draftText, at: Date.now() });
+    } else {
+        pluginLogger.warn("[notice] Send asr_confirm_request failed, skipping pending for key");
+        await processNextInQueue(api, key);
+    }
+}
+
+/** 从 key 对应队列取出一条 URL 并处理；无队列或队列空则不再操作 */
+async function processNextInQueue(api: OpenClawPluginApi, key: string): Promise<void> {
+    const sepIndex = key.indexOf(PENDING_KEY_SEP);
+    const topicStr = sepIndex >= 0 ? key.slice(0, sepIndex) : key;
+    const clientId = sepIndex >= 0 ? key.slice(sepIndex + 1) || "unknown" : "unknown";
+    const queue = voiceQueueByKey.get(key);
+    if (!queue || queue.length === 0) {
+        voiceQueueByKey.delete(key);
+        return;
+    }
+    const url = queue.shift()!;
+    if (queue.length === 0) voiceQueueByKey.delete(key);
+    const cfg = api.config ?? {};
+    await processOneVoiceUrl(api, cfg, topicStr, clientId, url);
 }
 
 // ---------------------------------------------------------------------------
@@ -440,28 +628,13 @@ function getHooksConfig(cfg: Record<string, unknown>): {
 } {
     const hooks = cfg.hooks as { enabled?: boolean; token?: string; path?: string } | undefined;
     const port = (cfg.gateway as { port?: number } | undefined)?.port ?? 18789;
-    const path = ((hooks?.path ?? "/hooks") as string).replace(/\/+$/, "");
+    const hookPath = ((hooks?.path ?? "/hooks") as string).replace(/\/+$/, "");
     return {
         port,
-        path,
+        path: hookPath,
         enabled: Boolean(hooks?.enabled && hooks?.token),
         token: String(hooks?.token ?? ""),
     };
-}
-
-function buildReplyText(payload: {
-    text?: string;
-    mediaUrl?: string;
-    mediaUrls?: string[];
-}): string {
-    const mediaUrls = payload.mediaUrls?.length
-        ? payload.mediaUrls
-        : payload.mediaUrl
-            ? [payload.mediaUrl]
-            : [];
-    const textPart = payload.text?.trim() ?? "";
-    const mediaPart = mediaUrls.length ? mediaUrls.join("\n") : "";
-    return textPart ? (mediaPart ? textPart + "\n\n" + mediaPart : textPart) : mediaPart;
 }
 
 /**
@@ -471,7 +644,7 @@ function buildReplyText(payload: {
 async function resolveMediaAndBuildContent(
     cfg: Record<string, unknown>,
     payload: { text?: string; mediaUrl?: string; mediaUrls?: string[] },
-    log: { info: PluginLog; warn: PluginLog }
+    log: PluginLogger
 ): Promise<string> {
     const fromPayload = payload.mediaUrls?.length ? payload.mediaUrls : payload.mediaUrl ? [payload.mediaUrl] : [];
     const fromText = extractLocalImagePathsFromText(payload.text ?? "");
@@ -666,8 +839,10 @@ async function handleInboundMessage(
 export default function register(api: OpenClawPluginApi): void {
     const hostLogger = api.logger;
     pluginLogger = {
+        debug: hostLogger?.debug ? (msg, ...args) => hostLogger.debug!(msg, ...args) : undefined,
         info: (msg, ...args) => (hostLogger?.info ? hostLogger.info(msg, ...args) : console.log("[notice]", msg, ...args)),
         warn: (msg, ...args) => (hostLogger?.warn ? hostLogger.warn(msg, ...args) : console.warn("[notice]", msg, ...args)),
+        error: (msg, ...args) => (hostLogger?.error ? hostLogger.error(msg, ...args) : console.error("[notice]", msg, ...args)),
     };
     api.registerChannel({ plugin: noticeChannel });
 
@@ -705,13 +880,81 @@ export default function register(api: OpenClawPluginApi): void {
                     const { messageText, contentPreview, skip } = parseMqttMessage(payloadStr);
                     if (skip) return;
 
+                    let clientId = "";
+                    try {
+                        const msg = JSON.parse(payloadStr) as { client?: string };
+                        if (typeof msg.client === "string") clientId = msg.client;
+                    } catch {
+                        /* non-JSON */
+                    }
+
                     recentMessages.unshift({ topic: t, payload: payloadStr, at: Date.now() });
                     if (recentMessages.length > MAX_RECENT_MESSAGES) recentMessages.pop();
                     pluginLogger.info("[notice] Message received topic=" + t + " content=" + contentPreview);
 
                     const trimmed = messageText.trim();
                     if (!trimmed) return;
-                    await handleInboundMessage(api, String(t), payloadStr, trimmed, contentPreview);
+
+                    const prunedKeys = prunePendingAsrConfirm();
+                    for (const key of prunedKeys) {
+                        try {
+                            await processNextInQueue(api, key);
+                        } catch (e) {
+                            pluginLogger.warn("[notice] processNextInQueue after prune failed " + String(e));
+                        }
+                    }
+                    const topicStr = String(t);
+                    const cfg = api.config ?? {};
+
+                    // 1) 确认为「asr_confirm」格式且存在待确认 -> 投递 Agent 并清除待确认，再处理队列下一条
+                    try {
+                        const parsed = JSON.parse(trimmed) as { type?: string; text?: string };
+                        if (parsed?.type === "asr_confirm" && typeof parsed.text === "string") {
+                            const key = pendingKey(topicStr, clientId);
+                            const pending = pendingAsrConfirm.get(key);
+                            if (pending) {
+                                pendingAsrConfirm.delete(key);
+                                const confirmedText = (parsed.text as string).trim();
+                                if (confirmedText) {
+                                    await handleInboundMessage(api, topicStr, payloadStr, confirmedText, contentPreview);
+                                }
+                                try {
+                                    await processNextInQueue(api, key);
+                                } catch (e) {
+                                    pluginLogger.warn("[notice] processNextInQueue after asr_confirm failed " + String(e));
+                                }
+                                return;
+                            }
+                        }
+                    } catch {
+                        /* not JSON or not asr_confirm */
+                    }
+
+                    // 2) 内容含语音 URL（仅 /api/media 且 n= 为音频扩展）-> 排队：有待确认则入队，否则处理队首并发请确认
+                    const mediaUrls = extractMediaUrls(trimmed);
+                    const audioUrls = mediaUrls.filter(isAudioMediaUrl);
+                    if (audioUrls.length > 0) {
+                        const key = pendingKey(topicStr, clientId);
+                        if (!voiceQueueByKey.has(key)) voiceQueueByKey.set(key, []);
+                        const queue = voiceQueueByKey.get(key)!;
+                        for (const u of audioUrls) {
+                            if (queue.length >= MAX_VOICE_QUEUE_PER_KEY) {
+                                queue.shift();
+                                pluginLogger.warn("[notice] Voice queue full, dropped oldest for key");
+                            }
+                            queue.push(u);
+                        }
+                        if (pendingAsrConfirm.has(key)) {
+                            return;
+                        }
+                        const firstUrl = queue.shift()!;
+                        if (queue.length === 0) voiceQueueByKey.delete(key);
+                        await processOneVoiceUrl(api, cfg, topicStr, clientId, firstUrl);
+                        return;
+                    }
+
+                    // 3) 普通消息
+                    await handleInboundMessage(api, topicStr, payloadStr, trimmed, contentPreview);
                 });
                 client.on("error", (err) => pluginLogger.warn("[notice] MQTT error: " + String(err)));
             },

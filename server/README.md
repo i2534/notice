@@ -20,6 +20,7 @@
 - 🔐 Token 认证（Webhook + MQTT + 图片上传/访问）
 - 🛡️ 认证限流：按 IP、按错误凭证、全局限流（防单 IP 与换 IP 暴力破解）
 - 🖼️ 图片上传（POST /api/upload）与签名 URL 访问（GET /api/image），支持反向代理 HTTPS
+- 🎤 多媒体上传（POST /api/media/upload）与签名 URL 访问（GET /api/media），用于语音等（.m4a/.mp3/.webm/.ogg/.wav）
 - 🌐 内置 Web 管理界面（消息发送/接收、消息体 Markdown 渲染）
 - 📝 日志轮转（按天分割、自动清理）
 - 📦 YAML 配置文件支持
@@ -42,6 +43,7 @@ server/
 │   ├── webhook.go       # Webhook 接收（支持 body.topic 指定发布主题）
 │   ├── api.go           # API 与消息历史
 │   ├── image.go         # 图片上传（/api/upload）与签名 URL 访问（/api/image）
+│   ├── media.go         # 多媒体上传（/api/media/upload）与签名 URL 访问（/api/media）
 │   ├── security.go      # 请求体/参数安全（限长、topic 校验、防 XSS/路径穿越）
 │   ├── webhook_test.go  # Webhook 与限流测试
 │   ├── image_test.go    # 图片上传与签名校验测试
@@ -156,6 +158,15 @@ image:
   max_upload_bytes: 5242880       # 单张最大 5MB
   max_upload_total_bytes: 20971520 # 单次请求总最大 20MB
   allowed_extensions: [".jpg", ".jpeg", ".png", ".gif", ".webp"]
+
+# 多媒体上传与访问（语音等，可选）
+media:
+  folder: "media"              # 存储子目录（相对 storage.path）
+  url_expiry_seconds: 86400   # 签名 URL 有效期（秒）
+  cleanup_enabled: true
+  cleanup_interval_seconds: 3600
+  max_upload_bytes: 10485760  # 单文件最大 10MB
+  allowed_extensions: [".m4a", ".mp3", ".webm", ".ogg", ".wav"]
 ```
 
 指定配置文件：
@@ -189,7 +200,7 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 
 - **X-Forwarded-Proto**：`https` 或 `http`（如 Nginx：`proxy_set_header X-Forwarded-Proto $scheme;`）
 
-这样 `/api/upload` 返回的 `image_urls` 才会是 `https://...`，客户端和浏览器才能正常加载。
+这样 `/api/upload` 与 `/api/media/upload` 返回的 URL 才会是 `https://...`，客户端和浏览器才能正常加载。
 
 ### 环境变量
 
@@ -226,6 +237,9 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | 图片 | IMAGE_CLEANUP_ENABLED | true | 是否启用过期图片清理 |
 | 图片 | IMAGE_MAX_UPLOAD_BYTES | 5242880 | 单张图片最大字节数 |
 | 图片 | IMAGE_MAX_UPLOAD_TOTAL_BYTES | 20971520 | 单次请求总最大字节数 |
+| 多媒体 | MEDIA_FOLDER | media | 多媒体存储子目录名 |
+| 多媒体 | MEDIA_URL_EXPIRY_SECONDS | 86400 | 签名 URL 有效期（秒） |
+| 多媒体 | MEDIA_MAX_UPLOAD_BYTES | 10485760 | 单文件最大字节数（10MB） |
 
 ## API 端点
 
@@ -301,6 +315,16 @@ proxy_set_header X-Forwarded-Proto $scheme;
 ### GET /api/image
 
 通过签名 URL 访问已上传图片。参数：`n`（文件名）、`e`（过期时间戳）、`s`（Base64 签名）。无需在请求头带 Token；签名错误或过期返回 403。
+
+### POST /api/media/upload
+
+上传单个多媒体文件（语音等），需 Bearer Token。用于 Android 等客户端上传录音后得到可公网访问的 URL。请求体：`multipart/form-data`，字段名 `file`。允许扩展名由配置 `media.allowed_extensions` 控制，默认 `.m4a/.mp3/.webm/.ogg/.wav`。单文件大小限制见 `media.max_upload_bytes`（默认 10MB）。
+
+**响应：** `{"success": true, "media_url": "https://your-server/api/media?n=xxx.m4a&e=过期时间戳&s=签名"}`
+
+### GET /api/media
+
+通过签名 URL 访问已上传多媒体文件。参数同 `/api/image`。签名错误或过期返回 403。
 
 ### GET /status
 

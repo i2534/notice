@@ -137,7 +137,7 @@ async function fetchMessageHistory() {
 // 渲染所有消息
 function renderMessages() {
     const list = document.getElementById('messagesList');
-    const emptyState = document.getElementById('emptyState');
+    if (!list) return;
 
     if (messages.length === 0) {
         list.innerHTML = `
@@ -152,10 +152,48 @@ function renderMessages() {
     } else {
         list.innerHTML = messages.map((msg, idx) => createMessageHTML(msg, idx)).join('');
         messageCount = messages.length;
+        attachMediaFallbacks(list);
     }
     document.getElementById('messageCount').textContent = messageCount + ' 条';
     updateSelectAllState();
     updateDeleteSelectedBtn();
+}
+
+/** 图片/音频加载失败时显示原始地址（可点击） */
+function attachMediaFallbacks(container) {
+    if (!container) return;
+    container.querySelectorAll('.message-content img').forEach(function (img) {
+        var src = img.getAttribute('src');
+        if (!src) return;
+        var fallback = document.createElement('a');
+        fallback.href = src;
+        fallback.target = '_blank';
+        fallback.rel = 'noopener';
+        fallback.className = 'message-media-fallback';
+        fallback.textContent = src;
+        fallback.style.display = 'none';
+        img.parentNode.insertBefore(fallback, img.nextSibling);
+        img.onerror = function () {
+            img.style.display = 'none';
+            fallback.style.display = 'inline-block';
+        };
+    });
+    container.querySelectorAll('.message-content audio').forEach(function (audio) {
+        var src = audio.getAttribute('src');
+        if (!src) return;
+        var fallback = document.createElement('a');
+        fallback.href = src;
+        fallback.target = '_blank';
+        fallback.rel = 'noopener';
+        fallback.className = 'message-media-fallback';
+        fallback.textContent = src;
+        fallback.style.display = 'none';
+        audio.parentNode.insertBefore(fallback, audio.nextSibling);
+        audio.addEventListener('error', function () {
+            audio.style.display = 'none';
+            fallback.style.display = 'inline-block';
+        });
+    });
 }
 
 // 创建单条消息的 HTML（展示时解析 content 内嵌套 JSON，避免直接显示整段 JSON）
@@ -262,15 +300,16 @@ function logout() {
 }
 
 async function loadServerStatus() {
+    var el = document.getElementById('serverStats');
+    if (!el) return;
     try {
         const res = await fetch('/status');
         const data = await res.json();
-        document.getElementById('serverStats').innerHTML = `
-                    <span>📊 ${data.status}</span>
-                    <span>👥 ${data.clients}</span>
-                `;
+        var statusStr = (data.status != null && data.status !== undefined) ? String(data.status) : '';
+        var clientsStr = (data.clients != null && data.clients !== undefined) ? String(data.clients) : '';
+        el.innerHTML = '<span>📊 ' + escapeHtml(statusStr) + '</span><span>👥 ' + escapeHtml(clientsStr) + '</span>';
     } catch (e) {
-        document.getElementById('serverStats').innerHTML = '<span style="color: var(--error)">⚠️</span>';
+        el.innerHTML = '<span style="color: var(--error)">⚠️</span>';
     }
 }
 
@@ -507,8 +546,10 @@ function confirmClearMessages() {
 
 // 消息选中状态变化
 function onMessageSelect(idx) {
-    const item = document.querySelector(`.message-item[data-idx="${idx}"]`);
+    const item = document.querySelector('.message-item[data-idx="' + idx + '"]');
+    if (!item) return;
     const checkbox = item.querySelector('input[type="checkbox"]');
+    if (!checkbox) return;
     if (checkbox.checked) {
         item.classList.add('selected');
     } else {
@@ -604,10 +645,11 @@ function hideConfirm(event) {
 
 // 执行确认操作
 function executeConfirm() {
-    if (confirmCallback) {
-        confirmCallback();
+    try {
+        if (confirmCallback) confirmCallback();
+    } finally {
+        hideConfirm();
     }
-    hideConfirm();
 }
 
 /** 打开发送面板（隐藏悬浮图标） */
@@ -688,6 +730,8 @@ async function sendMessage() {
 
         if (data.success) {
             responseBox.style.display = 'none';
+            responseBox.className = 'response-box';
+            responseBox.textContent = '';
             showToast('消息已发送', 'success');
 
             document.getElementById('sendTitle').value = '';
@@ -726,13 +770,49 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-/** 将消息内容按 Markdown 渲染为安全 HTML */
+/** 判断 URL 是否为可内联播放的音频（/api/media 路径或扩展名，含 query 参数 n=xxx.m4a） */
+function isAudioUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    var decoded = url.replace(/&amp;/gi, '&');
+    var pathPart = decoded.split('#')[0].split('?')[0];
+    if (/\/api\/media(\/|\?|$)/i.test(pathPart)) return true;
+    if (/\.(mp3|ogg|wav|m4a|aac|opus|weba)$/i.test(pathPart)) return true;
+    var q = decoded.split('#')[0];
+    var qs = q.indexOf('?') >= 0 ? q.substring(q.indexOf('?') + 1) : '';
+    if (qs) {
+        var parts = qs.split('&');
+        for (var i = 0; i < parts.length; i++) {
+            var eq = parts[i].indexOf('=');
+            if (eq > 0 && parts[i].substring(0, eq).toLowerCase() === 'n') {
+                var val = parts[i].substring(eq + 1);
+                try { val = decodeURIComponent(val); } catch (e) { }
+                if (/\.(mp3|ogg|wav|m4a|aac|opus|weba)$/i.test(val)) return true;
+                break;
+            }
+        }
+    }
+    return false;
+}
+
+/** 将消息内容中的音频链接替换为 <audio controls>，再交给 Markdown 渲染与消毒 */
+function replaceAudioLinksWithPlayer(html) {
+    return html.replace(/<a\s+href="([^"]+)"[^>]*>[\s\S]*?<\/a>/gi, function (match, href) {
+        if (isAudioUrl(href)) return '<audio controls preload="metadata" src="' + escapeHtml(href) + '"></audio>';
+        return match;
+    });
+}
+
+/** 将消息内容按 Markdown 渲染为安全 HTML；音频链接直接显示播放控件 */
 function renderMarkdown(text) {
     if (text == null || text === '') return '';
     if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return escapeHtml(text);
     try {
         const raw = marked.parse(String(text), { gfm: true, breaks: true });
-        return DOMPurify.sanitize(raw, { ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'img', 'blockquote', 'h1', 'h2', 'h3', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td'], ALLOWED_ATTR: ['href', 'title', 'src', 'alt'] });
+        const withAudio = replaceAudioLinksWithPlayer(raw);
+        return DOMPurify.sanitize(withAudio, {
+            ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 's', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'img', 'audio', 'blockquote', 'h1', 'h2', 'h3', 'hr', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+            ALLOWED_ATTR: ['href', 'title', 'src', 'alt', 'controls', 'preload']
+        });
     } catch (e) {
         return escapeHtml(text);
     }

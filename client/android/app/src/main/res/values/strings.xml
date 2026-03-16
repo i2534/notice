@@ -21,6 +21,12 @@
     <string name="message_detail_copy_content_description">复制消息内容</string>
     <string name="message_content_more">更多</string>
     <string name="image_url_fallback_label">图片地址</string>
+    <string name="image_load_failed">图片加载失败</string>
+    <string name="audio_load_failed">音频加载失败</string>
+    <string name="voice_media_url_label">语音</string>
+    <string name="voice_play_label">播放</string>
+    <string name="voice_playing_label">播放中…</string>
+    <string name="voice_play_error">播放失败</string>
     <string name="reply_to_topic">回复到: %1$s</string>
     <string name="reply_to_topic_clear">清除</string>
     <string name="message_delete_title">删除消息</string>
@@ -66,6 +72,20 @@
     <string name="settings_error_broker_required">请输入 Broker 地址</string>
     <string name="settings_error_broker_format">地址格式错误，应以 tcp://, ssl://, ws:// 或 wss:// 开头</string>
     <string name="settings_error_topic_required">请输入订阅主题</string>
+    <string name="settings_server_url">Notice 服务器 URL</string>
+    <string name="settings_server_url_hint">用于语音上传，与 OpenClaw serverUrl 一致；留空则无法发送语音</string>
+
+    <!-- 语音 -->
+    <string name="voice_btn_label">语音</string>
+    <string name="voice_mode_keyboard">键盘</string>
+    <string name="voice_hold_to_talk">按住 说话</string>
+    <string name="voice_recording">录音中…</string>
+    <string name="voice_recorded_click_send">已录制 %1$d 秒，点击发送即可发送</string>
+    <string name="voice_upload_failed">上传失败</string>
+    <string name="voice_record_failed">录音失败</string>
+    <string name="voice_need_server_url">请先在设置中填写 Notice 服务器 URL</string>
+    <string name="voice_confirm_send">确认发送</string>
+    <string name="voice_confirm_transcribe">请确认语音转写</string>
 
     <!-- 通知 -->
     <string name="notification_channel_name">MQTT 服务</string>

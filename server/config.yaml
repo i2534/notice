@@ -151,3 +151,17 @@ image:
     - ".png"
     - ".gif"
     - ".webp"
+
+# 多媒体上传与缓存配置（语音、视频等）
+media:
+  folder: "media"
+  url_expiry_seconds: 86400
+  cleanup_enabled: true
+  cleanup_interval_seconds: 3600
+  max_upload_bytes: 10485760  # 10MB
+  allowed_extensions:
+    - ".m4a"
+    - ".mp3"
+    - ".webm"
+    - ".ogg"
+    - ".wav"

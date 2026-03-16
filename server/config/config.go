@@ -22,6 +22,17 @@ type Config struct {
 	Storage   StorageConfig   `yaml:"storage"`
 	Message   MessageConfig   `yaml:"message"`
 	Image     ImageConfig     `yaml:"image"`
+	Media     MediaConfig     `yaml:"media"`
+}
+
+// MediaConfig 多媒体上传与缓存配置（语音、视频等）
+type MediaConfig struct {
+	Folder                 string   `yaml:"folder" env:"MEDIA_FOLDER"`
+	URLExpirySeconds       int      `yaml:"url_expiry_seconds" env:"MEDIA_URL_EXPIRY_SECONDS"`
+	CleanupEnabled         bool     `yaml:"cleanup_enabled" env:"MEDIA_CLEANUP_ENABLED"`
+	CleanupIntervalSeconds int      `yaml:"cleanup_interval_seconds" env:"MEDIA_CLEANUP_INTERVAL_SECONDS"`
+	MaxUploadBytes         int64    `yaml:"max_upload_bytes" env:"MEDIA_MAX_UPLOAD_BYTES"`
+	AllowedExtensions      []string `yaml:"allowed_extensions"`
 }
 
 // ImageConfig 图片上传与缓存配置
@@ -151,6 +162,14 @@ func defaultConfig() *Config {
 			MaxUploadBytes:         5 * 1024 * 1024,  // 5MB
 			MaxUploadTotalBytes:    20 * 1024 * 1024, // 20MB
 			AllowedExtensions:      []string{".jpg", ".jpeg", ".png", ".gif", ".webp"},
+		},
+		Media: MediaConfig{
+			Folder:                 "media",
+			URLExpirySeconds:       86400,  // 24 小时
+			CleanupEnabled:         true,
+			CleanupIntervalSeconds: 3600,   // 1 小时
+			MaxUploadBytes:         10 * 1024 * 1024, // 10MB（语音等）
+			AllowedExtensions:      []string{".m4a", ".mp3", ".webm", ".ogg", ".wav"},
 		},
 	}
 }

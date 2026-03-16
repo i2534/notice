@@ -52,6 +52,7 @@ class SettingsActivity : AppCompatActivity() {
             binding.inputSendTopic.setText(settings.sendTopic)
             binding.inputKeepAlive.setText(settings.keepAlive.toString())
             binding.inputAuthToken.setText(settings.authToken)
+            binding.inputServerUrl.setText(settings.serverUrl)
             binding.switchAutoConnect.isChecked = settings.autoConnect
         }
     }
@@ -63,6 +64,7 @@ class SettingsActivity : AppCompatActivity() {
         val sendTopic = binding.inputSendTopic.text.toString().trim()
         val keepAlive = binding.inputKeepAlive.text.toString().toIntOrNull() ?: 30
         val authToken = binding.inputAuthToken.text.toString().trim()
+        val serverUrl = binding.inputServerUrl.text.toString().trim()
         val autoConnect = binding.switchAutoConnect.isChecked
 
         if (brokerUrl.isBlank()) {
@@ -88,6 +90,7 @@ class SettingsActivity : AppCompatActivity() {
             sendTopic = sendTopic,
             keepAlive = keepAlive,
             authToken = authToken,
+            serverUrl = serverUrl,
             autoConnect = autoConnect
         )
 

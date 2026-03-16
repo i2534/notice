@@ -39,8 +39,8 @@ notice/
 ├── client/
 │   ├── cli/             # 跨平台命令行客户端 (Go) - Linux/Windows/macOS，支持 send -topic
 │   ├── gui/             # 跨平台桌面客户端 (Tauri) - Linux/Windows/macOS
-│   ├── android/         # Android 客户端 (Kotlin)，支持默认发送主题、回复指定 topic、Markdown
-│   └── openclaw/        # Openclaw 插件，收发可指定 topic，Agent 回信到同一 topic
+│   ├── android/         # Android 客户端 (Kotlin)，支持主题、Markdown、语音消息与媒体缓存
+│   └── openclaw/        # Openclaw 插件，收发可指定 topic，支持语音转写（需主配置 tools.media.audio）
 │
 └── README.md
 ```

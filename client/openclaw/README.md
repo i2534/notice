@@ -73,3 +73,4 @@ channels:
 - **接收**：MQTT 订阅，消息可通过 RPC `notice.getRecentMessages` 查询。
 - **回信**：Agent 回复通过 MQTT 发回来信同一 topic，实现「收信 → 处理 → 回信」闭环。
 - **媒体/图片**：回信时可带 `mediaUrl` 或 `mediaUrls`（或正文中的本地路径）。配置 `serverUrl` 与 `token` 后，本地图片会先上传到 Notice 的 `POST /api/upload`，返回的图片 URL 以 Markdown `![](url)` 写入内容；已是 `http(s):` 或协议相对 `//host/path` 的 URL 会直接使用，不再当成本地文件上传。
+- **语音消息**：收到语音（消息内容为音频 URL）时，插件会下载音频并调用 Openclaw 的 `runtime.stt.transcribeAudioFile` 做转写，再通过 MQTT 发送「请确认语音转写」给客户端；用户确认后转写文本才投递给 Agent。语音转写依赖 Openclaw 主配置中的 **`tools.media.audio`**（如 `~/.openclaw/openclaw.json`），详见 [Openclaw 文档](https://openclaw.dev/docs#tools-media)。未配置时用户端会看到提示文案并附带配置说明。

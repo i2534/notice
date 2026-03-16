@@ -15,7 +15,8 @@ Android MQTT 客户端，用于接收 Notice Server 的推送通知。
 - ✅ 消息多选批量删除（点击消息任意部分可选中，删除模式下不触发查看详情）
 - ✅ 消息详情弹窗查看（点击整条消息任意位置可打开，含正文与图片区域；内容截断时显示「更多」提示）
 - ✅ 回复可指定 topic：支持默认发送主题（与订阅主题分离）、从消息详情回复到该条 topic
-- ✅ 消息体「文本 + 图片」分块渲染：正文按 Markdown 渲染，图片单独加载；加载失败时显示「图片地址」+ URL 文本块（可长按全选复制），列表中点正文/URL 也可打开详情
+- ✅ 消息体「文本 + 图片 + 语音」分块渲染：正文按 Markdown 渲染，图片单独加载，语音块支持播放/进度；加载失败时显示「图片地址」+ URL 文本块（可长按全选复制），列表中点正文/URL 也可打开详情
+- ✅ 语音消息：录制、上传（POST /api/media/upload）、发送；接收后语音块可播放，本地媒体缓存（MediaCache）减少重复下载
 - ✅ 智能时间显示（今天/今年/跨年）
 - ✅ 配置持久化（DataStore）
 - ✅ 日志查看、分享导出、下拉刷新
@@ -204,9 +205,10 @@ tcp://192.168.1.100:9091 # TCP 明文（局域网）
 
 ## 消息内容与展示
 
-- **内容格式**：支持 Markdown 文本与 `![](url)` 图片。展示时按「文本块」与「图片块」拆分：文本用 Markwon 渲染，图片用独立 ImageView（Coil）加载。
+- **内容格式**：支持 Markdown 文本、`![](url)` 图片与语音块（音频 URL）。展示时按「文本块」「图片块」「语音块」拆分：文本用 Markwon 渲染，图片用 Coil 加载，语音块可点击播放并显示进度。
+- **语音消息**：发送端支持录制并上传到服务器 `POST /api/media/upload`，接收端语音块会通过本地媒体缓存（MediaCache）加载，减少重复下载。
 - **图片加载失败**：若某张图加载失败，该块会显示为带样式的「图片地址」+ URL 文本，便于复制到浏览器打开；详情弹窗内 URL 可长按全选复制。
-- **列表点击**：点击标题、正文、图片或 URL 区域均可打开消息详情。
+- **列表点击**：点击标题、正文、图片、语音或 URL 区域均可打开消息详情。
 
 ## 消息格式
 
@@ -237,27 +239,35 @@ app/src/main/
 │   │   ├── MqttConfig.kt     # 配置管理 (DataStore)
 │   │   ├── NoticeMessage.kt  # 消息数据类 (Room Entity)
 │   │   ├── AppDatabase.kt    # Room 数据库
-│   │   └── MessageDao.kt     # 消息 DAO (分页查询)
+│   │   ├── MessageDao.kt     # 消息 DAO (分页查询)
+│   │   ├── MediaCacheEntity.kt  # 媒体缓存 Room Entity
+│   │   └── MediaCacheDao.kt      # 媒体缓存 DAO
 │   ├── service/
 │   │   └── MqttService.kt    # MQTT 后台服务
 │   ├── receiver/
 │   │   └── BootReceiver.kt   # 开机启动接收器
 │   ├── util/
-│   │   └── AppLogger.kt      # 应用日志（持久化 + 轮转）
+│   │   ├── AppLogger.kt         # 应用日志（持久化 + 轮转）
+│   │   ├── MediaCacheConstants.kt # 媒体缓存路径等常量
+│   │   ├── MediaCacheDownloader.kt # 媒体下载到缓存
+│   │   ├── MediaCacheLoader.kt   # 从缓存或网络加载媒体 URI
+│   │   └── MediaUploadHelper.kt  # 录音上传（POST /api/media/upload）
 │   └── ui/
 │       ├── MainActivity.kt           # 主界面
-│       ├── SettingsActivity.kt       # 设置界面
-│       ├── AboutActivity.kt          # 关于页面
-│       ├── LogsActivity.kt           # 日志查看页面
-│       ├── LicensesActivity.kt       # 开源许可页面
-│       ├── MessageAdapter.kt        # 消息列表适配器
-│       ├── ContentBlocks.kt         # 内容解析（文本块 / 图片块）
-│       └── MessageContentRenderer.kt # 文本+图片块渲染（Markwon + Coil）
+│       ├── SettingsActivity.kt     # 设置界面
+│       ├── AboutActivity.kt         # 关于页面
+│       ├── LogsActivity.kt          # 日志查看页面
+│       ├── LicensesActivity.kt      # 开源许可页面
+│       ├── MessageAdapter.kt         # 消息列表适配器
+│       ├── ContentBlocks.kt         # 内容解析（文本块 / 图片块 / 语音块）
+│       └── MessageContentRenderer.kt # 文本+图片+语音块渲染（Markwon + Coil）
 └── res/
     ├── layout/
-    │   └── view_message_image_block.xml  # 单张图片块（成功显示图，失败显示 URL）
+    │   ├── view_message_image_block.xml  # 单张图片块（成功显示图，失败显示 URL）
+    │   └── view_message_voice_block.xml  # 语音块（播放、进度）
     └── drawable/
-        └── bg_url_fallback.xml          # 图片失败时 URL 块背景样式
+        ├── bg_url_fallback.xml          # 图片失败时 URL 块背景样式
+        └── (ic_play, ic_mic, bg_voice_play_row 等语音相关)
 ```
 
 ## 依赖库

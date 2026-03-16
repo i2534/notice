@@ -1,14 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- 允许明文传输用于本地/内网（Notice 图片 URL 常为 HTTP 内网地址） -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">localhost</domain>
-        <domain includeSubdomains="true">127.0.0.1</domain>
-        <domain includeSubdomains="true">10.0.2.2</domain>
-        <domain includeSubdomains="true">192.168.0.0</domain>
-    </domain-config>
-
-    <base-config cleartextTrafficPermitted="false">
+    <!-- 允许明文 HTTP：本地与内网（Notice 服务器、语音上传等常为 HTTP 内网地址） -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

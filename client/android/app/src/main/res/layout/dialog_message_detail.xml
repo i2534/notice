@@ -76,12 +76,14 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 内容区域：占满中间空间，底部按钮固定可见 -->
+    <!-- 内容区域：占满中间空间，底部按钮固定可见；不获取焦点避免首次点击被消费 -->
     <ScrollView
         android:id="@+id/dialogScrollView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:focusable="false"
+        android:focusableInTouchMode="false">
 
         <LinearLayout
             android:id="@+id/dialogContentContainer"

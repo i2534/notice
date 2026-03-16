@@ -101,10 +101,14 @@ func main() {
 	http.HandleFunc("/messages", handlers.MessagesHandler(storeManager, cfg))
 	http.HandleFunc("/api/image", handlers.ImageHandler(cfg, cfg.Storage.Path))
 	http.HandleFunc("/api/upload", handlers.UploadHandler(cfg, cfg.Storage.Path, authLimiter))
+	http.HandleFunc("/api/media/upload", handlers.MediaUploadHandler(cfg, cfg.Storage.Path, authLimiter))
+	http.HandleFunc("/api/media", handlers.MediaHandler(cfg, cfg.Storage.Path))
 
-	// 过期图片自动清理（按配置间隔执行）
+	// 过期图片与多媒体自动清理（按配置间隔执行）
 	imageCleanupStop := make(chan struct{})
+	mediaCleanupStop := make(chan struct{})
 	go handlers.RunImageCleanupLoop(cfg, cfg.Storage.Path, imageCleanupStop)
+	go handlers.RunMediaCleanupLoop(cfg, cfg.Storage.Path, mediaCleanupStop)
 
 	// 注册 Web 页面路由（拒绝路径穿越）
 	webContent, _ := fs.Sub(webFS, "web")
@@ -128,6 +132,7 @@ func main() {
 
 		logger.Info("正在关闭服务...")
 		close(imageCleanupStop)
+		close(mediaCleanupStop)
 		mqttBroker.Close()
 		storeManager.Close()
 		logger.Close() // 刷新并关闭日志文件

@@ -160,6 +160,25 @@
 
             </com.google.android.material.textfield.TextInputLayout>
 
+            <!-- Notice 服务器 URL（语音上传） -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="@string/settings_server_url"
+                app:boxBackgroundColor="@color/surface"
+                app:helperText="@string/settings_server_url_hint"
+                app:hintTextColor="@color/text_secondary">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/inputServerUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textUri"
+                    android:textColor="@color/text_primary" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
             <!-- Auto Connect -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"

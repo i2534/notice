@@ -19,7 +19,9 @@ data class MqttSettings(
     val sendTopic: String = "",
     val autoConnect: Boolean = true,
     val keepAlive: Int = 30,
-    val authToken: String = ""  // 认证 Token
+    val authToken: String = "",  // 认证 Token
+    /** Notice 服务器 URL（用于语音/多媒体上传，与 OpenClaw serverUrl 一致；留空则不可上传） */
+    val serverUrl: String = ""
 ) {
     /**
      * 获取有效的 Client ID
@@ -50,6 +52,7 @@ class MqttConfigStore(private val context: Context) {
         private val KEY_AUTO_CONNECT = booleanPreferencesKey("auto_connect")
         private val KEY_KEEP_ALIVE = intPreferencesKey("keep_alive")
         private val KEY_AUTH_TOKEN = stringPreferencesKey("auth_token")
+        private val KEY_SERVER_URL = stringPreferencesKey("server_url")
     }
 
     val settings: Flow<MqttSettings> = context.dataStore.data.map { prefs ->
@@ -60,7 +63,8 @@ class MqttConfigStore(private val context: Context) {
             sendTopic = prefs[KEY_SEND_TOPIC] ?: "",
             autoConnect = prefs[KEY_AUTO_CONNECT] ?: true,
             keepAlive = prefs[KEY_KEEP_ALIVE] ?: 30,
-            authToken = prefs[KEY_AUTH_TOKEN] ?: ""
+            authToken = prefs[KEY_AUTH_TOKEN] ?: "",
+            serverUrl = prefs[KEY_SERVER_URL] ?: ""
         )
     }
 
@@ -73,6 +77,7 @@ class MqttConfigStore(private val context: Context) {
             prefs[KEY_AUTO_CONNECT] = settings.autoConnect
             prefs[KEY_KEEP_ALIVE] = settings.keepAlive
             prefs[KEY_AUTH_TOKEN] = settings.authToken
+            prefs[KEY_SERVER_URL] = settings.serverUrl
         }
     }
 }

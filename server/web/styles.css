@@ -566,6 +566,26 @@ body {
     text-decoration: underline;
 }
 
+.message-content audio {
+    display: block;
+    max-width: 100%;
+    margin: 0.35em 0;
+    height: 32px;
+}
+
+.message-content .message-media-fallback {
+    display: inline-block;
+    max-width: 100%;
+    word-break: break-all;
+    font-size: 0.8rem;
+    color: var(--accent);
+    margin: 0.25em 0;
+}
+
+.message-content .message-media-fallback:hover {
+    text-decoration: underline;
+}
+
 .message-content img {
     max-width: 100%;
     height: auto;

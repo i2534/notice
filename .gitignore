@@ -38,3 +38,6 @@ client/linux/notice-client
 
 # Kotlin
 *.kotlin_module
+
+# Vibe Coding
+vibe/
