@@ -2,4 +2,5 @@
 <resources>
     <dimen name="card_margin">12dp</dimen>
     <dimen name="card_radius">12dp</dimen>
+    <dimen name="message_list_image_max_height">240dp</dimen>
 </resources>

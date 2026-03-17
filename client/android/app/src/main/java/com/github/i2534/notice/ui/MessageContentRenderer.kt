@@ -28,6 +28,8 @@ object MessageContentRenderer {
      * @param showUrlWhenNoCache 无缓存时是否显示 URL：true=详情页显示 URL，false=列表显示「图片/音频加载失败」
      * @param touchThrough 为 true 时，文本与 URL 块不消费触摸，点击会传递到父 View（如列表项），用于历史列表
      * @param textSelectable 为 true 时，文本块可长按选择，用于详情弹窗
+     * @param maxImageHeightInList 列表场景下图片最大高度（px），过高则固定高度 + centerCrop 裁剪
+     * @param detailImageMinWidth 详情场景下图片最小宽度（px），保证窄图能看清
      */
     fun render(
         container: ViewGroup,
@@ -37,7 +39,9 @@ object MessageContentRenderer {
         touchThrough: Boolean = false,
         textSelectable: Boolean = false,
         mediaCachePathByUrl: Map<String, String>? = null,
-        showUrlWhenNoCache: Boolean = true
+        showUrlWhenNoCache: Boolean = true,
+        maxImageHeightInList: Int? = null,
+        detailImageMinWidth: Int? = null
     ) {
         container.removeAllViews()
         val inflater = LayoutInflater.from(container.context)
@@ -80,6 +84,18 @@ object MessageContentRenderer {
                     if (touchThrough) {
                         urlFallback.isFocusable = false
                         urlFallback.movementMethod = null
+                    }
+
+                    // 列表：固定高度 + centerCrop 裁剪，防止长图撑满
+                    if (maxImageHeightInList != null) {
+                        imageView.layoutParams = imageView.layoutParams?.apply { height = maxImageHeightInList }
+                            ?: ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxImageHeightInList)
+                        imageView.scaleType = ImageView.ScaleType.CENTER_CROP
+                        imageView.adjustViewBounds = false
+                    }
+                    // 详情：最小宽度，配合滚动能看清
+                    if (detailImageMinWidth != null) {
+                        imageView.minimumWidth = detailImageMinWidth
                     }
 
                     val imageLocalPath = mediaCachePathByUrl?.get(block.url)

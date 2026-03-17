@@ -147,6 +147,7 @@ class MessageAdapter(
                 binding.asrConfirmRow.visibility = View.GONE
                 binding.messageContentContainer.visibility = View.VISIBLE
                 val blocks = ContentBlockParser.parse(message.content)
+                val maxImageHeightPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
                 MessageContentRenderer.render(
                     binding.messageContentContainer,
                     blocks,
@@ -154,7 +155,8 @@ class MessageAdapter(
                     maxTextLinesInList = 2,
                     touchThrough = true,
                     mediaCachePathByUrl = null,
-                    showUrlWhenNoCache = false
+                    showUrlWhenNoCache = false,
+                    maxImageHeightInList = maxImageHeightPx
                 )
                 val mediaAndImageUrls = ContentBlockParser.extractMediaAndImageUrls(message.content)
                 if (mediaAndImageUrls.isNotEmpty()) {
@@ -170,6 +172,7 @@ class MessageAdapter(
                         )
                         withContext(Dispatchers.Main) {
                             if (binding.messageContentContainer.getTag() == messageId) {
+                                val maxImageHeightPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
                                 MessageContentRenderer.render(
                                     binding.messageContentContainer,
                                     blocks,
@@ -177,7 +180,8 @@ class MessageAdapter(
                                     maxTextLinesInList = 2,
                                     touchThrough = true,
                                     mediaCachePathByUrl = if (map.isEmpty()) null else map,
-                                    showUrlWhenNoCache = true
+                                    showUrlWhenNoCache = true,
+                                    maxImageHeightInList = maxImageHeightPx
                                 )
                             }
                         }

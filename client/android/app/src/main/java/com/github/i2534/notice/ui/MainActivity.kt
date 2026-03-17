@@ -20,6 +20,7 @@ import android.provider.Settings
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.OnBackPressedCallback
@@ -660,7 +661,8 @@ class MainActivity : AppCompatActivity() {
                 markwon,
                 textSelectable = true,
                 mediaCachePathByUrl = mediaCachePathByUrl,
-                showUrlWhenNoCache = true
+                showUrlWhenNoCache = true,
+                detailImageMinWidth = null
             )
             detailBinding.dialogTopic.text = message.topic
             detailBinding.dialogTime.text = message.getFormattedTime()
@@ -684,6 +686,17 @@ class MainActivity : AppCompatActivity() {
                 )
             }
             dialog.show()
+            // 宽屏设备上弹窗可能被主题限制为半屏等，用实际内容区宽度设置图片最小宽度
+            detailBinding.dialogContentContainer.post {
+                val contentWidth = detailBinding.dialogContentContainer.width
+                if (contentWidth > 0) {
+                    for (i in 0 until detailBinding.dialogContentContainer.childCount) {
+                        detailBinding.dialogContentContainer.getChildAt(i)
+                            ?.findViewById<ImageView>(R.id.imageBlockImage)
+                            ?.minimumWidth = contentWidth
+                    }
+                }
+            }
             MessageContentRenderer.requestFocusOnFirstVisiblePlayRow(detailBinding.dialogContentContainer)
         }
 

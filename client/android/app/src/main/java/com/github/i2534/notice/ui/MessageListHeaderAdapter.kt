@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
@@ -81,6 +82,7 @@ class MessageListHeaderAdapter(
                 )
                 binding.latestContentContainer.setTag(message.id)
                 val scope = binding.root.findViewTreeLifecycleOwner()?.lifecycleScope
+                    ?: (context as? FragmentActivity)?.lifecycleScope
                 scope?.launch {
                     val map = MediaCacheLoader.ensureMediaAndImageCache(context.applicationContext, message.content)
                     withContext(Dispatchers.Main) {
