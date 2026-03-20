@@ -147,7 +147,7 @@ log:
 
 message:
   max_title_length: 50    # 标题最大长度，0 表示不限制
-  max_content_length: 1024 # 内容最大长度，0 表示不限制
+  max_content_length: 1024 # 内容最大长度，0 表示不限制；使用 OpenClaw Notice 插件时，插件的 maxContentLength 应 ≤ 此值
 
 # 图片上传与访问（可选）
 image:
@@ -230,8 +230,8 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | 日志 | LOG_MAX_FILES | 7 | 保留日志文件数 |
 | 存储 | STORAGE_ENABLED | true | 是否启用持久化存储 |
 | 存储 | STORAGE_PATH | data | 数据存储路径 |
-| 消息 | MESSAGE_MAX_TITLE_LENGTH | 50 | 标题最大长度（字符） |
-| 消息 | MESSAGE_MAX_CONTENT_LENGTH | 1024 | 内容最大长度（字符） |
+| 消息 | MESSAGE_MAX_TITLE_LENGTH | 50 | 标题最大长度（字符），**0=不限制** |
+| 消息 | MESSAGE_MAX_CONTENT_LENGTH | 1024 | 内容最大长度（字符），**0=不限制** |
 | 图片 | IMAGE_FOLDER | images | 图片存储子目录名 |
 | 图片 | IMAGE_URL_EXPIRY_SECONDS | 86400 | 签名 URL 有效期（秒） |
 | 图片 | IMAGE_CLEANUP_ENABLED | true | 是否启用过期图片清理 |
@@ -370,7 +370,12 @@ mosquitto_sub -h localhost -p 9091 -t notice/# -u "<token>"
 
 启用持久化存储后（默认启用），服务器重启不会丢失离线消息。
 
+### MQTT 消息 JSON 与 content_encoding
+
+推送载荷为 JSON（`title`、`content`、`timestamp`、`client` 等）。可选 **`content_encoding`**：值为 **`gzip+base64`** 时，`content` 为正文 UTF-8 字节经 **gzip** 再 **standard base64**；未设置则 `content` 为明文。Broker **原样转发**字节流；**消息历史**入库时若识别该编码会解压为明文，便于 `GET /messages`。是否压缩仅由**发布端**决定，服务端无压缩配置项。
+
 ### 示例代码
+
 
 **JavaScript (WebSocket)**
 

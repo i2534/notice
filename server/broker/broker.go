@@ -26,11 +26,12 @@ const (
 
 // Message 推送消息结构
 type Message struct {
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Extra     any       `json:"extra,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
-	Client    string    `json:"client,omitempty"` // 发送端标识：web / android / cli / webhook
+	Title            string    `json:"title"`
+	Content          string    `json:"content"`
+	ContentEncoding  string    `json:"content_encoding,omitempty"` // 如 gzip+base64，见 DecodeMessageContent
+	Extra            any       `json:"extra,omitempty"`
+	Timestamp        time.Time `json:"timestamp"`
+	Client           string    `json:"client,omitempty"` // 发送端标识：web / android / cli / webhook
 }
 
 // Config Broker 配置
@@ -386,7 +387,12 @@ func (h *MessageStoreHook) OnPublished(cl *mqtt.Client, pk packets.Packet) {
 		return
 	}
 
-	// JSON 格式，提取字段
+	// JSON 格式：入库前解压已知编码，便于 HTTP 历史为明文
+	if msg.ContentEncoding != "" {
+		if err := DecodeMessageContent(&msg); err != nil {
+			logger.Warn("消息 content 解压失败，按原始字段入库", "error", err)
+		}
+	}
 	if _, err := h.manager.Save(h.token, pk.TopicName, msg.Title, msg.Content, msg.Extra); err != nil {
 		logger.Warn("消息保存失败", "error", err)
 	}

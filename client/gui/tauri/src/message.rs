@@ -1,16 +1,48 @@
+use base64::Engine;
 use chrono::{DateTime, Utc};
+use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 
 /// 接收到的消息结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NoticeMessage {
+    #[serde(default)]
     pub title: String,
     pub content: String,
+    #[serde(default, rename = "content_encoding")]
+    pub content_encoding: Option<String>,
     #[serde(default)]
     pub extra: Option<serde_json::Value>,
     pub timestamp: DateTime<Utc>,
+    #[serde(default)]
+    pub client: Option<String>,
+}
+
+impl NoticeMessage {
+    /// 若 `content_encoding` 为 `gzip+base64`，将 `content` 解为 UTF-8 明文。
+    pub fn decode_content_if_needed(&mut self) {
+        if self.content_encoding.as_deref() != Some("gzip+base64") {
+            return;
+        }
+        let raw = match base64::engine::general_purpose::STANDARD.decode(self.content.as_bytes()) {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("notice base64 decode: {}", e);
+                return;
+            }
+        };
+        let mut dec = GzDecoder::new(&raw[..]);
+        let mut s = String::new();
+        if let Err(e) = dec.read_to_string(&mut s) {
+            log::warn!("notice gzip decode: {}", e);
+            return;
+        }
+        self.content = s;
+        self.content_encoding = None;
+    }
 }
 
 /// 消息事件 (发送到前端)

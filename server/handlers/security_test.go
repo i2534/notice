@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -53,6 +54,22 @@ func TestSanitizeString(t *testing.T) {
 	}
 	if got := SanitizeString("hello世界", 3); len([]rune(got)) != 3 {
 		t.Errorf("SanitizeString length = %d, want 3", len([]rune(got)))
+	}
+}
+
+func TestSanitizeString_MaxLenZeroNoTruncate(t *testing.T) {
+	long := strings.Repeat("x", 500) + "世"
+	got := SanitizeString(long, 0)
+	if got != long {
+		t.Errorf("SanitizeString(..., 0) len=%d, want %d", len(got), len(long))
+	}
+}
+
+func TestSanitizeContent_MaxLenZeroNoTruncate(t *testing.T) {
+	long := strings.Repeat("a\n", 300)
+	got := SanitizeContent(long, 0)
+	if got != long {
+		t.Errorf("SanitizeContent(..., 0) len=%d, want %d", len(got), len(long))
 	}
 }
 

@@ -1,0 +1,42 @@
+package broker
+
+import (
+	"bytes"
+	"compress/gzip"
+	"encoding/base64"
+	"fmt"
+	"strings"
+)
+
+// ContentEncodingGzipBase64 MQTT JSON 载荷中 content 为 gzip(UTF-8) 再 standard base64 时的 content_encoding 取值。
+const ContentEncodingGzipBase64 = "gzip+base64"
+
+// DecodeMessageContent 若 msg 带已知 content_encoding，将 content 解为明文 UTF-8 并清空编码字段；无编码则不变。
+func DecodeMessageContent(msg *Message) error {
+	if msg == nil {
+		return nil
+	}
+	enc := strings.TrimSpace(msg.ContentEncoding)
+	if enc == "" {
+		return nil
+	}
+	if enc != ContentEncodingGzipBase64 {
+		return fmt.Errorf("unknown content_encoding: %q", enc)
+	}
+	raw, err := base64.StdEncoding.DecodeString(msg.Content)
+	if err != nil {
+		return fmt.Errorf("base64 decode: %w", err)
+	}
+	r, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		return fmt.Errorf("gzip reader: %w", err)
+	}
+	defer r.Close()
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		return fmt.Errorf("gzip read: %w", err)
+	}
+	msg.Content = buf.String()
+	msg.ContentEncoding = ""
+	return nil
+}

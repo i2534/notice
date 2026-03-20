@@ -19,6 +19,7 @@ import type {
     PluginRuntime,
 } from "openclaw/plugin-sdk";
 import mqtt from "mqtt";
+import { gzipSync, gunzipSync } from "node:zlib";
 
 // ---------------------------------------------------------------------------
 // 常量
@@ -27,7 +28,6 @@ import mqtt from "mqtt";
 const CHANNEL_ID = "notice";
 const DEFAULT_TOPIC = "notice/openclaw";
 const OUTBOUND_CLIENT_ID = "openclaw";
-const NOTICE_MAX_CONTENT_LENGTH = 1024;
 const MAX_RECENT_MESSAGES = 50;
 const PENDING_ASR_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
 const MAX_VOICE_QUEUE_PER_KEY = 20;
@@ -64,6 +64,137 @@ function prunePendingAsrConfirm(): string[] {
 
 function getChannelConfig(cfg: Record<string, unknown>): Record<string, unknown> | undefined {
     return (cfg?.channels as Record<string, unknown>)?.[CHANNEL_ID] as Record<string, unknown> | undefined;
+}
+
+/** 从主配置解析显示名（ui.assistant.name → agents.list → agents.defaults → default），用于 MQTT 消息 title */
+function resolveAgentDisplayName(cfg: Record<string, unknown>): string {
+    const topKeys = cfg ? Object.keys(cfg).join(",") : "";
+    const agents = cfg?.agents as Record<string, unknown> | undefined;
+    const agentsKeys = agents && typeof agents === "object" ? Object.keys(agents).join(",") : "no-agents";
+    const list = agents?.list as Array<Record<string, unknown>> | undefined;
+    const listLen = Array.isArray(list) ? list.length : "none";
+    const listType =
+        list === undefined ? "undefined" : Array.isArray(list) ? "array(" + list.length + ")" : typeof list;
+
+    let result: string;
+    let source: string;
+
+    const uiAssistant = cfg?.ui as Record<string, unknown> | undefined;
+    const assistant = uiAssistant?.assistant as Record<string, unknown> | undefined;
+    const uiName = assistant && typeof assistant.name === "string" ? assistant.name.trim() : "";
+    if (uiName) {
+        result = uiName;
+        source = "ui.assistant.name";
+    } else if (!Array.isArray(list) || list.length === 0) {
+        const defaults = agents?.defaults as Record<string, unknown> | undefined;
+        const defIdentity = defaults?.identity as Record<string, unknown> | undefined;
+        const defIdentityName =
+            defIdentity && typeof defIdentity.name === "string" ? defIdentity.name.trim() : "";
+        const defName = typeof defaults?.name === "string" ? (defaults.name as string).trim() : "";
+        if (defIdentityName) {
+            result = defIdentityName;
+            source = "agents.defaults.identity.name";
+        } else if (defName) {
+            result = defName;
+            source = "agents.defaults.name";
+        } else {
+            result = "Openclaw";
+            source = "default(no agents.list)";
+        }
+    } else {
+        let defaultAgent: Record<string, unknown> | undefined;
+        for (const item of list) {
+            if (item && item.default === true) {
+                defaultAgent = item;
+                break;
+            }
+        }
+        if (!defaultAgent) defaultAgent = list[0];
+        if (!defaultAgent) {
+            result = "Openclaw";
+            source = "default(empty list)";
+        } else {
+            const identity = defaultAgent.identity as Record<string, unknown> | undefined;
+            const identityName = identity && typeof identity.name === "string" ? identity.name.trim() : "";
+            if (identityName) {
+                result = identityName;
+                source = "agents.list[].identity.name";
+            } else {
+                const name = typeof defaultAgent.name === "string" ? defaultAgent.name.trim() : "";
+                if (name) {
+                    result = name;
+                    source = "agents.list[].name";
+                } else {
+                    const id = typeof defaultAgent.id === "string" ? defaultAgent.id.trim() : "";
+                    if (id) {
+                        result = id;
+                        source = "agents.list[].id";
+                    } else {
+                        result = "Openclaw";
+                        source = "default";
+                    }
+                }
+            }
+        }
+    }
+
+    pluginLogger.info(
+        "[notice] resolveAgentDisplayName result=" +
+            result +
+            " source=" +
+            source +
+            " cfgKeys=" +
+            (topKeys || "(empty)") +
+            " agentsKeys=" +
+            agentsKeys +
+            " agentsListLen=" +
+            String(listLen) +
+            " listType=" +
+            listType
+    );
+    return result;
+}
+
+/** 未配置 maxContentLength 时：0=整段发送、不按长度分块（默认不截断） */
+const DEFAULT_MAX_CONTENT_LENGTH = 0;
+
+/** MQTT JSON：content 为 gzip(UTF-8)+standard base64 时的 content_encoding */
+const CONTENT_ENCODING_GZIP_B64 = "gzip+base64";
+
+/** Unicode 标量值数量（与 Go utf8.RuneCount 对齐的常见文本场景） */
+function countRunes(s: string): number {
+    return [...s].length;
+}
+
+/** 从通道配置读取单条消息最大内容长度：0=不限制（不分块）；正整数为每块最大 rune 数；未配置或无效时默认 0（不截断） */
+function resolveMaxContentLength(cfg: Record<string, unknown>): number {
+    const ch = getChannelConfig(cfg);
+    const v = ch?.maxContentLength;
+    if (typeof v === "number" && Number.isInteger(v)) {
+        if (v === 0) return 0;
+        if (v > 0) return v;
+    }
+    return DEFAULT_MAX_CONTENT_LENGTH;
+}
+
+/** 仅当正文 rune 数 >= 此值时才尝试 gzip+base64；0 表示不压缩 */
+function resolveCompressMinRunes(cfg: Record<string, unknown>): number {
+    const ch = getChannelConfig(cfg);
+    const v = ch?.compressMinRunes;
+    if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
+    return 0;
+}
+
+/** 是否允许将「/」开头消息按命令授权处理（默认 true） */
+function resolveAllowSlashCommands(cfg: Record<string, unknown>): boolean {
+    const ch = getChannelConfig(cfg);
+    if (ch?.allowSlashCommands === false) return false;
+    return true;
+}
+
+function shouldAuthorizeSlashCommand(cfg: Record<string, unknown>, messageTrimmed: string): boolean {
+    const t = messageTrimmed.trim();
+    return resolveAllowSlashCommands(cfg) && t.startsWith("/") && t.length > 0;
 }
 
 function listAccountIds(cfg: Record<string, unknown>): string[] {
@@ -129,26 +260,63 @@ function topicForPublish(topic: string): string {
     return t;
 }
 
-/** 通过 MQTT 发布一条消息（不经过 webhook） */
-function sendViaMqtt(publishTopic: string, text: string, title?: string): Promise<{ ok: boolean; error?: string }> {
+/** 构建 MQTT 消息 JSON；cfg 省略时不压缩（用于 ASR 等控制类短 JSON） */
+function buildNoticeMqttPayload(text: string, title: string, cfg?: Record<string, unknown>): string {
+    const ts = Date.now();
+    if (!cfg) {
+        return JSON.stringify({
+            title,
+            content: text,
+            client: OUTBOUND_CLIENT_ID,
+            timestamp: ts,
+        });
+    }
+    const minRunes = resolveCompressMinRunes(cfg);
+    const utf8 = Buffer.from(text, "utf8");
+    const plainLen = utf8.length;
+    let content = text;
+    let content_encoding: string | undefined;
+    if (minRunes > 0 && plainLen > 0 && countRunes(text) >= minRunes) {
+        const gz = gzipSync(utf8);
+        const b64 = Buffer.from(gz).toString("base64");
+        const encodedLen = b64.length;
+        if (encodedLen < plainLen) {
+            content = b64;
+            content_encoding = CONTENT_ENCODING_GZIP_B64;
+        }
+    }
+    const obj: Record<string, unknown> = {
+        title,
+        content,
+        client: OUTBOUND_CLIENT_ID,
+        timestamp: ts,
+    };
+    if (content_encoding) obj.content_encoding = content_encoding;
+    return JSON.stringify(obj);
+}
+
+/** 通过 MQTT 发布一条消息（不经过 webhook）。传入 cfg 时按 compressMinRunes 与体积判据可选 gzip+base64。 */
+function sendViaMqtt(
+    publishTopic: string,
+    text: string,
+    title?: string,
+    cfg?: Record<string, unknown>
+): Promise<{ ok: boolean; error?: string }> {
     const c = mqttClient;
     if (!c?.connected) {
         pluginLogger.warn("[notice] Send skipped: MQTT not connected");
         return Promise.resolve({ ok: false, error: "MQTT not connected" });
     }
-    const payload = JSON.stringify({
-        title: title ?? "Openclaw",
-        content: text,
-        client: OUTBOUND_CLIENT_ID,
-        timestamp: Date.now(),
-    });
+    const t = title ?? "Openclaw";
+    const payload = buildNoticeMqttPayload(text, t, cfg);
     return new Promise((resolve) => {
         c.publish(publishTopic, payload, { qos: 1 }, (err) => {
             if (err) {
                 pluginLogger.warn("[notice] Send failed topic=" + publishTopic + " error=" + String(err));
                 resolve({ ok: false, error: String(err) });
             } else {
-                pluginLogger.info("[notice] Sent topic=" + publishTopic + " length=" + text.length);
+                const contentPreview = text.slice(0, 200).replace(/\s+/g, " ").trim();
+                pluginLogger.info("[notice] Message sent topic=" + publishTopic + " content=" + contentPreview);
                 resolve({ ok: true });
             }
         });
@@ -330,9 +498,10 @@ async function uploadImagesToNotice(
     }
 }
 
-function chunkTextForNotice(text: string, maxLen: number = NOTICE_MAX_CONTENT_LENGTH): string[] {
+function chunkTextForNotice(text: string, maxLen: number = DEFAULT_MAX_CONTENT_LENGTH): string[] {
     const t = text.trim();
     if (!t) return [];
+    if (maxLen <= 0) return [t];
     if (t.length <= maxLen) return [t];
     const chunks: string[] = [];
     let rest = t;
@@ -353,12 +522,15 @@ function chunkTextForNotice(text: string, maxLen: number = NOTICE_MAX_CONTENT_LE
 async function sendReplyChunked(
     rawTopic: string,
     text: string,
-    log: Pick<PluginLogger, "warn">
+    log: Pick<PluginLogger, "warn">,
+    cfg: Record<string, unknown>
 ): Promise<boolean> {
     const topic = topicForPublish(rawTopic);
-    const chunks = chunkTextForNotice(text);
+    const title = resolveAgentDisplayName(cfg);
+    const maxLen = resolveMaxContentLength(cfg);
+    const chunks = chunkTextForNotice(text, maxLen);
     for (const chunk of chunks) {
-        const ok = await sendViaMqtt(topic, chunk);
+        const ok = await sendViaMqtt(topic, chunk, title, cfg);
         if (!ok.ok) {
             log.warn("[notice] Reply send failed " + (ok.error ?? ""));
             return false;
@@ -561,6 +733,9 @@ const noticeChannelConfigSchema: ChannelConfigSchema = {
                 enum: ["text_end", "message_end"],
                 default: "text_end",
             },
+            maxContentLength: { type: "number", default: 0 },
+            compressMinRunes: { type: "number", default: 0 },
+            allowSlashCommands: { type: "boolean", default: true },
         },
     },
     uiHints: {
@@ -575,6 +750,18 @@ const noticeChannelConfigSchema: ChannelConfigSchema = {
         blockStreamingBreak: {
             label: "发送时机",
             help: "text_end：每块产出即发送（逐条）；message_end：整条消息结束后再发送。",
+        },
+        maxContentLength: {
+            label: "单条 MQTT 正文最大长度（rune）",
+            help: "分块时每块最大 rune 数；0 表示不限制、整段发送（默认）。若经 Webhook 发往 Notice 且服务端限制了 max_content_length，请设为不超过该值。",
+        },
+        compressMinRunes: {
+            label: "压缩最小正文（rune）",
+            help: "仅当正文 rune 数≥此值且 gzip+base64 比 UTF-8 更短时才对 content 编码；0 表示从不压缩。服务端不配置，仅发布端策略。",
+        },
+        allowSlashCommands: {
+            label: "允许 / 命令",
+            help: "开启时将以「/」开头的入站消息标记为 CommandAuthorized（MQTT 与 token 同权，请确认信任模型）。",
         },
     },
 };
@@ -690,9 +877,11 @@ const noticeChannel = {
                 (getChannelConfig(cfg)?.topic as string) ??
                 DEFAULT_TOPIC;
             const publishTopic = topicForPublish(rawTopic);
-            const chunks = chunkTextForNotice(ctx.text);
+            const title = resolveAgentDisplayName(cfg);
+            const maxLen = resolveMaxContentLength(cfg);
+            const chunks = chunkTextForNotice(ctx.text, maxLen);
             for (const chunk of chunks) {
-                const ok = await sendViaMqtt(publishTopic, chunk);
+                const ok = await sendViaMqtt(publishTopic, chunk, title, cfg);
                 if (!ok.ok) return ok;
             }
             return { ok: true };
@@ -706,18 +895,37 @@ const noticeChannel = {
 
 const recentMessages: Array<{ topic: string; payload: string; at: number }> = [];
 
+function decodeNoticeJsonContent(msg: { content?: string; content_encoding?: string }): string {
+    if (msg.content == null) return "";
+    const raw = String(msg.content);
+    if (msg.content_encoding !== CONTENT_ENCODING_GZIP_B64) return raw;
+    try {
+        const buf = Buffer.from(raw, "base64");
+        return gunzipSync(buf).toString("utf8");
+    } catch (e) {
+        pluginLogger.warn("[notice] gzip+base64 decode failed: " + String(e));
+        return raw;
+    }
+}
+
 function parseMqttMessage(
     payloadStr: string
 ): { messageText: string; contentPreview: string; skip: boolean } {
     let contentPreview = payloadStr.slice(0, 200);
     let messageText = payloadStr;
     try {
-        const msg = JSON.parse(payloadStr) as { content?: string; title?: string; client?: string };
+        const msg = JSON.parse(payloadStr) as {
+            content?: string;
+            title?: string;
+            client?: string;
+            content_encoding?: string;
+        };
         if (msg.content === "__auth_check__") return { messageText: "", contentPreview: "", skip: true };
         if (msg.client === OUTBOUND_CLIENT_ID) return { messageText: "", contentPreview: "", skip: true };
         if (msg.content != null) {
-            contentPreview = String(msg.content).slice(0, 200);
-            messageText = String(msg.content);
+            const dec = decodeNoticeJsonContent(msg);
+            contentPreview = dec.slice(0, 200);
+            messageText = dec;
         }
     } catch {
         /* non-JSON payload */
@@ -804,10 +1012,12 @@ async function deliverInboundViaDispatch(
         body: messageTrimmed,
         envelope: reply.resolveEnvelopeFormatOptions(cfg),
     });
+    const commandAuthorized = shouldAuthorizeSlashCommand(cfg, messageTrimmed);
     const ctxPayload = reply.finalizeInboundContext({
         Body: envelope,
         RawBody: messageTrimmed,
         CommandBody: messageTrimmed,
+        CommandAuthorized: commandAuthorized,
         From: "notice:" + topicStr,
         To: topicStr,
         SessionKey: route.sessionKey,
@@ -833,7 +1043,7 @@ async function deliverInboundViaDispatch(
             deliver: async (payload) => {
                 const text = await resolveMediaAndBuildContent(cfg, payload, pluginLogger);
                 if (!text.trim()) return;
-                await sendReplyChunked(topicStr, text, pluginLogger);
+                await sendReplyChunked(topicStr, text, pluginLogger, cfg);
             },
         },
     });
@@ -893,6 +1103,7 @@ async function deliverInboundViaHookAgent(
         return;
     }
     const sessionKey = "notice:" + topicStr;
+    const commandAuthorized = shouldAuthorizeSlashCommand(cfg, messageTrimmed);
     try {
         const res = await fetch(`http://127.0.0.1:${hooks.port}${hooks.path}/agent`, {
             method: "POST",
@@ -908,6 +1119,7 @@ async function deliverInboundViaHookAgent(
                 channel: CHANNEL_ID,
                 to: topicStr,
                 wakeMode: "now",
+                commandAuthorized,
             }),
         });
         if (res.ok) {

@@ -1,10 +1,13 @@
 package com.github.i2534.notice.data
 
+import android.util.Base64
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.zip.GZIPInputStream
 
 @Entity(tableName = "messages")
 data class NoticeMessage(
@@ -18,6 +21,17 @@ data class NoticeMessage(
     val isOutgoing: Boolean = false  // true=本机回复发送的消息，false=收到的消息
 ) {
     companion object {
+        private const val CONTENT_ENCODING_GZIP_B64 = "gzip+base64"
+
+        private fun decodeGzipBase64Content(b64: String): String? {
+            return try {
+                val raw = Base64.decode(b64, Base64.DEFAULT)
+                GZIPInputStream(ByteArrayInputStream(raw)).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
         private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
         private val dateTimeFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
         private val fullDateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
@@ -31,10 +45,14 @@ data class NoticeMessage(
             val text = String(payload, Charsets.UTF_8)
             return try {
                 val json = JSONObject(text)
+                var content = json.optString("content", text)
+                if (json.optString("content_encoding", "") == CONTENT_ENCODING_GZIP_B64 && content.isNotEmpty()) {
+                    decodeGzipBase64Content(content)?.let { content = it }
+                }
                 NoticeMessage(
                     topic = topic,
                     title = json.optString("title", "通知"),
-                    content = json.optString("content", text),
+                    content = content,
                     client = json.optString("client").takeIf { it.isNotEmpty() }
                 )
             } catch (e: Exception) {

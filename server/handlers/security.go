@@ -41,7 +41,7 @@ func SanitizeString(s string, maxLen int) string {
 	var b strings.Builder
 	b.Grow(len(s))
 	for i, r := range s {
-		if i >= maxLen {
+		if maxLen > 0 && i >= maxLen {
 			break
 		}
 		if r == 0 || r == '\uFFFD' || unicode.IsControl(r) {
@@ -58,7 +58,7 @@ func SanitizeContent(s string, maxLen int) string {
 	b.Grow(len(s))
 	n := 0
 	for _, r := range s {
-		if n >= maxLen {
+		if maxLen > 0 && n >= maxLen {
 			break
 		}
 		if r == 0 || r == '\uFFFD' {

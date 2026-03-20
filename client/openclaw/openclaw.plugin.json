@@ -31,6 +31,18 @@
         "type": "string",
         "enum": ["text_end", "message_end"],
         "default": "text_end"
+      },
+      "maxContentLength": {
+        "type": "number",
+        "default": 0
+      },
+      "compressMinRunes": {
+        "type": "number",
+        "default": 0
+      },
+      "allowSlashCommands": {
+        "type": "boolean",
+        "default": true
       }
     }
   },
@@ -55,6 +67,18 @@
     "blockStreamingBreak": {
       "label": "发送时机",
       "help": "text_end：每块产出即发送（逐条）；message_end：整条消息结束后再发送。"
+    },
+    "maxContentLength": {
+      "label": "单条 MQTT 正文最大长度（rune）",
+      "help": "0（默认）= 不限制、整段发送；>0 时按该 rune 数分块。经 Webhook 时勿超过服务端 message.max_content_length。"
+    },
+    "compressMinRunes": {
+      "label": "压缩最小正文（rune）",
+      "help": "仅当正文 rune 数≥此值且 gzip+base64 比 UTF-8 字节更短时才编码 content；0 表示从不压缩（服务端无此项，仅发布端策略）。"
+    },
+    "allowSlashCommands": {
+      "label": "允许 / 命令",
+      "help": "开启时将以「/」开头的入站消息标记为 CommandAuthorized；MQTT 与 token 同权，请确认信任模型。"
     }
   }
 }

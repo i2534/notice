@@ -60,7 +60,7 @@ declare module "openclaw/plugin-sdk" {
                 }) => string;
                 resolveEnvelopeFormatOptions?: (cfg?: Record<string, unknown>) => unknown;
                 finalizeInboundContext?: <T extends Record<string, unknown>>(
-                    ctx: T,
+                    ctx: T & { CommandAuthorized?: boolean },
                     opts?: unknown
                 ) => T & { CommandAuthorized: boolean };
                 dispatchReplyWithBufferedBlockDispatcher?: (params: {

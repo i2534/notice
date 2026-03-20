@@ -149,7 +149,8 @@ impl MqttClient {
 
                         // 解析消息
                         match serde_json::from_str::<NoticeMessage>(&payload) {
-                            Ok(msg) => {
+                            Ok(mut msg) => {
+                                msg.decode_content_if_needed();
                                 let event = MessageEvent {
                                     topic: topic.clone(),
                                     message: msg.clone(),

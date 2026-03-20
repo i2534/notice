@@ -2,13 +2,17 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"notice-server/broker"
 	"notice-server/config"
+	"notice-server/logger"
 	"notice-server/ratelimit"
 )
 
@@ -217,6 +221,45 @@ func TestWebhookRequestBodyTooLarge(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("got status %d, want 413 Request Entity Too Large", rec.Code)
+	}
+}
+
+// TestWebhookZeroMaxLengthAcceptsLongContent max_title/max_content 为 0 时不截断、校验通过且可发布
+func TestWebhookZeroMaxLengthAcceptsLongContent(t *testing.T) {
+	if logger.Get() == nil {
+		_, _ = logger.Init(logger.Config{ConsoleLevel: "off", FileLevel: "off"})
+	}
+	br := broker.New("notice", broker.Config{
+		SessionExpiry:  60,
+		MessageExpiry:  60,
+		AuthToken:      "test-tok",
+		StorageEnabled: false,
+	}, nil)
+	if err := br.Start("127.0.0.1:0", "127.0.0.1:0"); err != nil {
+		t.Fatal(err)
+	}
+	defer br.Close()
+	time.Sleep(80 * time.Millisecond)
+
+	cfg := &config.Config{
+		Auth:    config.AuthConfig{Token: "test-tok"},
+		MQTT:    config.MQTTConfig{Topic: "notice"},
+		Message: config.MessageConfig{MaxTitleLength: 0, MaxContentLength: 0},
+	}
+	h := NewWebhookHandler(br, cfg, nil)
+
+	long := strings.Repeat("汉", 3000)
+	body, err := json.Marshal(map[string]string{"content": long})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-tok")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

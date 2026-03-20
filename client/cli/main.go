@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -59,11 +61,42 @@ func (t *FlexTime) UnmarshalJSON(b []byte) error {
 
 // Message 接收到的消息结构
 type Message struct {
-	Title     string   `json:"title"`
-	Content   string   `json:"content"`
-	Extra     any      `json:"extra,omitempty"`
-	Timestamp FlexTime `json:"timestamp"`
-	Client    string   `json:"client,omitempty"` // 发送端：web / android / cli / webhook
+	Title           string   `json:"title"`
+	Content         string   `json:"content"`
+	ContentEncoding string   `json:"content_encoding,omitempty"`
+	Extra           any      `json:"extra,omitempty"`
+	Timestamp       FlexTime `json:"timestamp"`
+	Client          string   `json:"client,omitempty"` // 发送端：web / android / cli / webhook
+}
+
+const contentEncodingGzipBase64 = "gzip+base64"
+
+func decodeMessageContent(m *Message) {
+	enc := strings.TrimSpace(m.ContentEncoding)
+	if enc == "" {
+		return
+	}
+	if enc != contentEncodingGzipBase64 {
+		return
+	}
+	raw, err := base64.StdEncoding.DecodeString(m.Content)
+	if err != nil {
+		log.Printf("base64 解码失败: %v", err)
+		return
+	}
+	r, err := gzip.NewReader(bytes.NewReader(raw))
+	if err != nil {
+		log.Printf("gzip: %v", err)
+		return
+	}
+	defer r.Close()
+	var buf bytes.Buffer
+	if _, err := buf.ReadFrom(r); err != nil {
+		log.Printf("gzip 读取: %v", err)
+		return
+	}
+	m.Content = buf.String()
+	m.ContentEncoding = ""
 }
 
 func main() {
@@ -185,6 +218,7 @@ func handleMessage(topic string, payload []byte) {
 		log.Printf("JSON 解析失败: %v", err)
 		return
 	}
+	decodeMessageContent(&msg)
 
 	// 显示系统通知
 	title := msg.Title

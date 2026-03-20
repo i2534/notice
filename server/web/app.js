@@ -23,6 +23,33 @@ function topicForPublish(topic) {
     return topic;
 }
 
+var NOTICE_CONTENT_ENCODING_GZIP_B64 = 'gzip+base64';
+
+/** 若 MQTT JSON 带 gzip+base64 编码的 content，解压为明文（需浏览器支持 DecompressionStream） */
+async function decodeNoticeMqttPayloadIfEncoded(msg) {
+    if (!msg || msg.content_encoding !== NOTICE_CONTENT_ENCODING_GZIP_B64 || msg.content == null) {
+        return msg;
+    }
+    if (typeof DecompressionStream === 'undefined') {
+        console.warn('[notice] DecompressionStream unavailable, cannot decode gzip+base64');
+        return msg;
+    }
+    var b64 = String(msg.content);
+    var binStr = atob(b64);
+    var bytes = new Uint8Array(binStr.length);
+    for (var i = 0; i < binStr.length; i++) {
+        bytes[i] = binStr.charCodeAt(i);
+    }
+    var ds = new DecompressionStream('gzip');
+    var stream = new Blob([bytes]).stream().pipeThrough(ds);
+    var buf = await new Response(stream).arrayBuffer();
+    var dec = new TextDecoder('utf-8').decode(buf);
+    var out = Object.assign({}, msg);
+    delete out.content_encoding;
+    out.content = dec;
+    return out;
+}
+
 function generateClientId() {
     return 'web-' + Math.random().toString(16).substr(2, 8);
 }
@@ -359,7 +386,7 @@ function connect() {
         fetchMessageHistory();
     });
 
-    client.on('message', (topic, payload) => {
+    client.on('message', async (topic, payload) => {
         const normTopic = topicForPublish(topic);
         var msg;
         if (payload != null && typeof payload === 'object' && !Array.isArray(payload) && ('content' in payload || 'title' in payload)) {
@@ -373,6 +400,11 @@ function connect() {
             }
         }
         if (msg.content === '__auth_check__') return;
+        try {
+            msg = await decodeNoticeMqttPayloadIfEncoded(msg);
+        } catch (e) {
+            console.warn('[notice] decode content_encoding failed', e);
+        }
         addMessage(normTopic, msg);
     });
 

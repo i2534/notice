@@ -58,9 +58,18 @@ channels:
     topic: "notice/openclaw"                     # 订阅主题，发送时转为可发布主题（如 notice/# → notice）
     blockStreaming: true                         # 按块流式发送（默认逐条发出）
     blockStreamingBreak: "text_end"              # text_end=逐条，message_end=整条结束后再发
+    maxContentLength: 0                          # 默认 0=不限制整段发送；>0 为分块时每块最大 rune 数（经 Webhook 时勿超过服务端限制）
+    compressMinRunes: 0                          # 仅发布端：≥此 rune 数且 gzip+base64 更短才编码；0=从不压缩
+    allowSlashCommands: true                     # 是否将「/」开头入站消息标记为 CommandAuthorized
 ```
 
 若主机不读取通道级 `blockStreamingBreak`，需在 openclaw 主配置中设置 `agents.defaults.blockStreamingBreak: "text_end"` 以实现逐条发送。
+
+**消息长度**：`maxContentLength` 默认 **0**（不限制、整段 MQTT 发送）。设为 **>0** 时按每块最大 **rune** 数分块；若内容会经 Notice **Webhook** 写入，需 **≤** 服务端 `message.max_content_length`。纯 MQTT 不经 Webhook 时服务端不按 `max_content_length` 校验正文。
+
+**载荷压缩**：`compressMinRunes`（默认 0）>0 时，仅当正文足够长且 `gzip+base64` 比 UTF-8 字节更短时，MQTT JSON 会带 `content_encoding: gzip+base64`。服务端不配置压缩，仅转发；各客户端与消息入库需支持解码。
+
+**/ 命令**：`allowSlashCommands`（默认 true）为 true 时，以 `/` 开头的入站正文会设置 `CommandAuthorized`（Dispatch）并在 `/hooks/agent` 请求中带 `commandAuthorized`。MQTT 与 token 同权，请评估信任模型。
 
 ## 收发方式
 

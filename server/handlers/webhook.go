@@ -145,16 +145,10 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Topic = topic
 	}
-	// 去除控制字符并限制长度（防 XSS/注入）
+	// 去除控制字符并限制长度（防 XSS/注入）；max_* 为 0 时表示不限制长度，仅做清洗
 	maxTitle := h.config.Message.MaxTitleLength
-	if maxTitle <= 0 {
-		maxTitle = 256
-	}
 	req.Title = SanitizeString(req.Title, maxTitle)
 	maxContent := h.config.Message.MaxContentLength
-	if maxContent <= 0 {
-		maxContent = 1024
-	}
 	req.Content = SanitizeContent(req.Content, maxContent)
 	if req.Content == "" {
 		h.sendError(w, http.StatusBadRequest, "content 字段不能为空")
