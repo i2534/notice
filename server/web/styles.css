@@ -449,7 +449,7 @@ body {
 .message-header {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.15rem;
 }
 
 .message-title {
@@ -1145,35 +1145,38 @@ button.full {
 /* 语音命令确认卡片（ASR） */
 .asr-confirm-card-wrap {
     width: 100%;
+    margin-top: 0.05rem;
 }
 
 .asr-confirm-card {
-    padding: 0.65rem 0.75rem;
+    padding: 0.4rem 0.55rem;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: 8px;
-    margin-top: 0.25rem;
+    margin-top: 0.1rem;
 }
 
 .asr-confirm-title {
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--accent);
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.2rem;
+    line-height: 1.2;
 }
 
 .asr-confirm-textarea {
     width: 100%;
-    min-height: 4rem;
-    padding: 0.5rem 0.6rem;
+    min-height: 2.75rem;
+    padding: 0.35rem 0.45rem;
     border: 1px solid var(--border);
     border-radius: 6px;
     background: var(--bg-card);
     color: var(--text-primary);
     font-size: 0.9rem;
     font-family: inherit;
+    line-height: 1.35;
     resize: vertical;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.3rem;
 }
 
 .asr-confirm-textarea:focus {
@@ -1184,12 +1187,13 @@ button.full {
 .asr-confirm-actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.35rem;
     align-items: center;
+    margin-top: 0.05rem;
 }
 
 .btn-asr {
-    padding: 0.35rem 0.85rem;
+    padding: 0.28rem 0.65rem;
     border-radius: 6px;
     font-size: 0.85rem;
     cursor: pointer;

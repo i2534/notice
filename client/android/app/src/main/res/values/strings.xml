@@ -91,6 +91,9 @@
     <string name="voice_command_cancel_a11y">取消语音命令</string>
     <string name="voice_asr_confirmed_line">【语音命令已确认】</string>
     <string name="voice_asr_cancelled_line">【已取消语音命令】</string>
+    <!-- 列表/详情中出站 asr_confirm、asr_cancel JSON 的可读展示 -->
+    <string name="voice_command_display_confirm">语音命令: %1$s</string>
+    <string name="voice_command_display_cancel">取消语音命令</string>
     <string name="voice_paused_label">已暂停</string>
 
     <!-- 通知 -->

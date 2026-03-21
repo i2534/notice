@@ -72,7 +72,13 @@ class MessageListHeaderAdapter(
                 binding.latestMessageCard.setOnClickListener { onLatestCardClick() }
                 binding.latestTitle.text = message.title
                 binding.latestTime.text = message.getFormattedTime()
-                val blocks = ContentBlockParser.parse(message.content)
+                val asrOutgoingDisplay =
+                    MessageAdapter.displayTextForOutgoingAsrCommand(context, message.isOutgoing, message.content)
+                val blocks = if (asrOutgoingDisplay != null) {
+                    listOf(ContentBlock.Text(asrOutgoingDisplay))
+                } else {
+                    ContentBlockParser.parse(message.content)
+                }
                 MessageContentRenderer.render(
                     binding.latestContentContainer,
                     blocks,
@@ -81,20 +87,23 @@ class MessageListHeaderAdapter(
                     showUrlWhenNoCache = false
                 )
                 binding.latestContentContainer.setTag(message.id)
-                val scope = binding.root.findViewTreeLifecycleOwner()?.lifecycleScope
-                    ?: (context as? FragmentActivity)?.lifecycleScope
-                scope?.launch {
-                    val map = MediaCacheLoader.ensureMediaAndImageCache(context.applicationContext, message.content)
-                    withContext(Dispatchers.Main) {
-                        if (binding.latestContentContainer.getTag() != message.id) return@withContext
-                        MessageContentRenderer.render(
-                            binding.latestContentContainer,
-                            blocks,
-                            markwon,
-                            mediaCachePathByUrl = if (map.isEmpty()) null else map,
-                            showUrlWhenNoCache = true
-                        )
-                        MessageContentRenderer.requestFocusOnFirstVisiblePlayRow(binding.latestContentContainer)
+                if (asrOutgoingDisplay == null) {
+                    val scope = binding.root.findViewTreeLifecycleOwner()?.lifecycleScope
+                        ?: (context as? FragmentActivity)?.lifecycleScope
+                    scope?.launch {
+                        val map = MediaCacheLoader.ensureMediaAndImageCache(context.applicationContext, message.content)
+                        withContext(Dispatchers.Main) {
+                            if (binding.latestContentContainer.getTag() != message.id) return@withContext
+                            val reloadBlocks = ContentBlockParser.parse(message.content)
+                            MessageContentRenderer.render(
+                                binding.latestContentContainer,
+                                reloadBlocks,
+                                markwon,
+                                mediaCachePathByUrl = if (map.isEmpty()) null else map,
+                                showUrlWhenNoCache = true
+                            )
+                            MessageContentRenderer.requestFocusOnFirstVisiblePlayRow(binding.latestContentContainer)
+                        }
                     }
                 }
             } else {

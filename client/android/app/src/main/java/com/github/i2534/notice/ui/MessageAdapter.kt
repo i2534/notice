@@ -1,5 +1,6 @@
 package com.github.i2534.notice.ui
 
+import android.content.Context
 import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.View
@@ -115,6 +116,33 @@ class MessageAdapter(
                 null
             }
         }
+
+        /**
+         * 出站 payload `{"type":"asr_confirm","text":"…"}` / `{"type":"asr_cancel"}` 在列表中的可读展示；
+         * 非此类或解析失败返回 null。
+         */
+        fun displayTextForOutgoingAsrCommand(context: Context, isOutgoing: Boolean, content: String): String? {
+            if (!isOutgoing) return null
+            val trimmed = content.trim()
+            if (!trimmed.startsWith("{")) return null
+            return try {
+                val obj = JSONObject(trimmed)
+                when (obj.optString("type")) {
+                    "asr_confirm" -> {
+                        val text = obj.optString("text", "").trim()
+                        if (text.isNotEmpty()) {
+                            context.getString(R.string.voice_command_display_confirm, text)
+                        } else {
+                            null
+                        }
+                    }
+                    "asr_cancel" -> context.getString(R.string.voice_command_display_cancel)
+                    else -> null
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
 
     class MessageViewHolder(
@@ -188,8 +216,15 @@ class MessageAdapter(
                 else -> {
                     binding.asrConfirmRow.visibility = View.GONE
                     binding.messageContentContainer.visibility = View.VISIBLE
-                    val blocks = ContentBlockParser.parse(message.content)
-                    val maxImageHeightPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
+                    val ctx = binding.root.context
+                    val asrOutgoingDisplay =
+                        MessageAdapter.displayTextForOutgoingAsrCommand(ctx, message.isOutgoing, message.content)
+                    val blocks = if (asrOutgoingDisplay != null) {
+                        listOf(ContentBlock.Text(asrOutgoingDisplay))
+                    } else {
+                        ContentBlockParser.parse(message.content)
+                    }
+                    val maxImageHeightPx = ctx.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
                     MessageContentRenderer.render(
                         binding.messageContentContainer,
                         blocks,
@@ -200,23 +235,26 @@ class MessageAdapter(
                         showUrlWhenNoCache = false,
                         maxImageHeightInList = maxImageHeightPx
                     )
-                    val mediaAndImageUrls = ContentBlockParser.extractMediaAndImageUrls(message.content)
+                    val mediaAndImageUrls =
+                        if (asrOutgoingDisplay != null) emptyList()
+                        else ContentBlockParser.extractMediaAndImageUrls(message.content)
                     if (mediaAndImageUrls.isNotEmpty()) {
                         binding.messageContentContainer.setTag(message.id)
                         val scope = binding.root.findViewTreeLifecycleOwner()?.lifecycleScope
-                            ?: (binding.root.context as? FragmentActivity)?.lifecycleScope
+                            ?: (ctx as? FragmentActivity)?.lifecycleScope
                         scope?.launch {
                             val messageId = message.id
                             val map = MediaCacheLoader.ensureMediaAndImageCache(
-                                binding.root.context.applicationContext,
+                                ctx.applicationContext,
                                 message.content
                             )
                             withContext(Dispatchers.Main) {
                                 if (binding.messageContentContainer.getTag() == messageId) {
-                                    val maxPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
+                                    val maxPx = ctx.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
+                                    val reloadBlocks = ContentBlockParser.parse(message.content)
                                     MessageContentRenderer.render(
                                         binding.messageContentContainer,
-                                        blocks,
+                                        reloadBlocks,
                                         markwon,
                                         maxTextLinesInList = 2,
                                         touchThrough = true,
@@ -229,7 +267,8 @@ class MessageAdapter(
                         }
                     }
                     val content = message.content
-                    val likelyTruncated = content.length > 100 || content.lines().size > 2 || blocks.size > 3
+                    val likelyTruncated = asrOutgoingDisplay == null &&
+                        (content.length > 100 || content.lines().size > 2 || blocks.size > 3)
                     binding.messageContentMore.visibility = if (likelyTruncated) View.VISIBLE else View.GONE
                 }
             }

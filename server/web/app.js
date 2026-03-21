@@ -121,6 +121,24 @@ function parseAsrConfirmRequestWeb(content) {
     return null;
 }
 
+/** Web：回复栏发出的 asr_confirm / asr_cancel JSON 在列表中的可读展示 */
+function formatAsrCommandPayloadForDisplay(msg, raw) {
+    if (!raw || raw.charAt(0) !== '{') return null;
+    if (msg.title === undefined || msg.title === null || String(msg.title) !== '回复') return null;
+    try {
+        var p = JSON.parse(raw);
+        if (!p || typeof p !== 'object') return null;
+        if (p.type === 'asr_confirm' && typeof p.text === 'string') {
+            var t = String(p.text).trim();
+            return t.length > 0 ? ('语音命令: ' + t) : null;
+        }
+        if (p.type === 'asr_cancel') {
+            return '取消语音命令';
+        }
+    } catch (e) { /* ignore */ }
+    return null;
+}
+
 function generateClientId() {
     return 'web-' + Math.random().toString(16).substr(2, 8);
 }
@@ -663,6 +681,13 @@ function getDisplayMessage(msg) {
                 }
             } catch (e) { /* ignore */ }
         }
+    }
+    var asrLine = formatAsrCommandPayloadForDisplay(msg, raw);
+    if (asrLine != null) {
+        return {
+            title: (msg.title !== undefined && msg.title !== null) ? String(msg.title) : '通知',
+            content: asrLine
+        };
     }
     return {
         title: (msg.title !== undefined && msg.title !== null) ? String(msg.title) : '通知',

@@ -675,8 +675,15 @@ class MainActivity : AppCompatActivity() {
             if (message.isOutgoing) R.drawable.bg_dialog_message_header_outgoing
             else R.drawable.bg_dialog_message_header
         )
-        val blocks = ContentBlockParser.parse(message.content)
-        val hasMediaOrImage = ContentBlockParser.extractMediaAndImageUrls(message.content).isNotEmpty()
+        val asrOutgoingDisplay =
+            MessageAdapter.displayTextForOutgoingAsrCommand(this, message.isOutgoing, message.content)
+        val blocks = if (asrOutgoingDisplay != null) {
+            listOf(ContentBlock.Text(asrOutgoingDisplay))
+        } else {
+            ContentBlockParser.parse(message.content)
+        }
+        val hasMediaOrImage = asrOutgoingDisplay == null &&
+            ContentBlockParser.extractMediaAndImageUrls(message.content).isNotEmpty()
 
         fun renderAndShowDialog(mediaCachePathByUrl: Map<String, String>?) {
             MessageContentRenderer.render(
