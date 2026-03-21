@@ -80,29 +80,46 @@ class MainActivity : AppCompatActivity() {
     /** 本次录音开始时间（用于显示录制秒数） */
     private var voiceRecordingStartMs: Long = 0L
 
-    private val messageAdapter by lazy {
-        MessageAdapter(
+    private val messageAdapter: MessageAdapter by lazy {
+        lateinit var self: MessageAdapter
+        self = MessageAdapter(
             markwon,
             onItemClick = { message -> showMessageDetailDialog(message) },
             onEnterSelectMode = { updateSelectModeUI() },
             onSelectionChanged = { count -> updateSelectionCount(count) },
-            onAsrConfirm = { topic, text ->
+            onAsrConfirm = { message, text ->
                 val service = mqttService
                 if (service == null || service.connectionState.value != MqttService.ConnectionState.CONNECTED) {
                     Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-                    return@MessageAdapter
-                }
-                val payload = JSONObject().apply {
-                    put("type", "asr_confirm")
-                    put("text", text)
-                }.toString()
-                if (service.publishReply(payload, topic)) {
-                    Snackbar.make(binding.root, R.string.reply_sent, Snackbar.LENGTH_SHORT).show()
                 } else {
+                    val payload = JSONObject().apply {
+                        put("type", "asr_confirm")
+                        put("text", text)
+                    }.toString()
+                    if (service.publishReply(payload, message.topic)) {
+                        self.markAsrHandled(message.id, getString(R.string.voice_asr_confirmed_line))
+                        Snackbar.make(binding.root, R.string.reply_sent, Snackbar.LENGTH_SHORT).show()
+                    } else {
+                        Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onAsrCancel = { message ->
+                val service = mqttService
+                if (service == null || service.connectionState.value != MqttService.ConnectionState.CONNECTED) {
                     Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
+                } else {
+                    val payload = JSONObject().apply { put("type", "asr_cancel") }.toString()
+                    if (service.publishReply(payload, message.topic)) {
+                        self.markAsrHandled(message.id, getString(R.string.voice_asr_cancelled_line))
+                        Snackbar.make(binding.root, R.string.reply_sent, Snackbar.LENGTH_SHORT).show()
+                    } else {
+                        Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
+                    }
                 }
             }
         )
+        self
     }
 
     private val headerAdapter by lazy {
@@ -366,6 +383,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleVoiceTextMode() {
+        pendingVoiceFile?.let { f ->
+            try {
+                f.delete()
+            } catch (_: Exception) {
+            }
+            pendingVoiceFile = null
+        }
         isVoiceInputMode = !isVoiceInputMode
         if (isVoiceInputMode) {
             binding.replyInput.visibility = View.GONE

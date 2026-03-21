@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"strings"
 	"testing"
 )
 
@@ -38,6 +39,24 @@ func TestDecodeMessageContent_gzipBase64(t *testing.T) {
 	}
 	if msg.ContentEncoding != "" {
 		t.Fatalf("encoding should be cleared, got %q", msg.ContentEncoding)
+	}
+	if msg.Content != plain {
+		t.Fatalf("got %q want %q", msg.Content, plain)
+	}
+}
+
+func TestGzipBase64Encode_roundtrip(t *testing.T) {
+	plain := "hello 世界\n" + strings.Repeat("x", 300)
+	b64, err := GzipBase64Encode(plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg := &Message{
+		Content:         b64,
+		ContentEncoding: ContentEncodingGzipBase64,
+	}
+	if err := DecodeMessageContent(msg); err != nil {
+		t.Fatal(err)
 	}
 	if msg.Content != plain {
 		t.Fatalf("got %q want %q", msg.Content, plain)

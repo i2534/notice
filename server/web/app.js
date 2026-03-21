@@ -50,6 +50,77 @@ async function decodeNoticeMqttPayloadIfEncoded(msg) {
     return out;
 }
 
+/** Webhook 发送：正文 Unicode 标量值数量 ≥ 此值时才尝试 gzip+base64（与 OpenClaw compressMinRunes 语义一致） */
+var WEBHOOK_COMPRESS_MIN_RUNES = 50;
+
+function countRunesWeb(s) {
+    return [...s].length;
+}
+
+/**
+ * 构建 webhook 的 content / content_encoding：与 OpenClaw 一致，仅当 rune 数达标且 base64 短于 UTF-8 字节长度时压缩。
+ * 无 CompressionStream 或失败时回退明文。
+ */
+async function buildWebhookContentFields(plain) {
+    if (typeof CompressionStream === 'undefined') {
+        return { content: plain };
+    }
+    var minRunes = WEBHOOK_COMPRESS_MIN_RUNES;
+    var utf8 = new TextEncoder().encode(plain);
+    var plainLen = utf8.length;
+    if (minRunes <= 0 || plainLen === 0 || countRunesWeb(plain) < minRunes) {
+        return { content: plain };
+    }
+    try {
+        var cs = new CompressionStream('gzip');
+        var stream = new Blob([utf8]).stream().pipeThrough(cs);
+        var buf = await new Response(stream).arrayBuffer();
+        var bytes = new Uint8Array(buf);
+        var bin = '';
+        for (var i = 0; i < bytes.length; i++) {
+            bin += String.fromCharCode(bytes[i]);
+        }
+        var b64 = btoa(bin);
+        if (b64.length < plainLen) {
+            return { content: b64, content_encoding: NOTICE_CONTENT_ENCODING_GZIP_B64 };
+        }
+    } catch (e) {
+        console.warn('[notice] webhook gzip compress failed', e);
+    }
+    return { content: plain };
+}
+
+/** MQTT 载荷转 UTF-8 字符串（浏览器中常为 Uint8Array，勿用默认 toString） */
+function mqttPayloadToUtf8String(payload) {
+    if (payload == null || payload === undefined) return '';
+    if (typeof payload === 'string') return payload;
+    if (payload instanceof ArrayBuffer) {
+        return new TextDecoder('utf-8', { fatal: false }).decode(payload);
+    }
+    if (ArrayBuffer.isView(payload)) {
+        var buf = payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength);
+        return new TextDecoder('utf-8', { fatal: false }).decode(buf);
+    }
+    if (typeof Buffer !== 'undefined' && Buffer.isBuffer && Buffer.isBuffer(payload)) {
+        return payload.toString('utf8');
+    }
+    return String(payload);
+}
+
+/** 若为 asr_confirm_request JSON 则返回转写文本，否则 null */
+function parseAsrConfirmRequestWeb(content) {
+    try {
+        var raw = (content != null && content !== undefined) ? String(content).trim() : '';
+        if (!raw || raw.charAt(0) !== '{') return null;
+        var o = JSON.parse(raw);
+        if (o && o.type === 'asr_confirm_request' && typeof o.text === 'string') {
+            var t = o.text.trim();
+            return t.length > 0 ? t : null;
+        }
+    } catch (e) { /* ignore */ }
+    return null;
+}
+
 function generateClientId() {
     return 'web-' + Math.random().toString(16).substr(2, 8);
 }
@@ -180,10 +251,103 @@ function renderMessages() {
         list.innerHTML = messages.map((msg, idx) => createMessageHTML(msg, idx)).join('');
         messageCount = messages.length;
         attachMediaFallbacks(list);
+        attachAsrCardClickHandlers(list);
     }
     document.getElementById('messageCount').textContent = messageCount + ' 条';
     updateSelectAllState();
     updateDeleteSelectedBtn();
+}
+
+/** 语音命令卡片：事件委托（innerHTML 每次重绘） */
+function attachAsrCardClickHandlers(container) {
+    if (!container || container.dataset.asrDelegateBound === '1') return;
+    container.dataset.asrDelegateBound = '1';
+    container.addEventListener('click', function (e) {
+        var btn = e.target.closest('.btn-asr[data-asr-action]');
+        if (!btn || btn.disabled) return;
+        var idx = parseInt(btn.getAttribute('data-asr-idx'), 10);
+        var action = btn.getAttribute('data-asr-action');
+        if (action === 'confirm') submitWebAsrConfirm(idx);
+        else if (action === 'cancel') submitWebAsrCancel(idx);
+    });
+}
+
+/** Web：发送 asr_confirm / asr_cancel（webhook），与 lastSentContent 去重对齐 §2.5 */
+async function sendWebAsrPayload(idx, contentStr, doneLine, toastMsg) {
+    if (!currentToken) {
+        showToast('请先登录', 'error');
+        return false;
+    }
+    var m = messages[idx];
+    if (!m || m.asrHandled) return false;
+
+    var card = document.querySelector('.asr-confirm-card[data-asr-idx="' + idx + '"]');
+    var buttons = card ? card.querySelectorAll('.btn-asr') : [];
+    buttons.forEach(function (b) { b.disabled = true; });
+
+    lastSentContent = contentStr;
+    lastSentTime = Date.now();
+
+    var topic = topicForPublish(m.topic || '');
+    var fields = await buildWebhookContentFields(contentStr);
+    var body = Object.assign({ title: '回复', client: 'web', topic: topic }, fields);
+
+    try {
+        var res = await fetch('/webhook', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + currentToken
+            },
+            body: JSON.stringify(body)
+        });
+        if (res.status === 401) {
+            lastSentContent = '';
+            logout();
+            showToast('认证失败', 'error');
+            return false;
+        }
+        if (res.status === 429) {
+            lastSentContent = '';
+            showToast('请求过于频繁', 'error');
+            return false;
+        }
+        var data = await res.json().catch(function () { return {}; });
+        if (!data.success) {
+            lastSentContent = '';
+            showToast(data.message || '发送失败', 'error');
+            buttons.forEach(function (b) { b.disabled = false; });
+            return false;
+        }
+        m.content = doneLine;
+        m.asrHandled = true;
+        saveCachedMessages();
+        renderMessages();
+        showToast(toastMsg, 'success');
+        loadServerStatus();
+        return true;
+    } catch (err) {
+        lastSentContent = '';
+        showToast(err.message || '网络错误', 'error');
+        buttons.forEach(function (b) { b.disabled = false; });
+        return false;
+    }
+}
+
+function submitWebAsrConfirm(idx) {
+    var ta = document.querySelector('.asr-confirm-textarea[data-asr-idx="' + idx + '"]');
+    var text = ta ? ta.value.trim() : '';
+    if (!text) {
+        showToast('请保留或修改识别文字', 'error');
+        return;
+    }
+    var contentStr = JSON.stringify({ type: 'asr_confirm', text: text });
+    sendWebAsrPayload(idx, contentStr, '【语音命令已确认】', '已确认');
+}
+
+function submitWebAsrCancel(idx) {
+    var contentStr = JSON.stringify({ type: 'asr_cancel' });
+    sendWebAsrPayload(idx, contentStr, '【已取消语音命令】', '已取消');
 }
 
 /** 图片/音频加载失败时显示原始地址（可点击） */
@@ -228,6 +392,26 @@ function createMessageHTML(msg, idx) {
     const display = getDisplayMessage(msg);
     const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : '';
     const clientLabel = msg.client ? `来自 ${escapeHtml(msg.client)}` : '';
+    const rawContent = (msg.content !== undefined && msg.content !== null) ? String(msg.content) : '';
+    const asrDraft = parseAsrConfirmRequestWeb(rawContent);
+    const asrDone = msg.asrHandled === true;
+    var bodyInner;
+    if (asrDraft != null && !asrDone) {
+        const safeDraft = escapeHtml(asrDraft);
+        bodyInner = `
+                        <div class="message-content asr-confirm-card-wrap">
+                            <div class="asr-confirm-card" data-asr-idx="${idx}">
+                                <div class="asr-confirm-title">语音命令</div>
+                                <textarea class="asr-confirm-textarea" data-asr-idx="${idx}" rows="3">${safeDraft}</textarea>
+                                <div class="asr-confirm-actions">
+                                    <button type="button" class="btn btn-asr btn-asr-primary" data-asr-idx="${idx}" data-asr-action="confirm">确认</button>
+                                    <button type="button" class="btn btn-asr btn-asr-secondary" data-asr-idx="${idx}" data-asr-action="cancel" title="取消语音命令">取消</button>
+                                </div>
+                            </div>
+                        </div>`;
+    } else {
+        bodyInner = `<div class="message-content">${renderMarkdown(display.content)}</div>`;
+    }
     return `
                 <div class="message-item" data-idx="${idx}">
                     <label class="custom-checkbox">
@@ -239,7 +423,7 @@ function createMessageHTML(msg, idx) {
                             <span class="message-title">${escapeHtml(display.title)}</span>
                             <span class="message-meta">${clientLabel ? `<span class="message-client">${clientLabel}</span> ` : ''}<span class="message-time">${time}</span></span>
                         </div>
-                        <div class="message-content">${renderMarkdown(display.content)}</div>
+                        ${bodyInner}
                         <div class="message-topic">${escapeHtml(msg.topic)}</div>
                     </div>
                 </div>
@@ -389,10 +573,10 @@ function connect() {
     client.on('message', async (topic, payload) => {
         const normTopic = topicForPublish(topic);
         var msg;
-        if (payload != null && typeof payload === 'object' && !Array.isArray(payload) && ('content' in payload || 'title' in payload)) {
+        if (payload != null && typeof payload === 'object' && !Array.isArray(payload) && !ArrayBuffer.isView(payload) && !(payload instanceof ArrayBuffer) && ('content' in payload || 'title' in payload)) {
             msg = payload;
         } else {
-            var str = typeof payload === 'string' ? payload : (payload && payload.toString && payload.toString());
+            var str = mqttPayloadToUtf8String(payload);
             try {
                 msg = JSON.parse(str);
             } catch (e) {
@@ -729,7 +913,8 @@ async function sendMessage() {
     lastSentTime = Date.now();
 
     try {
-        const body = { title: title || '通知', content, client: 'web' };
+        const fields = await buildWebhookContentFields(content);
+        const body = Object.assign({ title: title || '通知', client: 'web' }, fields);
         if (topic) body.topic = topic;
 
         const res = await fetch('/webhook', {

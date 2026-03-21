@@ -18,11 +18,12 @@ import (
 
 // Request Webhook 请求结构
 type Request struct {
-	Title   string `json:"title"`            // 消息标题
-	Content string `json:"content"`          // 消息内容（必填）；图片 URL 等可放在 content 中
-	Topic   string `json:"topic,omitempty"`  // 可选：指定主题
-	Extra   any    `json:"extra,omitempty"`  // 可选：额外数据
-	Client  string `json:"client,omitempty"` // 可选：发送端标识，如 web / android / cli
+	Title           string `json:"title"`                      // 消息标题
+	Content         string `json:"content"`                    // 消息内容（必填）；图片 URL 等可放在 content 中；可与 content_encoding 配合为 gzip+base64
+	Topic           string `json:"topic,omitempty"`            // 可选：指定主题
+	Extra           any    `json:"extra,omitempty"`            // 可选：额外数据
+	Client          string `json:"client,omitempty"`           // 可选：发送端标识，如 web / android / cli
+	ContentEncoding string `json:"content_encoding,omitempty"` // 可选：如 gzip+base64，与 MQTT / OpenClaw 约定一致
 }
 
 // Response Webhook 响应
@@ -149,28 +150,71 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	maxTitle := h.config.Message.MaxTitleLength
 	req.Title = SanitizeString(req.Title, maxTitle)
 	maxContent := h.config.Message.MaxContentLength
-	req.Content = SanitizeContent(req.Content, maxContent)
-	if req.Content == "" {
-		h.sendError(w, http.StatusBadRequest, "content 字段不能为空")
-		return
-	}
 	req.Client = SanitizeString(req.Client, 64)
 
+	enc := strings.TrimSpace(req.ContentEncoding)
+
+	var plainContent string
+	var outContent string
+	var outEncoding string
+
+	switch enc {
+	case "":
+		req.Content = SanitizeContent(req.Content, maxContent)
+		if req.Content == "" {
+			logger.Warn("content 字段为空")
+			h.sendError(w, http.StatusBadRequest, "content 字段不能为空")
+			return
+		}
+		plainContent = req.Content
+		outContent = req.Content
+		outEncoding = ""
+
+	case broker.ContentEncodingGzipBase64:
+		tmp := broker.Message{
+			Content:         req.Content,
+			ContentEncoding: enc,
+		}
+		if err := broker.DecodeMessageContent(&tmp); err != nil {
+			logger.Warn("gzip+base64 解码失败", "error", err)
+			h.sendError(w, http.StatusBadRequest, "content 解码失败")
+			return
+		}
+		plainContent = SanitizeContent(tmp.Content, maxContent)
+		if plainContent == "" {
+			logger.Warn("content 字段为空")
+			h.sendError(w, http.StatusBadRequest, "content 字段不能为空")
+			return
+		}
+		reB64, err := broker.GzipBase64Encode(plainContent)
+		if err != nil {
+			logger.Error("gzip 编码失败", "error", err)
+			h.sendError(w, http.StatusInternalServerError, "消息编码失败")
+			return
+		}
+		outContent = reB64
+		outEncoding = enc
+
+	default:
+		h.sendError(w, http.StatusBadRequest, "未知 content_encoding")
+		return
+	}
+
 	// 仅做 Token 校验，不发布到 MQTT（Web 端登录时用）
-	if req.Content == "__auth_check__" {
+	if enc == "" && plainContent == "__auth_check__" {
 		h.sendSuccess(w, "认证成功", h.broker.ClientCount())
 		return
 	}
 
-	// 验证字段长度
+	// 验证字段长度（按解压/明文后的 rune 计）
 	if h.config.Message.MaxTitleLength > 0 && utf8.RuneCountInString(req.Title) > h.config.Message.MaxTitleLength {
 		logger.Warn("title 超出长度限制", "size", utf8.RuneCountInString(req.Title), "max", h.config.Message.MaxTitleLength)
 		h.sendError(w, http.StatusBadRequest, fmt.Sprintf("title 长度不能超过 %d 字符", h.config.Message.MaxTitleLength))
 		return
 	}
 
-	if h.config.Message.MaxContentLength > 0 && utf8.RuneCountInString(req.Content) > h.config.Message.MaxContentLength {
-		logger.Warn("content 超出长度限制", "size", utf8.RuneCountInString(req.Content), "max", h.config.Message.MaxContentLength)
+	if h.config.Message.MaxContentLength > 0 && utf8.RuneCountInString(plainContent) > h.config.Message.MaxContentLength {
+		logger.Warn("content 超出长度限制", "size", utf8.RuneCountInString(plainContent), "max", h.config.Message.MaxContentLength)
 		h.sendError(w, http.StatusBadRequest, fmt.Sprintf("content 长度不能超过 %d 字符", h.config.Message.MaxContentLength))
 		return
 	}
@@ -181,11 +225,12 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		client = "webhook" // 经 Webhook 发送且未指定时
 	}
 	msg := broker.Message{
-		Title:     req.Title,
-		Content:   req.Content,
-		Extra:     req.Extra,
-		Timestamp: time.Now(),
-		Client:    client,
+		Title:           req.Title,
+		Content:         outContent,
+		ContentEncoding: outEncoding,
+		Extra:           req.Extra,
+		Timestamp:       time.Now(),
+		Client:          client,
 	}
 
 	// 发布到 MQTT（订阅可用通配符 notice/#，发布必须用具体主题）

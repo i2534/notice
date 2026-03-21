@@ -113,11 +113,13 @@
             android:gravity="center_vertical"
             android:layout_margin="8dp"
             android:layout_marginBottom="8dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:background="@drawable/bg_reply_bar"
             android:clipChildren="false"
             android:clipToPadding="false">
 
-            <!-- 左侧：语音/键盘切换（背景由上层提供不透明，仅前景水波纹） -->
+            <!-- 左侧：语音/键盘切换（与右侧发送按钮到条边的留白对称，图标在 48dp 内居中） -->
             <FrameLayout
                 android:id="@+id/btnInputModeToggleWrap"
                 android:layout_width="48dp"
@@ -144,7 +146,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="4dp"
+                android:layout_marginStart="0dp"
                 android:clipChildren="false"
                 android:clipToPadding="false"
                 android:background="@drawable/bg_reply_bar">
@@ -155,7 +157,7 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:paddingStart="12dp"
-                    android:paddingEnd="10dp"
+                    android:paddingEnd="8dp"
                     android:paddingTop="10dp"
                     android:paddingBottom="10dp"
                     android:clipChildren="false"

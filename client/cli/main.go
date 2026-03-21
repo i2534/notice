@@ -16,6 +16,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -71,32 +72,76 @@ type Message struct {
 
 const contentEncodingGzipBase64 = "gzip+base64"
 
-func decodeMessageContent(m *Message) {
+// logContentMaxRunes 接收日志中单条 content 最多展示的 Unicode 标量值数量（避免 base64 刷屏）
+const logContentMaxRunes = 400
+
+func decodeMessageContent(m *Message) error {
 	enc := strings.TrimSpace(m.ContentEncoding)
 	if enc == "" {
-		return
+		return nil
 	}
 	if enc != contentEncodingGzipBase64 {
-		return
+		return fmt.Errorf("未知 content_encoding: %q", enc)
 	}
 	raw, err := base64.StdEncoding.DecodeString(m.Content)
 	if err != nil {
-		log.Printf("base64 解码失败: %v", err)
-		return
+		return fmt.Errorf("base64 解码: %w", err)
 	}
 	r, err := gzip.NewReader(bytes.NewReader(raw))
 	if err != nil {
-		log.Printf("gzip: %v", err)
-		return
+		return fmt.Errorf("gzip: %w", err)
 	}
 	defer r.Close()
 	var buf bytes.Buffer
 	if _, err := buf.ReadFrom(r); err != nil {
-		log.Printf("gzip 读取: %v", err)
-		return
+		return fmt.Errorf("gzip 读取: %w", err)
 	}
 	m.Content = buf.String()
 	m.ContentEncoding = ""
+	return nil
+}
+
+func truncateForLog(s string, maxRunes int) string {
+	if maxRunes <= 0 || utf8.RuneCountInString(s) <= maxRunes {
+		return s
+	}
+	n := 0
+	for i := range s {
+		if n == maxRunes {
+			return s[:i] + "…(截断)"
+		}
+		n++
+	}
+	return s
+}
+
+func formatRecvLog(m *Message) string {
+	return fmt.Sprintf("title=%q client=%q content=%q", m.Title, m.Client, truncateForLog(m.Content, logContentMaxRunes))
+}
+
+// maybeWebhookCompress 与 Web/OpenClaw 一致：rune≥minRunes 且 gzip+base64 比 UTF-8 字节更短时启用压缩。
+func maybeWebhookCompress(plain string, minRunes int) (content string, contentEncoding string) {
+	if minRunes <= 0 {
+		return plain, ""
+	}
+	utf8b := []byte(plain)
+	if len(utf8b) == 0 || utf8.RuneCountInString(plain) < minRunes {
+		return plain, ""
+	}
+	var gz bytes.Buffer
+	w := gzip.NewWriter(&gz)
+	if _, err := w.Write(utf8b); err != nil {
+		_ = w.Close()
+		return plain, ""
+	}
+	if err := w.Close(); err != nil {
+		return plain, ""
+	}
+	b64 := base64.StdEncoding.EncodeToString(gz.Bytes())
+	if len(b64) >= len(utf8b) {
+		return plain, ""
+	}
+	return b64, contentEncodingGzipBase64
 }
 
 func main() {
@@ -211,14 +256,16 @@ func main() {
 
 // handleMessage 处理接收到的消息
 func handleMessage(topic string, payload []byte) {
-	log.Printf("收到消息 [%s]: %s", topic, string(payload))
-
 	var msg Message
 	if err := json.Unmarshal(payload, &msg); err != nil {
-		log.Printf("JSON 解析失败: %v", err)
+		log.Printf("收到消息 [%s] JSON 解析失败: %v", topic, err)
 		return
 	}
-	decodeMessageContent(&msg)
+	if err := decodeMessageContent(&msg); err != nil {
+		log.Printf("收到消息 [%s] 正文解码失败: %v (载荷约 %d 字节)", topic, err, len(payload))
+		return
+	}
+	log.Printf("收到消息 [%s]: %s", topic, formatRecvLog(&msg))
 
 	// 显示系统通知
 	title := msg.Title
@@ -347,6 +394,7 @@ func runSend(args []string) error {
 	content := fs.String("content", "", "消息内容（必填）")
 	title := fs.String("title", "CLI", "消息标题")
 	client := fs.String("client", "cli", "发送端标识")
+	compressMin := fs.Int("compress-min-runes", 255, "正文 Unicode 标量值数量≥此值且 gzip+base64 短于 UTF-8 时压缩 Webhook 请求；0 表示从不压缩")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -360,10 +408,14 @@ func runSend(args []string) error {
 		return fmt.Errorf("必须指定 -content")
 	}
 	url := strings.TrimSuffix(*server, "/") + "/webhook"
+	contentOut, enc := maybeWebhookCompress(*content, *compressMin)
 	body := map[string]interface{}{
 		"title":   *title,
-		"content": *content,
+		"content": contentOut,
 		"client":  *client,
+	}
+	if enc != "" {
+		body["content_encoding"] = enc
 	}
 	if *topic != "" {
 		body["topic"] = *topic

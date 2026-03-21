@@ -84,8 +84,14 @@
     <string name="voice_upload_failed">上传失败</string>
     <string name="voice_record_failed">录音失败</string>
     <string name="voice_need_server_url">请先在设置中填写 Notice 服务器 URL</string>
-    <string name="voice_confirm_send">确认发送</string>
-    <string name="voice_confirm_transcribe">请确认语音转写</string>
+    <string name="voice_confirm_send">确认</string>
+    <string name="voice_confirm_transcribe">识别结果（可编辑）</string>
+    <string name="voice_command_title">语音命令</string>
+    <string name="voice_command_cancel">取消</string>
+    <string name="voice_command_cancel_a11y">取消语音命令</string>
+    <string name="voice_asr_confirmed_line">【语音命令已确认】</string>
+    <string name="voice_asr_cancelled_line">【已取消语音命令】</string>
+    <string name="voice_paused_label">已暂停</string>
 
     <!-- 通知 -->
     <string name="notification_channel_name">MQTT 服务</string>

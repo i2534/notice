@@ -5,8 +5,8 @@
 ## 功能
 
 - 📡 连接 MQTT Broker 订阅消息
-- 📤 **send 子命令**：通过 webhook 发送消息，**可指定 topic**（回复到指定主题）
-- 🔔 收到消息后显示系统通知 (跨平台)
+- 📤 **send 子命令**：通过 webhook 发送消息，**可指定 topic**（回复到指定主题）；长正文可按服务端约定自动 **gzip+base64** 压缩
+- 🔔 收到消息后显示系统通知 (跨平台)；订阅到的 MQTT JSON 若带 `content_encoding: gzip+base64` 会自动解压后再通知与 `-exec`
 - 🔐 支持 Token 认证
 - 🔄 自动重连
 - ⚡ 支持收到消息时执行外部命令
@@ -153,6 +153,7 @@ start.bat tcp://localhost:9091 your-token
 | -content | (必填) | 消息内容 |
 | -title | CLI | 消息标题 |
 | -client | cli | 发送端标识 |
+| -compress-min-runes | 255 | 正文 Unicode 标量值数量 ≥ 此值且压缩后更短则对 Webhook 使用 `gzip+base64`；`0` 表示从不压缩 |
 
 ## Makefile 变量
 

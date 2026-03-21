@@ -40,3 +40,20 @@ func DecodeMessageContent(msg *Message) error {
 	msg.ContentEncoding = ""
 	return nil
 }
+
+// GzipBase64Encode 将 UTF-8 明文 gzip 压缩后做 standard base64（与 DecodeMessageContent 对偶）。
+func GzipBase64Encode(plain string) (string, error) {
+	if plain == "" {
+		return "", fmt.Errorf("empty plain text")
+	}
+	var buf bytes.Buffer
+	w := gzip.NewWriter(&buf)
+	if _, err := w.Write([]byte(plain)); err != nil {
+		_ = w.Close()
+		return "", err
+	}
+	if err := w.Close(); err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
+}

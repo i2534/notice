@@ -24,8 +24,8 @@ func TestWebhookBruteForceToken(t *testing.T) {
 		Auth: config.AuthConfig{Token: "correct-token"},
 		RateLimit: config.RateLimitConfig{
 			MaxFailures: 3,
-			BlockTime:   2,   // 秒，测试用短封禁
-			WindowTime:  60,  // 秒
+			BlockTime:   2,  // 秒，测试用短封禁
+			WindowTime:  60, // 秒
 		},
 		Message: config.MessageConfig{
 			MaxTitleLength:   50,
@@ -84,7 +84,7 @@ func TestWebhookBruteForceTokenUnblockAfterBlockTime(t *testing.T) {
 		Auth: config.AuthConfig{Token: "secret"},
 		RateLimit: config.RateLimitConfig{
 			MaxFailures: 2,
-			BlockTime:   1,  // 1 秒，但下面用短 limiter 覆盖
+			BlockTime:   1, // 1 秒，但下面用短 limiter 覆盖
 			WindowTime:  60,
 		},
 		Message: config.MessageConfig{
@@ -140,12 +140,12 @@ func TestWebhookGlobalRateLimit(t *testing.T) {
 	cfg := &config.Config{
 		Auth: config.AuthConfig{Token: "secret-token"},
 		RateLimit: config.RateLimitConfig{
-			MaxFailures:            10,  // 单 IP 放宽，避免先于全局触发
-			BlockTime:              60,
-			WindowTime:             60,
-			GlobalMaxPerMinute:     3,
-			GlobalBlockTime:        int(globalBlockTime / time.Millisecond),
-			CredentialMaxFailures:  0,
+			MaxFailures:           10, // 单 IP 放宽，避免先于全局触发
+			BlockTime:             60,
+			WindowTime:            60,
+			GlobalMaxPerMinute:    3,
+			GlobalBlockTime:       int(globalBlockTime / time.Millisecond),
+			CredentialMaxFailures: 0,
 		},
 		Message: config.MessageConfig{
 			MaxTitleLength:   50,
@@ -153,12 +153,12 @@ func TestWebhookGlobalRateLimit(t *testing.T) {
 		},
 	}
 	limiter := ratelimit.New(ratelimit.Config{
-		MaxFailures:            cfg.RateLimit.MaxFailures,
-		BlockTime:              time.Duration(cfg.RateLimit.BlockTime) * time.Second,
-		WindowTime:             time.Duration(cfg.RateLimit.WindowTime) * time.Second,
-		GlobalMaxPerMinute:     cfg.RateLimit.GlobalMaxPerMinute,
-		GlobalBlockTime:        globalBlockTime,
-		CredentialMaxFailures:  cfg.RateLimit.CredentialMaxFailures,
+		MaxFailures:           cfg.RateLimit.MaxFailures,
+		BlockTime:             time.Duration(cfg.RateLimit.BlockTime) * time.Second,
+		WindowTime:            time.Duration(cfg.RateLimit.WindowTime) * time.Second,
+		GlobalMaxPerMinute:    cfg.RateLimit.GlobalMaxPerMinute,
+		GlobalBlockTime:       globalBlockTime,
+		CredentialMaxFailures: cfg.RateLimit.CredentialMaxFailures,
 	})
 	h := NewWebhookHandler(nil, cfg, limiter)
 	body := []byte(`{"content":"x"}`)
@@ -284,5 +284,89 @@ func TestWebhookInvalidTopic(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Errorf("topic %q: got status %d, want 400", topic, rec.Code)
 		}
+	}
+}
+
+// TestWebhookContentEncodingGzipValid webhook 接受 gzip+base64 正文，解压校验长度后重新编码发布
+func TestWebhookContentEncodingGzipValid(t *testing.T) {
+	if logger.Get() == nil {
+		_, _ = logger.Init(logger.Config{ConsoleLevel: "off", FileLevel: "off"})
+	}
+	br := broker.New("notice", broker.Config{
+		SessionExpiry:  60,
+		MessageExpiry:  60,
+		AuthToken:      "test-tok",
+		StorageEnabled: false,
+	}, nil)
+	if err := br.Start("127.0.0.1:0", "127.0.0.1:0"); err != nil {
+		t.Fatal(err)
+	}
+	defer br.Close()
+	time.Sleep(80 * time.Millisecond)
+
+	cfg := &config.Config{
+		Auth:    config.AuthConfig{Token: "test-tok"},
+		MQTT:    config.MQTTConfig{Topic: "notice"},
+		Message: config.MessageConfig{MaxTitleLength: 50, MaxContentLength: 2048},
+	}
+	h := NewWebhookHandler(br, cfg, nil)
+
+	plain := strings.Repeat("汉", 300)
+	b64, err := broker.GzipBase64Encode(plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(map[string]string{
+		"title":            "t",
+		"content":          b64,
+		"content_encoding": broker.ContentEncodingGzipBase64,
+		"client":           "web",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer test-tok")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestWebhookContentEncodingGzipInvalid(t *testing.T) {
+	cfg := &config.Config{
+		Auth:    config.AuthConfig{Token: "secret"},
+		Message: config.MessageConfig{MaxTitleLength: 50, MaxContentLength: 1024},
+	}
+	h := NewWebhookHandler(nil, cfg, nil)
+	body := []byte(`{"content":"!!!","content_encoding":"gzip+base64","title":"x"}`)
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.RemoteAddr = "1.2.3.4:0"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer secret")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", rec.Code)
+	}
+}
+
+func TestWebhookContentEncodingUnknown(t *testing.T) {
+	cfg := &config.Config{
+		Auth:    config.AuthConfig{Token: "secret"},
+		Message: config.MessageConfig{MaxTitleLength: 50, MaxContentLength: 1024},
+	}
+	h := NewWebhookHandler(nil, cfg, nil)
+	body := []byte(`{"content":"eA==","content_encoding":"br","title":"x"}`)
+	req := httptest.NewRequest(http.MethodPost, "/webhook", bytes.NewReader(body))
+	req.RemoteAddr = "1.2.3.4:0"
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer secret")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400", rec.Code)
 	}
 }

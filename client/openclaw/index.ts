@@ -1223,31 +1223,54 @@ export default function register(api: OpenClawPluginApi): void {
                     const topicStr = String(t);
                     const cfg = api.config ?? {};
 
-                    // 1) 确认为「asr_confirm」格式且存在待确认 -> 投递 Agent 并清除待确认，再处理队列下一条
+                    // 1) asr_cancel：无论是否有 pending 均 return，避免重复包掉进普通消息
+                    try {
+                        const parsedCancel = JSON.parse(trimmed) as { type?: string };
+                        if (parsedCancel?.type === "asr_cancel") {
+                            const key = pendingKey(topicStr, clientId);
+                            if (pendingAsrConfirm.has(key)) {
+                                pendingAsrConfirm.delete(key);
+                                try {
+                                    await processNextInQueue(api, key);
+                                } catch (e) {
+                                    pluginLogger.warn("[notice] processNextInQueue after asr_cancel failed " + String(e));
+                                }
+                            } else {
+                                pluginLogger.info("[notice] asr_cancel ignored (no pending) key=" + key);
+                            }
+                            return;
+                        }
+                    } catch {
+                        /* not JSON or not asr_cancel */
+                    }
+
+                    // 2) asr_confirm：无 pending 时早退，禁止落入 handleInboundMessage（避免重复 JSON 当用户正文）
                     try {
                         const parsed = JSON.parse(trimmed) as { type?: string; text?: string };
                         if (parsed?.type === "asr_confirm" && typeof parsed.text === "string") {
                             const key = pendingKey(topicStr, clientId);
                             const pending = pendingAsrConfirm.get(key);
-                            if (pending) {
-                                pendingAsrConfirm.delete(key);
-                                const confirmedText = (parsed.text as string).trim();
-                                if (confirmedText) {
-                                    await handleInboundMessage(api, topicStr, payloadStr, confirmedText, contentPreview);
-                                }
-                                try {
-                                    await processNextInQueue(api, key);
-                                } catch (e) {
-                                    pluginLogger.warn("[notice] processNextInQueue after asr_confirm failed " + String(e));
-                                }
+                            if (!pending) {
+                                pluginLogger.info("[notice] asr_confirm ignored (no pending) key=" + key);
                                 return;
                             }
+                            pendingAsrConfirm.delete(key);
+                            const confirmedText = (parsed.text as string).trim();
+                            if (confirmedText) {
+                                await handleInboundMessage(api, topicStr, payloadStr, confirmedText, contentPreview);
+                            }
+                            try {
+                                await processNextInQueue(api, key);
+                            } catch (e) {
+                                pluginLogger.warn("[notice] processNextInQueue after asr_confirm failed " + String(e));
+                            }
+                            return;
                         }
                     } catch {
                         /* not JSON or not asr_confirm */
                     }
 
-                    // 2) 内容含语音 URL（仅 /api/media 且 n= 为音频扩展）-> 排队：有待确认则入队，否则处理队首并发请确认
+                    // 3) 内容含语音 URL（仅 /api/media 且 n= 为音频扩展）-> 排队：有待确认则入队，否则处理队首并发请确认
                     const mediaUrls = extractMediaUrls(trimmed);
                     const audioUrls = mediaUrls.filter(isAudioMediaUrl);
                     if (audioUrls.length > 0) {
@@ -1270,7 +1293,7 @@ export default function register(api: OpenClawPluginApi): void {
                         return;
                     }
 
-                    // 3) 普通消息
+                    // 4) 普通消息
                     await handleInboundMessage(api, topicStr, payloadStr, trimmed, contentPreview);
                 });
                 client.on("error", (err) => pluginLogger.warn("[notice] MQTT error: " + String(err)));

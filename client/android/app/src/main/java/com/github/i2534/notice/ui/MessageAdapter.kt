@@ -26,8 +26,17 @@ class MessageAdapter(
     private val onItemClick: ((NoticeMessage) -> Unit)? = null,
     private val onEnterSelectMode: (() -> Unit)? = null,
     private val onSelectionChanged: ((Int) -> Unit)? = null,
-    private val onAsrConfirm: ((topic: String, text: String) -> Unit)? = null
+    private val onAsrConfirm: ((message: NoticeMessage, text: String) -> Unit)? = null,
+    private val onAsrCancel: ((message: NoticeMessage) -> Unit)? = null
 ) : PagingDataAdapter<NoticeMessage, MessageAdapter.MessageViewHolder>(MessageDiffCallback()) {
+
+    /** 本会话内已确认/取消的语音命令卡片，改为只读一行说明（不入库） */
+    private val asrHandledDisplayLines = mutableMapOf<String, String>()
+
+    fun markAsrHandled(messageId: String, displayLine: String) {
+        asrHandledDisplayLines[messageId] = displayLine
+        notifyDataSetChanged()
+    }
 
     // 多选模式
     var isSelectMode = false
@@ -70,9 +79,15 @@ class MessageAdapter(
     override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
         val message = getItem(position) ?: return
         val isSelected = selectedIds.contains(message.id)
-        holder.bind(message, isSelectMode, isSelected, onAsrConfirm)
+        holder.bind(
+            message,
+            isSelectMode,
+            isSelected,
+            asrHandledDisplayLines[message.id],
+            onAsrConfirm,
+            onAsrCancel
+        )
 
-        // 点击时根据当前是否多选模式决定行为：多选时只切换选中，非多选时打开详情（删除时不能触发查看详情）
         holder.itemView.setOnClickListener {
             if (isSelectMode) {
                 toggleSelection(message)
@@ -111,9 +126,10 @@ class MessageAdapter(
             message: NoticeMessage,
             isSelectMode: Boolean,
             isSelected: Boolean,
-            onAsrConfirm: ((topic: String, text: String) -> Unit)?
+            asrHandledLine: String?,
+            onAsrConfirm: ((NoticeMessage, String) -> Unit)?,
+            onAsrCancel: ((NoticeMessage) -> Unit)?
         ) {
-            // 本机回复不显示标题，也不显示「来自 xxx」
             if (message.isOutgoing) {
                 binding.messageTitle.visibility = View.GONE
                 binding.messageClient.visibility = View.GONE
@@ -132,67 +148,92 @@ class MessageAdapter(
             binding.messageTime.text = message.getFormattedTime()
             binding.messageTopic.text = message.topic
 
-            // 语音转写确认：content 为 JSON { type: "asr_confirm_request", text: "..." }
             val asrRequest = MessageAdapter.parseAsrConfirmRequest(message.content)
-            if (asrRequest != null && onAsrConfirm != null) {
-                binding.asrConfirmRow.visibility = View.VISIBLE
-                binding.messageContentContainer.visibility = View.GONE
-                binding.messageContentMore.visibility = View.GONE
-                binding.asrConfirmEdit.setText(asrRequest)
-                binding.asrConfirmBtn.setOnClickListener {
-                    val text = binding.asrConfirmEdit.text?.toString()?.trim() ?: return@setOnClickListener
-                    onAsrConfirm(message.topic, text)
+
+            when {
+                asrHandledLine != null -> {
+                    binding.asrConfirmRow.visibility = View.GONE
+                    binding.messageContentContainer.visibility = View.VISIBLE
+                    binding.messageContentMore.visibility = View.GONE
+                    val maxImageHeightPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
+                    MessageContentRenderer.render(
+                        binding.messageContentContainer,
+                        listOf(ContentBlock.Text(asrHandledLine)),
+                        markwon,
+                        maxTextLinesInList = 4,
+                        touchThrough = true,
+                        mediaCachePathByUrl = null,
+                        showUrlWhenNoCache = false,
+                        maxImageHeightInList = maxImageHeightPx
+                    )
                 }
-            } else {
-                binding.asrConfirmRow.visibility = View.GONE
-                binding.messageContentContainer.visibility = View.VISIBLE
-                val blocks = ContentBlockParser.parse(message.content)
-                val maxImageHeightPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
-                MessageContentRenderer.render(
-                    binding.messageContentContainer,
-                    blocks,
-                    markwon,
-                    maxTextLinesInList = 2,
-                    touchThrough = true,
-                    mediaCachePathByUrl = null,
-                    showUrlWhenNoCache = false,
-                    maxImageHeightInList = maxImageHeightPx
-                )
-                val mediaAndImageUrls = ContentBlockParser.extractMediaAndImageUrls(message.content)
-                if (mediaAndImageUrls.isNotEmpty()) {
-                    binding.messageContentContainer.setTag(message.id)
-                    val scope = binding.root.findViewTreeLifecycleOwner()?.lifecycleScope
-                        ?: (binding.root.context as? FragmentActivity)?.lifecycleScope
-                    scope?.launch {
-                        val messageId = message.id
-                        // 无缓存时从 URL 下载一次并写入缓存，再按有缓存逻辑渲染
-                        val map = MediaCacheLoader.ensureMediaAndImageCache(
-                            binding.root.context.applicationContext,
-                            message.content
-                        )
-                        withContext(Dispatchers.Main) {
-                            if (binding.messageContentContainer.getTag() == messageId) {
-                                val maxImageHeightPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
-                                MessageContentRenderer.render(
-                                    binding.messageContentContainer,
-                                    blocks,
-                                    markwon,
-                                    maxTextLinesInList = 2,
-                                    touchThrough = true,
-                                    mediaCachePathByUrl = if (map.isEmpty()) null else map,
-                                    showUrlWhenNoCache = true,
-                                    maxImageHeightInList = maxImageHeightPx
-                                )
+                asrRequest != null && onAsrConfirm != null -> {
+                    binding.asrConfirmRow.visibility = View.VISIBLE
+                    binding.messageContentContainer.visibility = View.GONE
+                    binding.messageContentMore.visibility = View.GONE
+                    binding.asrConfirmEdit.isEnabled = true
+                    binding.asrConfirmBtn.isEnabled = true
+                    binding.asrCancelBtn.visibility = if (onAsrCancel != null) View.VISIBLE else View.GONE
+                    binding.asrCancelBtn.isEnabled = onAsrCancel != null
+                    binding.asrConfirmEdit.setText(asrRequest)
+                    binding.asrConfirmBtn.setOnClickListener {
+                        val text = binding.asrConfirmEdit.text?.toString()?.trim().orEmpty()
+                        if (text.isEmpty()) return@setOnClickListener
+                        onAsrConfirm(message, text)
+                    }
+                    binding.asrCancelBtn.setOnClickListener {
+                        onAsrCancel?.invoke(message)
+                    }
+                }
+                else -> {
+                    binding.asrConfirmRow.visibility = View.GONE
+                    binding.messageContentContainer.visibility = View.VISIBLE
+                    val blocks = ContentBlockParser.parse(message.content)
+                    val maxImageHeightPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
+                    MessageContentRenderer.render(
+                        binding.messageContentContainer,
+                        blocks,
+                        markwon,
+                        maxTextLinesInList = 2,
+                        touchThrough = true,
+                        mediaCachePathByUrl = null,
+                        showUrlWhenNoCache = false,
+                        maxImageHeightInList = maxImageHeightPx
+                    )
+                    val mediaAndImageUrls = ContentBlockParser.extractMediaAndImageUrls(message.content)
+                    if (mediaAndImageUrls.isNotEmpty()) {
+                        binding.messageContentContainer.setTag(message.id)
+                        val scope = binding.root.findViewTreeLifecycleOwner()?.lifecycleScope
+                            ?: (binding.root.context as? FragmentActivity)?.lifecycleScope
+                        scope?.launch {
+                            val messageId = message.id
+                            val map = MediaCacheLoader.ensureMediaAndImageCache(
+                                binding.root.context.applicationContext,
+                                message.content
+                            )
+                            withContext(Dispatchers.Main) {
+                                if (binding.messageContentContainer.getTag() == messageId) {
+                                    val maxPx = binding.root.context.resources.getDimensionPixelSize(R.dimen.message_list_image_max_height)
+                                    MessageContentRenderer.render(
+                                        binding.messageContentContainer,
+                                        blocks,
+                                        markwon,
+                                        maxTextLinesInList = 2,
+                                        touchThrough = true,
+                                        mediaCachePathByUrl = if (map.isEmpty()) null else map,
+                                        showUrlWhenNoCache = true,
+                                        maxImageHeightInList = maxPx
+                                    )
+                                }
                             }
                         }
                     }
+                    val content = message.content
+                    val likelyTruncated = content.length > 100 || content.lines().size > 2 || blocks.size > 3
+                    binding.messageContentMore.visibility = if (likelyTruncated) View.VISIBLE else View.GONE
                 }
-                val content = message.content
-                val likelyTruncated = content.length > 100 || content.lines().size > 2 || blocks.size > 3
-                binding.messageContentMore.visibility = if (likelyTruncated) View.VISIBLE else View.GONE
             }
 
-            // 选中状态 / 本机发送：使用边框和背景色区分
             val context = binding.root.context
             if (isSelectMode && isSelected) {
                 binding.root.strokeWidth = 2

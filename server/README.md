@@ -147,7 +147,8 @@ log:
 
 message:
   max_title_length: 50    # 标题最大长度，0 表示不限制
-  max_content_length: 1024 # 内容最大长度，0 表示不限制；使用 OpenClaw Notice 插件时，插件的 maxContentLength 应 ≤ 此值
+  # 内容最大长度（rune），0 表示不限制。仅作用于经 Webhook 入口写入的正文（SanitizeContent 截断）；客户端经 MQTT 直发并由 Broker 入库时不受此项截断。
+  max_content_length: 1024 # 使用 OpenClaw Notice 插件时，插件的 maxContentLength 应 ≤ 此值（若走 Webhook）
 
 # 图片上传与访问（可选）
 image:
@@ -261,11 +262,14 @@ X-Auth-Token: <token>
 
 | 字段 | 必填 | 说明 |
 |------|------|------|
-| content | ✅ | 通知内容 |
+| content | ✅ | 通知内容；可与 `content_encoding` 配合为 gzip 压缩后再 standard base64 的字符串（与 MQTT / OpenClaw 约定一致） |
 | title | | 标题，默认空 |
 | topic | | 指定发布到的 MQTT 主题（仅允许字母数字、`/`、`-`、`_`，禁止 `..` 等）；不传则使用服务端默认主题 |
 | extra | | 额外数据（对象） |
 | client | | 发送端标识（如 web / android / cli），长度与内容受安全校验限制 |
+| content_encoding | | 可选，仅支持 `gzip+base64`。服务端会解码、按明文做清洗与 `max_content_length` 校验（按解压后的 rune 数），再重新编码后发布到 MQTT |
+
+Web 控制台在正文 Unicode 标量值数量 ≥ **255** 且 gzip+base64 比 UTF-8 字节更短时，会自动附带 `content_encoding`（需浏览器支持 `CompressionStream`）。
 
 ```json
 {

@@ -1,5 +1,6 @@
 package com.github.i2534.notice.ui
 
+import android.content.Context
 import android.media.MediaPlayer
 import android.net.Uri
 import android.view.LayoutInflater
@@ -16,6 +17,112 @@ import com.github.i2534.notice.R
 import com.github.i2534.notice.util.AppLogger
 import io.noties.markwon.Markwon
 import java.io.File
+
+/**
+ * 全局唯一语音播放：同一条点击播放/暂停切换，另一条会先停旧再播新。
+ */
+private object VoicePlaybackCoordinator {
+
+    private data class Active(
+        val path: String,
+        val idle: () -> Unit,
+        val playing: () -> Unit,
+        val paused: () -> Unit,
+        var player: MediaPlayer?,
+        var pausedFlag: Boolean,
+    )
+
+    private var active: Active? = null
+
+    private fun finishActive(playIdle: Boolean) {
+        val a = active ?: return
+        try {
+            a.player?.release()
+        } catch (_: Exception) {
+        }
+        a.player = null
+        active = null
+        if (playIdle) {
+            a.idle()
+        }
+    }
+
+    fun handleVoiceRowClick(
+        applicationContext: Context,
+        uiHost: View,
+        localPath: String,
+        idle: () -> Unit,
+        playing: () -> Unit,
+        paused: () -> Unit,
+    ) {
+        val path = try {
+            File(localPath).canonicalPath
+        } catch (_: Exception) {
+            localPath
+        }
+
+        val cur = active
+        if (cur != null && cur.path == path && cur.player != null) {
+            val mp = cur.player!!
+            when {
+                mp.isPlaying -> {
+                    try {
+                        mp.pause()
+                    } catch (_: Exception) {
+                    }
+                    cur.pausedFlag = true
+                    uiHost.post { paused() }
+                    return
+                }
+                cur.pausedFlag -> {
+                    try {
+                        mp.start()
+                    } catch (_: Exception) {
+                    }
+                    cur.pausedFlag = false
+                    uiHost.post { playing() }
+                    return
+                }
+            }
+        }
+
+        if (cur != null) {
+            finishActive(true)
+        }
+
+        try {
+            val mp = MediaPlayer().apply {
+                setDataSource(applicationContext, Uri.fromFile(File(localPath)))
+                setOnCompletionListener {
+                    val a = active
+                    if (a != null && a.path == path) {
+                        finishActive(true)
+                    }
+                }
+                setOnErrorListener { _, _, _ ->
+                    Toast.makeText(applicationContext, R.string.voice_play_error, Toast.LENGTH_SHORT).show()
+                    val a = active
+                    if (a != null && a.path == path) {
+                        finishActive(true)
+                    }
+                    true
+                }
+                setOnPreparedListener {
+                    start()
+                    val a = active
+                    if (a != null && a.path == path) {
+                        a.pausedFlag = false
+                        uiHost.post { playing() }
+                    }
+                }
+                prepareAsync()
+            }
+            active = Active(path, idle, playing, paused, mp, false)
+        } catch (_: Exception) {
+            Toast.makeText(applicationContext, R.string.voice_play_error, Toast.LENGTH_SHORT).show()
+        }
+    }
+}
 
 /**
  * 将解析后的内容块渲染到容器中：文本块用 Markwon，图片块用 ImageView（有缓存从本地加载，无缓存时列表显示「图片加载失败」、详情显示 URL），
@@ -161,39 +268,33 @@ object MessageContentRenderer {
                         if (touchThrough) playRow.isFocusable = false
                         playRow.setOnClickListener {
                             val ctx = playRow.context.applicationContext
-                            fun restorePlayingState() {
+                            fun idleUi() {
                                 playRow.post {
                                     playIcon.setImageResource(R.drawable.ic_play)
                                     playLabel.setText(R.string.voice_play_label)
                                 }
                             }
-                            try {
-                                val mp = MediaPlayer().apply {
-                                    setDataSource(ctx, Uri.fromFile(File(localPath)))
-                                    setOnCompletionListener {
-                                        AppLogger.i("VoicePlay", "播放完毕: $localPath")
-                                        restorePlayingState()
-                                        release()
-                                    }
-                                    setOnErrorListener { _, _, _ ->
-                                        Toast.makeText(ctx, R.string.voice_play_error, Toast.LENGTH_SHORT).show()
-                                        restorePlayingState()
-                                        release()
-                                        true
-                                    }
-                                    setOnPreparedListener {
-                                        start()
-                                        AppLogger.i("VoicePlay", "播放开始: $localPath")
-                                        playRow.post {
-                                            playIcon.setImageResource(R.drawable.ic_voice_playing)
-                                            playLabel.setText(R.string.voice_playing_label)
-                                        }
-                                    }
-                                    prepareAsync()
+                            fun playingUi() {
+                                playRow.post {
+                                    playIcon.setImageResource(R.drawable.ic_voice_playing)
+                                    playLabel.setText(R.string.voice_playing_label)
                                 }
-                            } catch (e: Exception) {
-                                Toast.makeText(ctx, R.string.voice_play_error, Toast.LENGTH_SHORT).show()
                             }
+                            fun pausedUi() {
+                                playRow.post {
+                                    playIcon.setImageResource(R.drawable.ic_play)
+                                    playLabel.setText(R.string.voice_paused_label)
+                                }
+                            }
+                            AppLogger.i("VoicePlay", "点击播放行: $localPath")
+                            VoicePlaybackCoordinator.handleVoiceRowClick(
+                                ctx,
+                                playRow,
+                                localPath,
+                                idle = { idleUi() },
+                                playing = { playingUi() },
+                                paused = { pausedUi() },
+                            )
                         }
                     } else {
                         playRow.isGone = true

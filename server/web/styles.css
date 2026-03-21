@@ -1142,6 +1142,83 @@ button.full {
     color: var(--text-secondary);
 }
 
+/* 语音命令确认卡片（ASR） */
+.asr-confirm-card-wrap {
+    width: 100%;
+}
+
+.asr-confirm-card {
+    padding: 0.65rem 0.75rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-top: 0.25rem;
+}
+
+.asr-confirm-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 0.4rem;
+}
+
+.asr-confirm-textarea {
+    width: 100%;
+    min-height: 4rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    resize: vertical;
+    margin-bottom: 0.5rem;
+}
+
+.asr-confirm-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.asr-confirm-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.btn-asr {
+    padding: 0.35rem 0.85rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+}
+
+.btn-asr:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-asr-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+    font-weight: 600;
+}
+
+.btn-asr-secondary {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+
+.btn-asr-secondary:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
 /* 响应式 */
 @media (max-width: 640px) {
     .topbar {
