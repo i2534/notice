@@ -31,6 +31,7 @@ notice/
 │   ├── broker/          # 内置 MQTT Broker
 │   ├── handlers/        # HTTP 处理器 (Webhook 等)
 │   ├── store/           # 消息持久化存储
+│   ├── badgeropts/      # Badger 内存参数（消息库与 MQTT 共用）
 │   ├── ratelimit/       # IP 限流
 │   ├── logger/          # 日志系统（支持轮转）
 │   ├── web/             # Web 管理界面

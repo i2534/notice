@@ -25,6 +25,7 @@
 - 📝 日志轮转（按天分割、自动清理）
 - 📦 YAML 配置文件支持
 - 💾 离线消息支持（会话保持）
+- 🧠 Badger 内存可调（消息历史与 MQTT 持久化共用参数，适合小内存 VPS）
 - ⚡ 单一服务，无外部依赖
 
 ## 项目结构
@@ -51,6 +52,9 @@ server/
 ├── store/
 │   ├── store.go         # 消息持久化存储
 │   └── store_test.go    # 存储单元测试
+├── badgeropts/
+│   ├── badgeropts.go    # Badger 打开参数（消息库 + MQTT 共用）
+│   └── badgeropts_test.go
 ├── ratelimit/
 │   ├── ratelimit.go     # 认证限流（按 IP / 按凭证 / 全局）
 │   └── ratelimit_test.go # 限流单元测试
@@ -145,6 +149,15 @@ log:
   rotate_days: 1
   max_files: 7
 
+# 持久化：消息历史 + MQTT 会话/订阅/离线消息（image/media 目录也在此 path 下）
+storage:
+  enabled: true
+  path: "data"
+  # 以下为 Badger 内存参数（两库共用）；0 表示使用代码内低内存默认（约 12/24/2，适合 ~2GB RAM VPS）
+  badger_memtable_mb: 12
+  badger_block_cache_mb: 24
+  badger_num_memtables: 2
+
 message:
   max_title_length: 50    # 标题最大长度，0 表示不限制
   # 内容最大长度（rune），0 表示不限制。仅作用于经 Webhook 入口写入的正文（SanitizeContent 截断）；客户端经 MQTT 直发并由 Broker 入库时不受此项截断。
@@ -169,6 +182,8 @@ media:
   max_upload_bytes: 10485760  # 单文件最大 10MB
   allowed_extensions: [".m4a", ".mp3", ".webm", ".ogg", ".wav"]
 ```
+
+更完整的字段与注释以仓库内 `config.yaml` 为准。
 
 指定配置文件：
 
@@ -341,20 +356,17 @@ proxy_set_header X-Forwarded-Proto $scheme;
 
 无需认证。`{"status":"ok"}`
 
-### GET /debug/pprof/
+### GET /debug/pprof/（可选，默认关闭）
 
-Go 运行时性能分析（heap、CPU、goroutine 等），由标准库 `net/http/pprof` 提供。**生产环境勿对公网暴露**，建议仅本机或内网配合 SSH 隧道使用。
+**默认发行版未启用**：`main.go` 中 `_ "net/http/pprof"` 为注释状态，不注册该路由。
 
-常用命令（默认 HTTP 端口见配置，示例 `9090`）：
+需要本地/内网排查性能时，取消注释上述导入并重新编译，即可在同一 HTTP 端口使用标准库 `net/http/pprof`。**切勿对公网暴露**（堆采样可能含敏感字符串），建议 SSH 隧道或仅 `127.0.0.1` 访问。
+
+启用后常用命令（端口以配置为准，示例 `9090`）：
 
 ```bash
-# 浏览器查看索引页
 open http://127.0.0.1:9090/debug/pprof/
-
-# 30 秒 CPU 采样
 go tool pprof http://127.0.0.1:9090/debug/pprof/profile?seconds=30
-
-# 堆内存（当前存活对象）
 go tool pprof http://127.0.0.1:9090/debug/pprof/heap
 ```
 
