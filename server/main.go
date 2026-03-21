@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+
+	// _ "net/http/pprof" // 注册 /debug/pprof/（DefaultServeMux）
+
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"notice-server/badgeropts"
 	"notice-server/broker"
 	"notice-server/config"
 	"notice-server/handlers"
@@ -56,18 +60,29 @@ func main() {
 	logger.Info("启动 Notice Server...", "version", Version, "build", BuildTime)
 	logger.Info("项目地址", "url", ProjectURL)
 
+	badgerParams := badgeropts.Params{
+		MemTableMB:   cfg.Storage.BadgerMemTableMB,
+		BlockCacheMB: cfg.Storage.BadgerBlockCacheMB,
+		NumMemtables: cfg.Storage.BadgerNumMemtables,
+	}
+	bp := badgerParams.Normalized()
+
 	// 创建消息存储管理器
-	storeManager := store.NewManager(cfg.Storage.Path, cfg.Storage.Enabled)
+	storeManager := store.NewManager(cfg.Storage.Path, cfg.Storage.Enabled, badgerParams)
 	if storeManager.IsEnabled() {
-		logger.Info("消息存储已启用", "path", cfg.Storage.Path)
+		logger.Info("消息存储已启用", "path", cfg.Storage.Path,
+			"badger_memtable_mb", bp.MemTableMB,
+			"badger_block_cache_mb", bp.BlockCacheMB,
+			"badger_num_memtables", bp.NumMemtables,
+		)
 	}
 
 	// 认证限流（Webhook 与 MQTT 共用，防暴力尝试）
 	authLimiter := ratelimit.New(ratelimit.Config{
-		MaxFailures:            cfg.RateLimit.MaxFailures,
+		MaxFailures:           cfg.RateLimit.MaxFailures,
 		BlockTime:             time.Duration(cfg.RateLimit.BlockTime) * time.Second,
 		WindowTime:            time.Duration(cfg.RateLimit.WindowTime) * time.Second,
-		GlobalMaxPerMinute:     cfg.RateLimit.GlobalMaxPerMinute,
+		GlobalMaxPerMinute:    cfg.RateLimit.GlobalMaxPerMinute,
 		GlobalBlockTime:       time.Duration(cfg.RateLimit.GlobalBlockTime) * time.Second,
 		CredentialMaxFailures: cfg.RateLimit.CredentialMaxFailures,
 	})
@@ -79,6 +94,7 @@ func main() {
 		AuthToken:      cfg.Auth.Token,
 		StorageEnabled: cfg.Storage.Enabled,
 		StoragePath:    cfg.Storage.Path,
+		Badger:         badgerParams,
 		AuthLimiter:    authLimiter,
 	}
 	mqttBroker := broker.New(cfg.MQTT.Topic, brokerCfg, storeManager)

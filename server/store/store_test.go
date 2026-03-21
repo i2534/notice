@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"notice-server/badgeropts"
 )
 
 func TestTokenHash(t *testing.T) {
@@ -35,7 +37,7 @@ func TestTokenStore(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// 创建存储
-	ts, err := newTokenStore(tmpDir, "test-token")
+	ts, err := newTokenStore(tmpDir, "test-token", badgeropts.Params{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,21 +89,21 @@ func TestTokenStoreCollision(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// 第一个 token 创建成功
-	ts1, err := newTokenStore(tmpDir, "token-a")
+	ts1, err := newTokenStore(tmpDir, "token-a", badgeropts.Params{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ts1.Close()
 
 	// 相同 token 再次打开应成功
-	ts2, err := newTokenStore(tmpDir, "token-a")
+	ts2, err := newTokenStore(tmpDir, "token-a", badgeropts.Params{})
 	if err != nil {
 		t.Fatalf("相同 token 再次打开应成功: %v", err)
 	}
 	ts2.Close()
 
 	// 不同 token 尝试使用同一目录应失败
-	_, err = newTokenStore(tmpDir, "token-b")
+	_, err = newTokenStore(tmpDir, "token-b", badgeropts.Params{})
 	if err != ErrTokenCollision {
 		t.Errorf("应返回 ErrTokenCollision，实际: %v", err)
 	}
@@ -114,7 +116,7 @@ func TestTokenStoreList(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	ts, err := newTokenStore(tmpDir, "test-token")
+	ts, err := newTokenStore(tmpDir, "test-token", badgeropts.Params{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +183,7 @@ func TestTokenStoreListPageSize(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	ts, err := newTokenStore(tmpDir, "test-token")
+	ts, err := newTokenStore(tmpDir, "test-token", badgeropts.Params{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +221,7 @@ func TestManager(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// 测试禁用状态
-	m := NewManager(tmpDir, false)
+	m := NewManager(tmpDir, false, badgeropts.Params{})
 	if m.IsEnabled() {
 		t.Error("Manager 应该是禁用状态")
 	}
@@ -232,7 +234,7 @@ func TestManager(t *testing.T) {
 	}
 
 	// 测试启用状态
-	m = NewManager(tmpDir, true)
+	m = NewManager(tmpDir, true, badgeropts.Params{})
 	defer m.Close()
 
 	if !m.IsEnabled() {
@@ -264,7 +266,7 @@ func TestManagerTokenIsolation(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	m := NewManager(tmpDir, true)
+	m := NewManager(tmpDir, true, badgeropts.Params{})
 	defer m.Close()
 
 	// 为两个不同 token 保存消息
@@ -328,14 +330,14 @@ func TestManagerPersistence(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	// 第一次打开，保存数据
-	m1 := NewManager(tmpDir, true)
+	m1 := NewManager(tmpDir, true, badgeropts.Params{})
 	for i := 0; i < 10; i++ {
 		m1.Save("persist-token", "topic", "标题", "内容", nil)
 	}
 	m1.Close()
 
 	// 第二次打开，验证数据持久化
-	m2 := NewManager(tmpDir, true)
+	m2 := NewManager(tmpDir, true, badgeropts.Params{})
 	defer m2.Close()
 
 	// 需要先访问一次才能加载
@@ -358,7 +360,7 @@ func TestManagerConcurrent(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	m := NewManager(tmpDir, true)
+	m := NewManager(tmpDir, true, badgeropts.Params{})
 	defer m.Close()
 
 	// 并发保存

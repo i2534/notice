@@ -14,6 +14,7 @@ import (
 	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/mochi-mqtt/server/v2/packets"
 
+	"notice-server/badgeropts"
 	"notice-server/logger"
 	"notice-server/ratelimit"
 	"notice-server/store"
@@ -41,6 +42,7 @@ type Config struct {
 	AuthToken      string             // 认证 Token，为空则不校验
 	StorageEnabled bool               // 是否启用持久化存储
 	StoragePath    string             // 持久化存储路径
+	Badger         badgeropts.Params  // Badger 内存参数（与消息库共用 badgeropts.Options）
 	AuthLimiter    *ratelimit.Limiter // 认证失败限流（与 Webhook 共用时可防暴力尝试），nil 则不限流
 }
 
@@ -90,16 +92,19 @@ func (b *Broker) Start(tcpAddr, wsAddr string) error {
 	// 添加持久化存储钩子（必须最先添加，以便加载已保存的会话和订阅）
 	if b.config.StorageEnabled && b.config.StoragePath != "" {
 		mqttPath := filepath.Join(b.config.StoragePath, mqttStorageDir)
-		// 配置 BadgerDB 选项，设置日志级别为 WARNING 以减少 DEBUG 输出
-		badgerOpts := badgerdb.DefaultOptions(mqttPath).
-			WithLoggingLevel(badgerdb.INFO)
+		bp := b.config.Badger.Normalized()
+		mqttBadgerOpts := badgeropts.Options(mqttPath, b.config.Badger).WithLoggingLevel(badgerdb.INFO)
 		if err := b.server.AddHook(new(badger.Hook), &badger.Options{
 			Path:    mqttPath,
-			Options: &badgerOpts,
+			Options: &mqttBadgerOpts,
 		}); err != nil {
 			return err
 		}
-		logger.Info("MQTT 持久化存储已启用", "path", mqttPath)
+		logger.Info("MQTT 持久化存储已启用", "path", mqttPath,
+			"badger_memtable_mb", bp.MemTableMB,
+			"badger_block_cache_mb", bp.BlockCacheMB,
+			"badger_num_memtables", bp.NumMemtables,
+		)
 	}
 
 	// 启用 Token 认证（可选限流防暴力尝试）

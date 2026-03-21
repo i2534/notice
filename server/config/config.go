@@ -63,6 +63,11 @@ type MessageConfig struct {
 type StorageConfig struct {
 	Enabled bool   `yaml:"enabled" env:"STORAGE_ENABLED"` // 是否启用持久化
 	Path    string `yaml:"path" env:"STORAGE_PATH"`       // 数据存储路径
+
+	// Badger 内存参数（消息历史与 MQTT 共用同一套构造逻辑）。0 表示使用内置低内存默认值（适合 ~2GB RAM VPS）。
+	BadgerMemTableMB   int `yaml:"badger_memtable_mb" env:"STORAGE_BADGER_MEMTABLE_MB"`       // 单表 MemTable 上限（MB）
+	BadgerBlockCacheMB int `yaml:"badger_block_cache_mb" env:"STORAGE_BADGER_BLOCK_CACHE_MB"` // 块缓存上限（MB）
+	BadgerNumMemtables int `yaml:"badger_num_memtables" env:"STORAGE_BADGER_NUM_MEMTABLES"`   // 内存表个数（建议 2–3）
 }
 
 // HTTPConfig HTTP 服务配置
@@ -147,8 +152,11 @@ func defaultConfig() *Config {
 			MaxFiles:     7,
 		},
 		Storage: StorageConfig{
-			Enabled: true,
-			Path:    "data",
+			Enabled:            true,
+			Path:               "data",
+			BadgerMemTableMB:   12,
+			BadgerBlockCacheMB: 24,
+			BadgerNumMemtables: 2,
 		},
 		Message: MessageConfig{
 			MaxTitleLength:   50,  // 标题最大 50 字符

@@ -231,6 +231,9 @@ CONFIG_PATH=/path/to/config.yaml ./notice-server
 | 日志 | LOG_MAX_FILES | 7 | 保留日志文件数 |
 | 存储 | STORAGE_ENABLED | true | 是否启用持久化存储 |
 | 存储 | STORAGE_PATH | data | 数据存储路径 |
+| 存储 | STORAGE_BADGER_MEMTABLE_MB | 12 | Badger MemTable 上限（MB），0=内置默认 |
+| 存储 | STORAGE_BADGER_BLOCK_CACHE_MB | 24 | Badger 块缓存上限（MB），0=内置默认 |
+| 存储 | STORAGE_BADGER_NUM_MEMTABLES | 2 | Badger 内存表个数（建议 2–3），0=内置默认 |
 | 消息 | MESSAGE_MAX_TITLE_LENGTH | 50 | 标题最大长度（字符），**0=不限制** |
 | 消息 | MESSAGE_MAX_CONTENT_LENGTH | 1024 | 内容最大长度（字符），**0=不限制** |
 | 图片 | IMAGE_FOLDER | images | 图片存储子目录名 |
@@ -337,6 +340,23 @@ proxy_set_header X-Forwarded-Proto $scheme;
 ### GET /health
 
 无需认证。`{"status":"ok"}`
+
+### GET /debug/pprof/
+
+Go 运行时性能分析（heap、CPU、goroutine 等），由标准库 `net/http/pprof` 提供。**生产环境勿对公网暴露**，建议仅本机或内网配合 SSH 隧道使用。
+
+常用命令（默认 HTTP 端口见配置，示例 `9090`）：
+
+```bash
+# 浏览器查看索引页
+open http://127.0.0.1:9090/debug/pprof/
+
+# 30 秒 CPU 采样
+go tool pprof http://127.0.0.1:9090/debug/pprof/profile?seconds=30
+
+# 堆内存（当前存活对象）
+go tool pprof http://127.0.0.1:9090/debug/pprof/heap
+```
 
 ### GET /messages
 

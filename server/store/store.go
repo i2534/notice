@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v4"
+
+	"notice-server/badgeropts"
 )
 
 const (
@@ -69,9 +71,8 @@ type TokenStore struct {
 }
 
 // newTokenStore 创建单个 token 的存储
-func newTokenStore(path string, token string) (*TokenStore, error) {
-	opts := badger.DefaultOptions(path)
-	opts.Logger = nil
+func newTokenStore(path string, token string, bp badgeropts.Params) (*TokenStore, error) {
+	opts := badgeropts.Options(path, bp)
 
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -318,18 +319,20 @@ func (ts *TokenStore) Close() error {
 
 // Manager 管理多个 token 的存储
 type Manager struct {
-	basePath string
-	enabled  bool
-	stores   map[string]*TokenStore // hash -> store
-	mu       sync.RWMutex
+	basePath     string
+	enabled      bool
+	badgerParams badgeropts.Params
+	stores       map[string]*TokenStore // hash -> store
+	mu           sync.RWMutex
 }
 
-// NewManager 创建存储管理器
-func NewManager(path string, enabled bool) *Manager {
+// NewManager 创建存储管理器；badgerParams 为零值时使用 badgeropts 内置低内存默认。
+func NewManager(path string, enabled bool, badgerParams badgeropts.Params) *Manager {
 	return &Manager{
-		basePath: filepath.Join(path, storeDirName),
-		enabled:  enabled,
-		stores:   make(map[string]*TokenStore),
+		basePath:     filepath.Join(path, storeDirName),
+		enabled:      enabled,
+		badgerParams: badgerParams,
+		stores:       make(map[string]*TokenStore),
 	}
 }
 
@@ -359,7 +362,7 @@ func (m *Manager) GetStore(token string) (*TokenStore, error) {
 
 	// 创建新的存储（分层路径）
 	path := tokenPath(m.basePath, hash)
-	ts, err := newTokenStore(path, token)
+	ts, err := newTokenStore(path, token, m.badgerParams)
 	if err != nil {
 		return nil, err
 	}

@@ -108,6 +108,13 @@ storage:
   # 环境变量: STORAGE_PATH
   path: "data"
 
+  # Badger 内存（消息历史 + MQTT 持久化共用同一套参数，适合 ~2GB RAM VPS）
+  # 0 表示使用代码内低内存默认值（当前默认 12 / 24 / 2）
+  # 环境变量: STORAGE_BADGER_MEMTABLE_MB, STORAGE_BADGER_BLOCK_CACHE_MB, STORAGE_BADGER_NUM_MEMTABLES
+  badger_memtable_mb: 12
+  badger_block_cache_mb: 24
+  badger_num_memtables: 2
+
 # 消息配置
 message:
   # 标题最大长度（字符，rune），0 表示不限制（Webhook 仅清洗、不按长度截断）
@@ -116,7 +123,7 @@ message:
 
   # 内容最大长度（字符，rune），0 表示不限制（Webhook 仅清洗、不按长度截断）
   # 环境变量: MESSAGE_MAX_CONTENT_LENGTH
-  max_content_length: 1024
+  max_content_length: 0
 
 # 图片上传与缓存配置
 image:
@@ -124,9 +131,9 @@ image:
   # 环境变量: IMAGE_FOLDER
   folder: "images"
 
-  # 签名 URL 有效期（秒），默认 24 小时
+  # 签名 URL 有效期（秒），默认 24 * 7 小时
   # 环境变量: IMAGE_URL_EXPIRY_SECONDS
-  url_expiry_seconds: 86400
+  url_expiry_seconds: 604800
 
   # 是否启用过期图片自动清理
   # 环境变量: IMAGE_CLEANUP_ENABLED
@@ -155,7 +162,7 @@ image:
 # 多媒体上传与缓存配置（语音、视频等）
 media:
   folder: "media"
-  url_expiry_seconds: 86400
+  url_expiry_seconds: 604800
   cleanup_enabled: true
   cleanup_interval_seconds: 3600
   max_upload_bytes: 10485760  # 10MB
