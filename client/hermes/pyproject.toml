@@ -1,0 +1,11 @@
+[project]
+name = "hermes-notice"
+version = "1.0.0"
+description = "Notice messaging adapter for Hermes Agent"
+requires-python = ">=3.11"
+dependencies = [
+    "paho-mqtt>=2.0",
+]
+
+[project.entry-points."hermes_agent.plugins"]
+notice = "adapter"

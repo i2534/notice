@@ -41,6 +41,7 @@ notice/
 │   ├── cli/             # 跨平台命令行客户端 (Go) - Linux/Windows/macOS，支持 send -topic
 │   ├── gui/             # 跨平台桌面客户端 (Tauri) - Linux/Windows/macOS
 │   ├── android/         # Android 客户端 (Kotlin)，支持主题、Markdown、语音消息与媒体缓存
+│   ├── hermes/          # Hermes Agent 插件，通过 MQTT 接入 Notice 平台
 │   └── openclaw/        # Openclaw 插件，收发可指定 topic，支持语音转写（需主配置 tools.media.audio）
 │
 └── README.md
@@ -146,26 +147,27 @@ curl -X POST http://localhost:9090/webhook \
 
 ## 功能特性
 
-| 功能 | Server | CLI | GUI | Android |
-|------|--------|-----|-----|---------|
-| MQTT Broker | ✅ 内置 | - | - | - |
-| Webhook 接收 | ✅ | - | - | - |
-| Token 认证 | ✅ | ✅ | ✅ | ✅ |
-| IP 限流 | ✅ | - | - | - |
-| Web 界面 | ✅ | - | - | - |
-| 日志轮转 | ✅ | - | - | - |
-| 桌面通知 | - | ✅ | ✅ | ✅ |
-| 消息历史 | ✅ | - | ✅ | ✅ |
-| 系统托盘 | - | - | ✅ | - |
-| 后台运行 | - | - | ✅ | ✅ |
-| 开机自启 | - | - | - | ✅ |
-| 执行命令 | - | ✅ | - | - |
-| 发送可指定 topic | ✅ Webhook | ✅ send -topic | - | ✅ 设置+回复指定 |
-| 消息 Markdown 渲染 | ✅ Web | - | - | ✅ |
-| Linux | ✅ | ✅ | ✅ | - |
-| Windows | ✅ | ✅ | ✅ | - |
-| macOS | ✅ | ✅ | ✅ | - |
-| Android | - | - | - | ✅ |
+| 功能 | Server | CLI | GUI | Android | Hermes |
+|------|--------|-----|-----|---------|--------|
+| MQTT Broker | ✅ 内置 | - | - | - | - |
+| Webhook 接收 | ✅ | - | - | - | - |
+| Token 认证 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| IP 限流 | ✅ | - | - | - | - |
+| Web 界面 | ✅ | - | - | - | - |
+| 日志轮转 | ✅ | - | - | - | - |
+| 桌面通知 | - | ✅ | ✅ | ✅ | - |
+| 消息历史 | ✅ | - | ✅ | ✅ | - |
+| 系统托盘 | - | - | ✅ | - | - |
+| 后台运行 | - | - | ✅ | ✅ | - |
+| 开机自启 | - | - | - | ✅ | - |
+| 执行命令 | - | ✅ | - | - | - |
+| 发送可指定 topic | ✅ Webhook | ✅ send -topic | - | ✅ 设置+回复指定 | ✅ |
+| 消息 Markdown 渲染 | ✅ Web | - | - | ✅ | ✅ |
+| 长消息自动压缩 | - | - | - | - | ✅ |
+| Linux | ✅ | ✅ | ✅ | - | ✅ |
+| Windows | ✅ | ✅ | ✅ | - | ✅ |
+| macOS | ✅ | ✅ | ✅ | - | ✅ |
+| Android | - | - | - | ✅ | - |
 
 ## 文档
 
@@ -173,6 +175,7 @@ curl -X POST http://localhost:9090/webhook \
 - [CLI Client 文档](client/cli/README.md) - 跨平台命令行客户端（含 send 子命令）
 - [GUI Client 文档](client/gui/README.md) - 跨平台桌面客户端
 - [Android Client 文档](client/android/README.md) - Android 客户端（默认发送主题、回复指定 topic、Markdown）
+- [Hermes 插件文档](client/hermes/README.md) - Hermes Agent 插件（MQTT 接入），支持 Markdown、图片上传与长消息压缩
 - [Openclaw 插件文档](client/openclaw/README.md) - Openclaw Channel 插件（MQTT 收发），收发可指定 topic
 
 ## License
