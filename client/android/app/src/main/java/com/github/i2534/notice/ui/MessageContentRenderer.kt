@@ -1,6 +1,7 @@
 package com.github.i2534.notice.ui
 
 import android.content.Context
+
 import android.media.MediaPlayer
 import android.net.Uri
 import android.view.LayoutInflater
@@ -145,6 +146,7 @@ object MessageContentRenderer {
         maxTextLinesInList: Int? = null,
         touchThrough: Boolean = false,
         textSelectable: Boolean = false,
+        isOutgoing: Boolean = false,
         mediaCachePathByUrl: Map<String, String>? = null,
         showUrlWhenNoCache: Boolean = true,
         maxImageHeightInList: Int? = null,
@@ -158,25 +160,32 @@ object MessageContentRenderer {
             val topMargin = if (index == 0) 0 else dp4
             when (block) {
                 is ContentBlock.Text -> {
+                    val text = block.text.replace("\r\n", "\n").ifBlank { " " }
                     val textView = TextView(container.context).apply {
-                        setTextColor(ContextCompat.getColor(context, R.color.text_secondary))
+                        setTextColor(ContextCompat.getColor(context, if (isOutgoing) R.color.white else R.color.text_secondary))
                         textSize = 14f
+                        isClickable = textSelectable && !touchThrough
+                        isFocusable = textSelectable && !touchThrough
+                        isFocusableInTouchMode = textSelectable && !touchThrough
+                        setTextIsSelectable(textSelectable && !touchThrough)
                         if (maxTextLinesInList != null) {
                             maxLines = maxTextLinesInList
+                            ellipsize = android.text.TextUtils.TruncateAt.END
+                            this.text = text
+                        } else {
+                            markwon.setMarkdown(this, text)
                         }
-                        isClickable = !textSelectable
-                        isFocusable = textSelectable
-                        setTextIsSelectable(textSelectable)
                     }
-                    val text = block.text.ifBlank { " " }
-                    markwon.setMarkdown(textView, text)
                     if (touchThrough) {
                         textView.movementMethod = null
                     }
-                    val lp = ViewGroup.MarginLayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                    ).apply { this.topMargin = topMargin }
+                    val widthPx = if (maxTextLinesInList != null) {
+                        /* 列表预览：用明确宽度代替 MATCH_PARENT，避免 wrap_content 父容器下宽度坍塌 */
+                        (container.context.resources.displayMetrics.widthPixels * 0.85).toInt()
+                    } else {
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    }
+                    val lp = ViewGroup.MarginLayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT).apply { this.topMargin = topMargin }
                     container.addView(textView, lp)
                 }
                 is ContentBlock.Image -> {
@@ -263,9 +272,8 @@ object MessageContentRenderer {
                         urlFallback.isGone = true
                         playRow.isVisible = true
                         playRow.isClickable = true
-                        playRow.isFocusable = !touchThrough
+                           playRow.isFocusable = !touchThrough
                         playRow.isFocusableInTouchMode = !touchThrough
-                        if (touchThrough) playRow.isFocusable = false
                         playRow.setOnClickListener {
                             val ctx = playRow.context.applicationContext
                             fun idleUi() {

@@ -17,7 +17,6 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
@@ -32,8 +31,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.paging.LoadState
-import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.i2534.notice.NoticeApp
 import com.github.i2534.notice.R
@@ -67,79 +64,22 @@ class MainActivity : AppCompatActivity() {
     private val markwon get() = (application as NoticeApp).markwon
     private var mqttService: MqttService? = null
     private var serviceBound = false
-    /** 指定回复到的主题（从消息详情点「回复」时设置）；发送后清除 */
     private var replyToTopicOverride: String? = null
     private lateinit var configStore: MqttConfigStore
     private var mediaRecorder: MediaRecorder? = null
     private var currentRecordFile: java.io.File? = null
     private var isRecording = false
-    /** 待发送的语音文件（松开后不自动上传，点击发送时才上传并发送） */
     private var pendingVoiceFile: java.io.File? = null
-    /** true = 语音模式（按住说话），false = 文本模式 */
     private var isVoiceInputMode = false
-    /** 本次录音开始时间（用于显示录制秒数） */
     private var voiceRecordingStartMs: Long = 0L
 
-    private val messageAdapter: MessageAdapter by lazy {
-        lateinit var self: MessageAdapter
-        self = MessageAdapter(
-            markwon,
-            onItemClick = { message -> showMessageDetailDialog(message) },
-            onEnterSelectMode = { updateSelectModeUI() },
-            onSelectionChanged = { count -> updateSelectionCount(count) },
-            onAsrConfirm = { message, text ->
-                val service = mqttService
-                if (service == null || service.connectionState.value != MqttService.ConnectionState.CONNECTED) {
-                    Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-                } else {
-                    val payload = JSONObject().apply {
-                        put("type", "asr_confirm")
-                        put("text", text)
-                    }.toString()
-                    if (service.publishReply(payload, message.topic)) {
-                        self.markAsrHandled(message.id, getString(R.string.voice_asr_confirmed_line))
-                        Snackbar.make(binding.root, R.string.reply_sent, Snackbar.LENGTH_SHORT).show()
-                    } else {
-                        Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-                    }
-                }
-            },
-            onAsrCancel = { message ->
-                val service = mqttService
-                if (service == null || service.connectionState.value != MqttService.ConnectionState.CONNECTED) {
-                    Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-                } else {
-                    val payload = JSONObject().apply { put("type", "asr_cancel") }.toString()
-                    if (service.publishReply(payload, message.topic)) {
-                        self.markAsrHandled(message.id, getString(R.string.voice_asr_cancelled_line))
-                        Snackbar.make(binding.root, R.string.reply_sent, Snackbar.LENGTH_SHORT).show()
-                    } else {
-                        Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-                    }
-                }
-            }
-        )
-        self
-    }
-
-    private val headerAdapter by lazy {
-        MessageListHeaderAdapter(
-            context = this,
-            markwon = markwon,
-            onLatestCardClick = { mqttService?.clearUnreadCount() },
-            onClearClick = {
-                if (messageAdapter.isSelectMode) deleteSelectedMessages()
-                else showClearAllDialog()
-            }
-        )
-    }
+    private lateinit var bubbleAdapter: BubbleMessageAdapter
+    private var lastBuiltItems: List<MessageListItem> = emptyList()
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            startMqttService()
-        }
+        if (isGranted) startMqttService()
     }
 
     private val recordAudioPermissionLauncher = registerForActivityResult(
@@ -170,7 +110,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         configStore = MqttConfigStore(this)
 
-        // 由我们自行处理系统栏和软键盘 insets，避免输入框被虚拟按键/键盘遮挡
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setupUI()
         ViewCompat.requestApplyInsets(binding.root)
@@ -196,10 +135,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
-        // 返回键处理（多选模式下退出多选）
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (messageAdapter.isSelectMode) {
+                if (bubbleAdapter.isSelectMode) {
                     exitSelectMode()
                 } else {
                     isEnabled = false
@@ -208,7 +146,6 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        // Toolbar
         binding.toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_connection -> {
@@ -237,17 +174,38 @@ class MainActivity : AppCompatActivity() {
                     startActivity(Intent(this, LogsActivity::class.java))
                     true
                 }
+                         R.id.action_clear -> {
+                    showClearAllDialog()
+                    true
+                }
+                R.id.action_select_delete -> {
+                    deleteSelectedMessages()
+                    true
+                }
+                R.id.action_select_done -> {
+                    exitSelectMode()
+                    true
+                }
                 else -> false
             }
         }
 
-        // RecyclerView：头部（最新消息+历史标题）+ 消息列表，整页单区滚动
         binding.messageList.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
-            adapter = ConcatAdapter(headerAdapter, messageAdapter)
         }
 
-        // 对话回复栏：不按圆角 outline 裁切子 View，避免麦克风图标被裁
+        bubbleAdapter = BubbleMessageAdapter(
+            markwon = markwon,
+            onItemClick = { message -> showMessageDetailDialog(message) },
+            onLongClick = { message ->
+                bubbleAdapter.enterSelectMode(message)
+                true
+            },
+            onEnterSelectMode = { updateSelectModeUI() },
+            onSelectionChanged = { count -> updateSelectionCount(count) }
+        )
+        binding.messageList.adapter = bubbleAdapter
+
         binding.replyCard.clipToOutline = false
         binding.replyInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
@@ -263,27 +221,15 @@ class MainActivity : AppCompatActivity() {
             updateReplyToTopicUI()
         }
 
-        // 根布局：预留状态栏（上）和导航栏（下），避免内容被系统栏遮挡
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(
-                systemBars.left,
-                systemBars.top,
-                systemBars.right,
-                systemBars.bottom
-            )
+            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
 
-        // 主内容区：键盘弹出时底部 padding = 键盘高度，整块内容上移；键盘收起时 padding 恢复为 0，输入栏回到底部
         ViewCompat.setOnApplyWindowInsetsListener(binding.mainContent) { view, insets ->
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
-            view.setPadding(
-                view.paddingLeft,
-                view.paddingTop,
-                view.paddingRight,
-                ime.bottom
-            )
+            view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, ime.bottom)
             insets
         }
     }
@@ -291,11 +237,8 @@ class MainActivity : AppCompatActivity() {
     private fun toggleReplySection() {
         val isVisible = binding.replySection.visibility == View.VISIBLE
         binding.replySection.visibility = if (isVisible) View.GONE else View.VISIBLE
-        if (!isVisible) {
-            binding.replyInput.requestFocus()
-        } else {
-            binding.replyInput.clearFocus()
-        }
+        if (!isVisible) binding.replyInput.requestFocus()
+        else binding.replyInput.clearFocus()
     }
 
     private fun updateReplyToTopicUI() {
@@ -310,11 +253,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun sendReply() {
         val pendingVoice = pendingVoiceFile
-        if (pendingVoice != null) {
-            // 有待发送语音：上传后发送，不要求输入框有文字
-            sendPendingVoice(pendingVoice)
-            return
-        }
+        if (pendingVoice != null) { sendPendingVoice(pendingVoice); return }
         val content = binding.replyInput.text?.toString()?.trim() ?: ""
         if (content.isEmpty()) {
             Snackbar.make(binding.root, R.string.reply_hint, Snackbar.LENGTH_SHORT).show()
@@ -383,13 +322,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleVoiceTextMode() {
-        pendingVoiceFile?.let { f ->
-            try {
-                f.delete()
-            } catch (_: Exception) {
-            }
-            pendingVoiceFile = null
-        }
+        pendingVoiceFile?.let { f -> try { f.delete() } catch (_: Exception) { }; pendingVoiceFile = null }
         isVoiceInputMode = !isVoiceInputMode
         if (isVoiceInputMode) {
             binding.replyInput.visibility = View.GONE
@@ -408,14 +341,8 @@ class MainActivity : AppCompatActivity() {
     private fun setupHoldToTalk() {
         binding.voiceHoldToTalk.setOnTouchListener { _, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (!isRecording) tryStartHoldToTalk()
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (isRecording) stopVoiceRecording()
-                    true
-                }
+                android.view.MotionEvent.ACTION_DOWN -> { if (!isRecording) tryStartHoldToTalk(); true }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> { if (isRecording) stopVoiceRecording(); true }
                 else -> false
             }
         }
@@ -429,8 +356,7 @@ class MainActivity : AppCompatActivity() {
                 return@launch
             }
             when {
-                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED ->
-                    startVoiceRecording()
+                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> startVoiceRecording()
                 else -> recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
         }
@@ -472,11 +398,8 @@ class MainActivity : AppCompatActivity() {
         binding.voiceHoldToTalk.text = getString(R.string.voice_hold_to_talk)
         binding.voiceHoldToTalk.setBackgroundResource(R.drawable.bg_hold_to_talk)
         if (recorder == null || file == null) return
-        try {
-            recorder.stop()
-        } catch (_: Exception) { }
+        try { recorder.stop() } catch (_: Exception) { }
         recorder.release()
-        // 不在此处上传：仅保存为待发送，点击发送时才上传并发送
         pendingVoiceFile?.delete()
         pendingVoiceFile = file
         val durationSec = ((System.currentTimeMillis() - voiceRecordingStartMs) / 1000).toInt().coerceAtLeast(0)
@@ -485,15 +408,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            when {
-                ContextCompat.checkSelfPermission(
-                    this, Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> {
-                    startMqttService()
-                }
-                else -> {
-                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                startMqttService()
+            } else {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         } else {
             startMqttService()
@@ -508,9 +426,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkBatteryOptimization() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
-            showBatteryOptimizationDialog()
-        }
+        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) showBatteryOptimizationDialog()
     }
 
     private fun showBatteryOptimizationDialog() {
@@ -527,17 +443,11 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("BatteryLife")
     private fun requestIgnoreBatteryOptimization() {
         try {
-            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = Uri.parse("package:$packageName")
-            }
-            startActivity(intent)
+            })
         } catch (e: Exception) {
-            // 部分手机不支持，打开电池设置页面
-            try {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            } catch (e2: Exception) {
-                // 忽略
-            }
+            try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } catch (e2: Exception) { }
         }
     }
 
@@ -548,42 +458,48 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeService() {
         mqttService?.let { service ->
-            // 观察连接状态
             lifecycleScope.launch {
-                service.connectionState.collectLatest { state ->
-                    updateConnectionUI(state)
-                }
+                service.connectionState.collectLatest { state -> updateConnectionUI(state) }
             }
 
-            // 观察分页消息列表
             lifecycleScope.launch {
-                service.messagesPaging.collectLatest { pagingData ->
-                    messageAdapter.submitData(pagingData)
-                }
-            }
+                service.messagesAsc.collectLatest { messages ->
+                    val newItems = BubbleListBuilder.buildMessages(messages)
+                    bubbleAdapter.submitDiff(lastBuiltItems, newItems)
+                    lastBuiltItems = newItems
 
-            // 观察列表是否为空
-            lifecycleScope.launch {
-                messageAdapter.loadStateFlow.collectLatest { loadStates ->
-                    val isEmpty = loadStates.refresh is LoadState.NotLoading &&
-                            messageAdapter.itemCount == 0
+                    val isEmpty = messages.isEmpty()
                     binding.emptyText.visibility = if (isEmpty) View.VISIBLE else View.GONE
+
+                    binding.messageList.post {
+                        if (!isEmpty) {
+                            binding.messageList.scrollToPosition(bubbleAdapter.itemCount - 1)
+                        }
+                    }
                 }
             }
 
-            // 观察最新消息（头部在 MessageListHeaderAdapter 内渲染）
             lifecycleScope.launch {
-                service.latestMessage.collectLatest { message ->
-                    headerAdapter.latestMessage = message
+               service.latestMessage.collectLatest { message ->
+                    mqttService?.clearUnreadCount()
                 }
             }
-
         }
-    }
+  }
 
     private fun updateSelectModeUI() {
-        headerAdapter.isSelectMode = true
-        binding.toolbar.title = getString(R.string.select_mode_title, messageAdapter.getSelectedCount())
+        val isSelect = bubbleAdapter.isSelectMode
+        binding.toolbar.title = if (isSelect) getString(R.string.select_mode_title, bubbleAdapter.getSelectedCount()) else getString(R.string.app_name)
+        binding.toolbar.menu.apply {
+            findItem(R.id.action_connection).isVisible = !isSelect
+            findItem(R.id.action_reply).isVisible = !isSelect
+            findItem(R.id.action_settings).isVisible = !isSelect
+            findItem(R.id.action_about).isVisible = !isSelect
+            findItem(R.id.action_logs).isVisible = !isSelect
+            findItem(R.id.action_clear).isVisible = !isSelect
+            findItem(R.id.action_select_delete).isVisible = isSelect
+            findItem(R.id.action_select_done).isVisible = isSelect
+        }
     }
 
     private fun updateSelectionCount(count: Int) {
@@ -591,18 +507,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun exitSelectMode() {
-        messageAdapter.exitSelectMode()
-        headerAdapter.isSelectMode = false
-        binding.toolbar.title = getString(R.string.app_name)
+        bubbleAdapter.exitSelectMode()
+        updateSelectModeUI()
     }
 
     private fun deleteSelectedMessages() {
-        val selectedIds = messageAdapter.getSelectedIds()
+        val selectedIds = bubbleAdapter.getSelectedIds()
         if (selectedIds.isEmpty()) {
             Snackbar.make(binding.root, R.string.no_message_selected, Snackbar.LENGTH_SHORT).show()
             return
         }
-
         showConfirmDialog(
             title = getString(R.string.message_delete_title),
             message = getString(R.string.message_delete_selected_confirm, selectedIds.size),
@@ -620,7 +534,6 @@ class MainActivity : AppCompatActivity() {
             message = getString(R.string.clear_all_confirm),
             onConfirm = {
                 mqttService?.clearMessages()
-                headerAdapter.latestMessage = null
             }
         )
     }
@@ -643,13 +556,8 @@ class MainActivity : AppCompatActivity() {
 
         confirmBinding.btnPositive.apply {
             text = positiveText
-            if (!isDestructive) {
-                backgroundTintList = ContextCompat.getColorStateList(context, R.color.primary)
-            }
-            setOnClickListener {
-                onConfirm()
-                dialog.dismiss()
-            }
+            if (!isDestructive) backgroundTintList = ContextCompat.getColorStateList(context, R.color.primary)
+            setOnClickListener { onConfirm(); dialog.dismiss() }
         }
         confirmBinding.btnNegative.apply {
             text = negativeText
@@ -669,14 +577,12 @@ class MainActivity : AppCompatActivity() {
             detailBinding.dialogTitle.visibility = View.VISIBLE
             detailBinding.dialogTitle.text = message.title
         }
-        detailBinding.dialogSentByMe.visibility =
-            if (message.isOutgoing) View.VISIBLE else View.GONE
+        detailBinding.dialogSentByMe.visibility = if (message.isOutgoing) View.VISIBLE else View.GONE
         detailBinding.dialogHeader.setBackgroundResource(
             if (message.isOutgoing) R.drawable.bg_dialog_message_header_outgoing
             else R.drawable.bg_dialog_message_header
         )
-        val asrOutgoingDisplay =
-            MessageAdapter.displayTextForOutgoingAsrCommand(this, message.isOutgoing, message.content)
+        val asrOutgoingDisplay = BubbleMessageAdapter.displayTextForOutgoingAsrCommand(this, message.isOutgoing, message.content)
         val blocks = if (asrOutgoingDisplay != null) {
             listOf(ContentBlock.Text(asrOutgoingDisplay))
         } else {
@@ -703,21 +609,16 @@ class MainActivity : AppCompatActivity() {
             detailBinding.btnClose.setOnClickListener { dialog.dismiss() }
             detailBinding.btnCopy.setOnClickListener {
                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText(message.title, message.content)
-                clipboard.setPrimaryClip(clip)
+                clipboard.setPrimaryClip(ClipData.newPlainText(message.title, message.content))
                 Snackbar.make(binding.root, R.string.message_detail_copied, Snackbar.LENGTH_SHORT).show()
                 dialog.dismiss()
             }
             dialog.window?.apply {
                 setBackgroundDrawableResource(android.R.color.transparent)
                 val maxHeight = (resources.displayMetrics.heightPixels * DIALOG_MAX_HEIGHT_RATIO).toInt()
-                setLayout(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    maxHeight
-                )
+                setLayout(WindowManager.LayoutParams.MATCH_PARENT, maxHeight)
             }
             dialog.show()
-            // 宽屏设备上弹窗可能被主题限制为半屏等，用实际内容区宽度设置图片最小宽度
             detailBinding.dialogContentContainer.post {
                 val contentWidth = detailBinding.dialogContentContainer.width
                 if (contentWidth > 0) {
@@ -743,12 +644,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateConnectionUI(state: MqttService.ConnectionState) {
         val (statusTitleRes, iconRes) = when (state) {
-            MqttService.ConnectionState.DISCONNECTED ->
-                R.string.status_disconnected to R.drawable.ic_status_disconnected
-            MqttService.ConnectionState.CONNECTING ->
-                R.string.status_connecting to R.drawable.ic_status_connecting
-            MqttService.ConnectionState.CONNECTED ->
-                R.string.status_connected to R.drawable.ic_status_connected
+            MqttService.ConnectionState.DISCONNECTED -> R.string.status_disconnected to R.drawable.ic_status_disconnected
+            MqttService.ConnectionState.CONNECTING -> R.string.status_connecting to R.drawable.ic_status_connecting
+            MqttService.ConnectionState.CONNECTED -> R.string.status_connected to R.drawable.ic_status_connected
         }
         binding.toolbar.menu.findItem(R.id.action_connection)?.let { item ->
             item.title = getString(statusTitleRes)

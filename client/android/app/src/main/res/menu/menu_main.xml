@@ -36,4 +36,28 @@
         app:iconTint="@color/text_primary"
         app:showAsAction="never" />
 
+    <item
+        android:id="@+id/action_clear"
+        android:icon="@drawable/ic_delete"
+        android:title="@string/clear_history"
+        app:iconTint="@color/text_primary"
+        app:showAsAction="never" />
+
+    <!-- 多选模式专用按钮 -->
+    <item
+        android:id="@+id/action_select_delete"
+        android:icon="@drawable/ic_delete"
+        android:title="@string/message_delete_title"
+        app:iconTint="@color/error"
+        app:showAsAction="always"
+        android:visible="false" />
+
+    <item
+        android:id="@+id/action_select_done"
+        android:icon="@drawable/ic_check"
+        android:title="@string/select_mode_done"
+        app:iconTint="@color/primary"
+        app:showAsAction="always"
+        android:visible="false" />
+
 </menu>

@@ -20,7 +20,7 @@ android {
 
     defaultConfig {
         applicationId = "com.github.i2534.notice"
-        minSdk = 31  // Android 12
+        minSdk = 29  // Android 10
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName

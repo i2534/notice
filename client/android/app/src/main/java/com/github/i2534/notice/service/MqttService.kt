@@ -15,10 +15,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
-import androidx.paging.PagingData
-import androidx.paging.cachedIn
+
 import com.github.i2534.notice.NoticeApp
 import com.github.i2534.notice.R
 import com.github.i2534.notice.data.AppDatabase
@@ -74,8 +71,7 @@ class MqttService : Service() {
         // Doze 保活闹钟间隔（10 分钟）
         private const val KEEP_ALIVE_INTERVAL = 10 * 60 * 1000L
 
-        private const val PAGING_PAGE_SIZE = 20
-        private const val PAGING_INITIAL_LOAD_SIZE = 40
+
     }
 
     private val binder = LocalBinder()
@@ -145,22 +141,11 @@ class MqttService : Service() {
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    // 分页消息流
     /** 收到新消息或列表需刷新时触发，使历史列表重新从 DB 加载 */
-    private val listRefreshTrigger = MutableSharedFlow<Unit>(replay = 0, extraBufferCapacity = 1)
+    private val _messagesAsc = MutableStateFlow<List<NoticeMessage>>(emptyList())
 
-    val messagesPaging: Flow<PagingData<NoticeMessage>> = listRefreshTrigger
-        .onStart { emit(Unit) }
-        .flatMapLatest {
-            Pager(
-                config = PagingConfig(
-                    pageSize = PAGING_PAGE_SIZE,
-                    enablePlaceholders = false,
-                    initialLoadSize = PAGING_INITIAL_LOAD_SIZE
-                ),
-                pagingSourceFactory = { messageDao.getMessagesPaging() }
-            ).flow
-        }.cachedIn(scope)
+    val messagesAsc: StateFlow<List<NoticeMessage>> = _messagesAsc
+
 
     private val _latestMessage = MutableSharedFlow<NoticeMessage>(replay = 1)
     val latestMessage: SharedFlow<NoticeMessage> = _latestMessage.asSharedFlow()
@@ -184,7 +169,7 @@ class MqttService : Service() {
         AppLogger.d(TAG, "MqttService created")
         acquireWakeLock()
         startHeartbeat()
-        loadLatestMessage()
+        loadMessagesAsc()
         scheduleKeepAliveAlarm()
         registerDozeReceiver()
         // 持续同步最新配置（保存设置后 getPublishTopic 等能立即用到新值，无需重连）
@@ -193,12 +178,9 @@ class MqttService : Service() {
         }
     }
 
-    private fun loadLatestMessage() {
+    private fun loadMessagesAsc() {
         scope.launch {
-            messageDao.getLatestMessage()?.let { message ->
-                _latestMessage.emit(message)
-                AppLogger.d(TAG, "Loaded latest message: ${message.title}")
-            }
+            _messagesAsc.value = messageDao.getAllMessagesAsc()
         }
     }
 
@@ -567,7 +549,7 @@ class MqttService : Service() {
         scope.launch {
             messageDao.insert(message)
             messageDao.trimToSize(500)
-            listRefreshTrigger.emit(Unit)
+            _messagesAsc.value = messageDao.getAllMessagesAsc()
         }
 
         // 增加未读计数
@@ -658,14 +640,14 @@ class MqttService : Service() {
             paths.forEach { path -> java.io.File(path).delete() }
             mediaCacheDao.deleteAll()
             messageDao.deleteAll()
-            listRefreshTrigger.emit(Unit)
+            _messagesAsc.value = messageDao.getAllMessagesAsc()
         }
     }
 
     fun deleteMessage(messageId: String) {
         scope.launch {
             messageDao.delete(messageId)
-            listRefreshTrigger.emit(Unit)
+            _messagesAsc.value = messageDao.getAllMessagesAsc()
         }
     }
 
@@ -679,7 +661,7 @@ class MqttService : Service() {
                 mediaCacheDao.deleteByUrls(urls)
             }
             messageDao.deleteByIds(messageIds.toList())
-            listRefreshTrigger.emit(Unit)
+            _messagesAsc.value = messageDao.getAllMessagesAsc()
         }
     }
 
@@ -758,7 +740,7 @@ class MqttService : Service() {
                 )
                 messageDao.insert(msg)
                 messageDao.trimToSize(500)
-                listRefreshTrigger.emit(Unit)
+                _messagesAsc.value = messageDao.getAllMessagesAsc()
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Publish reply failed: ${e.message}")
                 lastSentReplyContent = null

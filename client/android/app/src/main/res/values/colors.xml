@@ -34,7 +34,7 @@
 
     <!-- 交互色 -->
     <color name="ripple">#33FFFFFF</color>
-    <color name="selected_background">#1A0D7377</color>
-    <!-- 本机发送的消息卡片背景（略浅于选中态，避免长按选中时无变化） -->
-    <color name="message_outgoing_bg">#120D7377</color>
+    <color name="selected_background">#260D7377</color>
+    <!-- 本机发送的消息卡片背景（明显区别于选中态） -->
+    <color name="message_outgoing_bg">#0A0D7377</color>
 </resources>

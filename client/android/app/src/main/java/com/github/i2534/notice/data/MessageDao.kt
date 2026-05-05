@@ -68,4 +68,7 @@ interface MessageDao {
      */
     @Query("DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY timestamp DESC LIMIT :keepCount)")
     suspend fun trimToSize(keepCount: Int)
+
+    @Query("SELECT * FROM messages ORDER BY timestamp ASC")
+    suspend fun getAllMessagesAsc(): List<NoticeMessage>
 }

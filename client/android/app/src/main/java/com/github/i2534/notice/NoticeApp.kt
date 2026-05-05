@@ -9,6 +9,7 @@ import com.github.i2534.notice.R
 import com.github.i2534.notice.util.AppLogger
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
+import com.github.i2534.notice.ui.SoftBreakPlugin
 
 class NoticeApp : Application() {
 
@@ -18,6 +19,7 @@ class NoticeApp : Application() {
         val surfaceVariant = ContextCompat.getColor(this, R.color.surface_variant)
         val cellPadding = (8 * density).toInt()
         Markwon.builder(this)
+            .usePlugin(SoftBreakPlugin)
             .usePlugin(TablePlugin.create { builder ->
                 builder
                     .tableBorderColor(surfaceVariant)

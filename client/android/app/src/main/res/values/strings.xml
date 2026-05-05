@@ -36,6 +36,7 @@
     <string name="message_deleted">消息已删除</string>
     <string name="messages_deleted">已删除 %1$d 条消息</string>
     <string name="select_mode_title">已选择 %1$d 项</string>
+    <string name="select_mode_done">完成</string>
     <string name="btn_delete_selected">删除</string>
     <string name="no_message_selected">未选择任何消息</string>
     <string name="clear_all_title">清空消息</string>
@@ -144,4 +145,11 @@
 
     <!-- 开源许可页面 -->
     <string name="licenses_title">开源许可</string>
+
+    <!-- 日期分隔 -->
+    <string name="date_today">今天</string>
+    <string name="date_yesterday">昨天</string>
+
+    <!-- 气泡相关 -->
+    <string name="topic_header_prefix"># </string>
 </resources>

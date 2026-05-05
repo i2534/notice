@@ -34,13 +34,13 @@
         android:clipToPadding="false"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <!-- 整页单区滚动：头部（最新消息+历史标题）+ 消息列表由 ConcatAdapter 组成 -->
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:clipChildren="false"
-            android:clipToPadding="false">
+            <!-- 整页单区滚动：气泡消息列表（含 Topic 分组头 + 日期分隔） -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipChildren="false"
+                android:clipToPadding="false">
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/messageList"
@@ -51,7 +51,7 @@
                 android:paddingBottom="8dp"
                 android:clipToPadding="false"
                 tools:itemCount="5"
-                tools:listitem="@layout/item_message" />
+                tools:listitem="@layout/item_bubble_message" />
 
             <!-- 空状态（无消息时居中显示） -->
             <TextView
