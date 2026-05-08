@@ -238,9 +238,9 @@ let mqttClient: mqtt.MqttClient | null = null;
 
 // 插件 logger，在 register 时注入，供发送等逻辑打日志
 let pluginLogger: PluginLogger = {
-    info: (msg, ...args) => console.log("[notice]", msg, ...args),
-    warn: (msg, ...args) => console.warn("[notice]", msg, ...args),
-    error: (msg, ...args) => console.error("[notice]", msg, ...args),
+    info: (msg) => console.log("[notice]", msg),
+    warn: (msg) => console.warn("[notice]", msg),
+    error: (msg) => console.error("[notice]", msg),
 };
 
 /** 订阅主题转可发布主题（与 Notice Server topicForPublish 一致） */
@@ -981,6 +981,12 @@ async function resolveMediaAndBuildContent(
     return textPart ? (mediaPart ? textPart + "\n\n" + mediaPart : textPart) : mediaPart;
 }
 
+/**
+ * 入站投递路径 1：dispatch（首选）。
+ * 依赖 runtime.channel.reply.dispatchReplyWithBufferedBlockDispatcher (openclaw@2026.3.23-2+)
+ * 以及 routing.resolveAgentRoute, reply.formatAgentEnvelope 等。
+ * 如升级后任一方法不可用，返回 false 回退到下一条路径。
+ */
 async function deliverInboundViaDispatch(
     api: OpenClawPluginApi,
     cfg: Record<string, unknown>,
@@ -1050,6 +1056,12 @@ async function deliverInboundViaDispatch(
     return true;
 }
 
+/**
+ * 入站投递路径 2：enqueue + wake（回退）。
+ * 依赖 runtime.system.enqueueSystemEvent (openclaw@2026.3.23-2+)
+ * 和 runtime.channel.session.resolveStorePath / updateLastRoute。
+ * 如升级后不可用，返回 false 回退到 hook agent 路径。
+ */
 async function deliverInboundViaEnqueueAndWake(
     api: OpenClawPluginApi,
     cfg: Record<string, unknown>,
@@ -1091,6 +1103,11 @@ async function deliverInboundViaEnqueueAndWake(
     return true;
 }
 
+/**
+ * 入站投递路径 3：hook agent（最终回退）。
+ * 不依赖 openclaw runtime，通过 HTTP hooks 配置（cfg.hooks）触发。
+ * 需要 hooks.enabled + hooks.token 配置。
+ */
 async function deliverInboundViaHookAgent(
     api: OpenClawPluginApi,
     cfg: Record<string, unknown>,
@@ -1156,10 +1173,10 @@ async function handleInboundMessage(
 export default function register(api: OpenClawPluginApi): void {
     const hostLogger = api.logger;
     pluginLogger = {
-        debug: hostLogger?.debug ? (msg, ...args) => hostLogger.debug!(msg, ...args) : undefined,
-        info: (msg, ...args) => (hostLogger?.info ? hostLogger.info(msg, ...args) : console.log("[notice]", msg, ...args)),
-        warn: (msg, ...args) => (hostLogger?.warn ? hostLogger.warn(msg, ...args) : console.warn("[notice]", msg, ...args)),
-        error: (msg, ...args) => (hostLogger?.error ? hostLogger.error(msg, ...args) : console.error("[notice]", msg, ...args)),
+        debug: hostLogger?.debug ? (msg) => hostLogger.debug!(msg) : undefined,
+        info: (msg) => (hostLogger?.info ? hostLogger.info(msg) : console.log("[notice]", msg)),
+        warn: (msg) => (hostLogger?.warn ? hostLogger.warn(msg) : console.warn("[notice]", msg)),
+        error: (msg) => (hostLogger?.error ? hostLogger.error(msg) : console.error("[notice]", msg)),
     };
     api.registerChannel({ plugin: noticeChannel });
 

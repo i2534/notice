@@ -43,6 +43,18 @@
       "allowSlashCommands": {
         "type": "boolean",
         "default": true
+      },
+      "accounts": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "properties": {
+            "token": { "type": "string" },
+            "brokerUrl": { "type": "string" },
+            "topic": { "type": "string" },
+            "serverUrl": { "type": "string" }
+          }
+        }
       }
     }
   },
@@ -79,6 +91,105 @@
     "allowSlashCommands": {
       "label": "允许 / 命令",
       "help": "开启时将以「/」开头的入站消息标记为 CommandAuthorized；MQTT 与 token 同权，请确认信任模型。"
+    },
+    "accounts": {
+      "label": "多账号配置",
+      "help": "每个账号可独立配置 token、brokerUrl、topic 等，键名即账号 ID（未指定时回退到通道级默认配置）。"
+    }
+  },
+  "channelConfigs": {
+    "notice": {
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "brokerUrl": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string",
+            "default": "notice/openclaw"
+          },
+          "serverUrl": {
+            "type": "string"
+          },
+          "blockStreaming": {
+            "type": "boolean",
+            "default": true
+          },
+          "blockStreamingBreak": {
+            "type": "string",
+            "enum": ["text_end", "message_end"],
+            "default": "text_end"
+          },
+          "maxContentLength": {
+            "type": "number",
+            "default": 0
+          },
+          "compressMinRunes": {
+            "type": "number",
+            "default": 0
+          },
+          "allowSlashCommands": {
+            "type": "boolean",
+            "default": true
+          },
+          "accounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "token": { "type": "string" },
+                "brokerUrl": { "type": "string" },
+                "topic": { "type": "string" },
+                "serverUrl": { "type": "string" }
+              }
+            }
+          }
+        }
+      },
+      "uiHints": {
+        "token": {
+          "label": "Token",
+          "sensitive": true
+        },
+        "brokerUrl": {
+          "label": "MQTT Broker URL"
+        },
+        "topic": {
+          "label": "Topic (subscribe & publish)"
+        },
+        "serverUrl": {
+          "label": "Notice 服务器 URL (图片上传)"
+        },
+        "blockStreaming": {
+          "label": "按块流式发送",
+          "help": "启用后，Agent 回复在生成过程中按块通过 MQTT 发送；关闭则等整条消息结束后再发。"
+        },
+        "blockStreamingBreak": {
+          "label": "发送时机",
+          "help": "text_end：每块产出即发送（逐条）；message_end：整条消息结束后再发送。"
+        },
+        "maxContentLength": {
+          "label": "单条 MQTT 正文最大长度（rune）",
+          "help": "0（默认）= 不限制、整段发送；>0 时按该 rune 数分块。经 Webhook 时勿超过服务端 message.max_content_length。"
+        },
+        "compressMinRunes": {
+          "label": "压缩最小正文（rune）",
+          "help": "仅当正文 rune 数≥此值且 gzip+base64 比 UTF-8 字节更短时才编码 content；0 表示从不压缩（服务端无此项，仅发布端策略）。"
+        },
+        "allowSlashCommands": {
+          "label": "允许 / 命令",
+          "help": "开启时将以「/」开头的入站消息标记为 CommandAuthorized；MQTT 与 token 同权，请确认信任模型。"
+        },
+        "accounts": {
+          "label": "多账号配置",
+          "help": "每个账号可独立配置 token、brokerUrl、topic 等，键名即账号 ID（未指定时回退到通道级默认配置）。"
+        }
+      }
     }
   }
 }
