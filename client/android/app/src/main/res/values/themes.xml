@@ -24,6 +24,13 @@
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 
+    <!-- Toolbar 标题样式 -->
+    <style name="TextAppearance.ToolbarTitle" parent="TextAppearance.Material3.TitleMedium">
+        <item name="android:textStyle">normal</item>
+        <item name="android:textSize">17sp</item>
+        <item name="alpha">0.85</item>
+    </style>
+
     <!-- 消息详情弹窗主题 -->
     <style name="Theme.Notice.Dialog" parent="Theme.Material3.DayNight.Dialog">
         <item name="colorPrimary">@color/primary</item>
