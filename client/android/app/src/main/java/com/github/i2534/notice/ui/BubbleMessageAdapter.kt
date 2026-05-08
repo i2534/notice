@@ -1,7 +1,8 @@
 package com.github.i2534.notice.ui
 
-import android.content.res.ColorStateList
 import android.view.Gravity
+import android.content.res.ColorStateList
+import androidx.core.view.ViewCompat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -60,6 +61,8 @@ class BubbleMessageAdapter(
     }
 
     private var items: List<MessageListItem> = emptyList()
+
+    fun getItems(): List<MessageListItem> = items
 
     private val asrHandledDisplayLines = mutableMapOf<String, String>()
     fun markAsrHandled(messageId: String, displayLine: String) {
@@ -125,17 +128,30 @@ class BubbleMessageAdapter(
         when (val item = items[position]) {
             is MessageListItem.TopicHeader -> (holder as TopicHeaderViewHolder).bind(item.topic)
             is MessageListItem.DateSeparator -> (holder as DateSeparatorViewHolder).bind(item.dateLabel)
-            is MessageListItem.MessageBubble -> (holder as BubbleViewHolder).bind(
-                item.message,
-                isSelectMode,
-                selectedIds.contains(item.message.id),
-                { msg -> if (isSelectMode) toggleSelection(msg) else onItemClick(msg) },
-                { msg -> onLongClick(msg) }
-            )
+            is MessageListItem.MessageBubble -> {
+                val prevIsOutgoing = if (position > 0 && items[position - 1] is MessageListItem.MessageBubble) {
+                    (items[position - 1] as MessageListItem.MessageBubble).message.isOutgoing
+                } else { null }
+                (holder as BubbleViewHolder).bind(
+                    item.message,
+                    isSelectMode,
+                    selectedIds.contains(item.message.id),
+                    prevIsOutgoing,
+                    { msg -> if (isSelectMode) toggleSelection(msg) else onItemClick(msg) },
+                    { msg -> onLongClick(msg) }
+                )
+            }
         }
     }
 
     override fun getItemCount() = items.size
+
+    override fun onViewAttachedToWindow(holder: RecyclerView.ViewHolder) {
+        super.onViewAttachedToWindow(holder)
+        if (holder is BubbleViewHolder) {
+            holder.setSpacing(holder.itemView.resources.displayMetrics.density)
+        }
+    }
 
     private fun toggleSelection(message: NoticeMessage) {
         if (message.id in selectedIds) selectedIds.remove(message.id) else selectedIds.add(message.id)
@@ -148,8 +164,10 @@ class BubbleMessageAdapter(
         private val name: TextView = itemView.findViewById(R.id.topicName)
 
         fun bind(topic: String) {
-            stripe.setBackgroundColor(TopicColor.forTopic(topic))
-            name.text = "# $topic"
+            val color = TopicColor.forTopic(topic)
+            ViewCompat.setBackgroundTintList(stripe, ColorStateList.valueOf(color))
+            name.setTextColor(color)
+            name.text = topic
         }
     }
 
@@ -165,52 +183,54 @@ class BubbleMessageAdapter(
         itemView: View,
         private val markwon: Markwon
     ) : RecyclerView.ViewHolder(itemView) {
-        private val root: com.google.android.material.card.MaterialCardView =
-            itemView.findViewById(R.id.bubbleRoot)
-        private val bubbleCard: View = itemView.findViewById(R.id.bubbleCard)
+        private val root: FrameLayout = itemView.findViewById(R.id.bubbleRoot)
+        private val bubbleCard: FrameLayout = itemView.findViewById(R.id.bubbleCard)
         private val bubbleTime: TextView = itemView.findViewById(R.id.bubbleTime)
         private val contentContainer: ViewGroup = itemView.findViewById(R.id.bubbleContentContainer)
-        private val bubbleFade: View = itemView.findViewById(R.id.bubbleFade)
+        private val bubbleMore: TextView = itemView.findViewById(R.id.bubbleMore)
+
+        fun setSpacing(density: Float) {
+            val lp = root.layoutParams as ViewGroup.MarginLayoutParams
+            lp.topMargin = (6 * density).toInt()
+        }
 
         fun bind(
             message: NoticeMessage,
             isSelectMode: Boolean,
             isSelected: Boolean,
+            prevIsOutgoing: Boolean?,
             onClick: (NoticeMessage) -> Unit,
             onLongClick: (NoticeMessage) -> Unit
         ) {
             val isOutgoing = message.isOutgoing
             val ctx = itemView.context
 
-            val lp = bubbleCard.layoutParams as FrameLayout.LayoutParams
+            // 气泡 80% 宽度，通过 gravity 控制左右对齐
+            val containerWidth = ctx.resources.displayMetrics.widthPixels
+            val bubbleWidth = (containerWidth * 0.85).toInt()
+            val lp = FrameLayout.LayoutParams(bubbleWidth, FrameLayout.LayoutParams.WRAP_CONTENT)
             lp.gravity = if (isOutgoing) Gravity.END else Gravity.START
             bubbleCard.layoutParams = lp
+
             bubbleCard.background = ContextCompat.getDrawable(
                 ctx,
                 if (isOutgoing) R.drawable.bg_bubble_outgoing else R.drawable.bg_bubble_incoming
             )
 
             if (isSelectMode && isSelected) {
-                root.strokeWidth = 3
-                root.strokeColor = ContextCompat.getColor(ctx, R.color.primary_light)
-                root.setCardBackgroundColor(
-                    ColorStateList.valueOf(ContextCompat.getColor(ctx, R.color.selected_background))
-                )
+                root.background = ContextCompat.getDrawable(ctx, R.drawable.bg_selected_bubble)
             } else {
-                root.strokeWidth = 0
-                root.setCardBackgroundColor(
-                    ColorStateList.valueOf(
-                        if (isOutgoing)
-                            ContextCompat.getColor(ctx, R.color.message_outgoing_bg)
-                        else
-                            ContextCompat.getColor(ctx, R.color.surface_variant)
-                    )
-                )
+                root.background = null
             }
 
             bubbleTime.text = message.getFormattedTime()
-            bubbleTime.setTextColor(ContextCompat.getColor(ctx, if (isOutgoing) R.color.white else R.color.text_secondary))
-            bubbleTime.alpha = if (isOutgoing) 0.7f else 1f
+            if (isOutgoing) {
+                bubbleTime.setTextColor(ContextCompat.getColor(ctx, R.color.white))
+                bubbleTime.alpha = 0.5f
+            } else {
+                bubbleTime.setTextColor(ContextCompat.getColor(ctx, R.color.text_secondary))
+                bubbleTime.alpha = 0.8f
+            }
 
             contentContainer.removeAllViews()
             val asrOutgoingDisplay = displayTextForOutgoingAsrCommand(ctx, isOutgoing, message.content)
@@ -220,7 +240,7 @@ class BubbleMessageAdapter(
             } else {
                 listOf(ContentBlock.Text(message.content))
             }
-            MessageContentRenderer.render(
+      MessageContentRenderer.render(
                 container = contentContainer,
                 blocks = previewBlocks,
                 markwon = markwon,
@@ -229,14 +249,14 @@ class BubbleMessageAdapter(
                 isOutgoing = isOutgoing,
                 mediaCachePathByUrl = null,
                 showUrlWhenNoCache = false
-            )
-            val likelyTruncated = asrOutgoingDisplay == null &&
-                (message.content.length > 80 || message.content.lines().size > 2)
-             if (likelyTruncated) {
-                bubbleFade.background = ContextCompat.getDrawable(ctx, R.drawable.bg_bubble_fade)
-                bubbleFade.visibility = View.VISIBLE
-            } else {
-                bubbleFade.visibility = View.GONE
+            ) { isTruncated ->
+                bubbleMore.apply {
+                    visibility = if (isTruncated) View.VISIBLE else View.GONE
+                    setTextColor(
+                        if (isOutgoing) android.graphics.Color.parseColor("#80FFFFFF")
+                        else ContextCompat.getColor(ctx, R.color.primary_light)
+                    )
+                }
             }
 
             root.setOnClickListener { onClick(message) }

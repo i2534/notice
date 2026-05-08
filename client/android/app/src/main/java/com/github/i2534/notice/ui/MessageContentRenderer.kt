@@ -9,13 +9,14 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
 import coil.load
 import com.github.i2534.notice.R
 import com.github.i2534.notice.util.AppLogger
+import com.github.i2534.notice.util.BannerType
+import com.github.i2534.notice.util.MessageBanner
 import io.noties.markwon.Markwon
 import java.io.File
 
@@ -101,7 +102,7 @@ private object VoicePlaybackCoordinator {
                     }
                 }
                 setOnErrorListener { _, _, _ ->
-                    Toast.makeText(applicationContext, R.string.voice_play_error, Toast.LENGTH_SHORT).show()
+                    MessageBanner.showRes(applicationContext, R.string.voice_play_error, BannerType.Error)
                     val a = active
                     if (a != null && a.path == path) {
                         finishActive(true)
@@ -119,8 +120,8 @@ private object VoicePlaybackCoordinator {
                 prepareAsync()
             }
             active = Active(path, idle, playing, paused, mp, false)
-        } catch (_: Exception) {
-            Toast.makeText(applicationContext, R.string.voice_play_error, Toast.LENGTH_SHORT).show()
+       } catch (_: Exception) {
+            MessageBanner.showRes(applicationContext, R.string.voice_play_error, BannerType.Error)
         }
     }
 }
@@ -150,7 +151,8 @@ object MessageContentRenderer {
         mediaCachePathByUrl: Map<String, String>? = null,
         showUrlWhenNoCache: Boolean = true,
         maxImageHeightInList: Int? = null,
-        detailImageMinWidth: Int? = null
+        detailImageMinWidth: Int? = null,
+        onTruncated: ((Boolean) -> Unit)? = null
     ) {
         container.removeAllViews()
         val inflater = LayoutInflater.from(container.context)
@@ -179,13 +181,20 @@ object MessageContentRenderer {
                     if (touchThrough) {
                         textView.movementMethod = null
                     }
-                    val widthPx = if (maxTextLinesInList != null) {
-                        /* 列表预览：用明确宽度代替 MATCH_PARENT，避免 wrap_content 父容器下宽度坍塌 */
-                        (container.context.resources.displayMetrics.widthPixels * 0.85).toInt()
-                    } else {
-                        ViewGroup.LayoutParams.MATCH_PARENT
+                    if (maxTextLinesInList != null && onTruncated != null) {
+                        textView.post {
+                            val isTruncated = textView.text?.let { t ->
+                                val lastVisibleLine = textView.lineCount.coerceAtMost(maxTextLinesInList) - 1
+                                val lastChar = (textView.layout?.getLineEnd(lastVisibleLine) ?: -1) - 1
+                                lastChar >= 0 && lastChar < t.length && t[lastChar] == '\u2026'
+                            } ?: false
+                            onTruncated(isTruncated)
+                        }
                     }
-                    val lp = ViewGroup.MarginLayoutParams(widthPx, ViewGroup.LayoutParams.WRAP_CONTENT).apply { this.topMargin = topMargin }
+                    val lp = ViewGroup.MarginLayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply { this.topMargin = topMargin }
                     container.addView(textView, lp)
                 }
                 is ContentBlock.Image -> {
