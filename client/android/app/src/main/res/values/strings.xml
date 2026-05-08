@@ -52,6 +52,17 @@
     <string name="reply_sent">回复已发送</string>
     <string name="reply_failed_not_connected">未连接，请先连接</string>
     <string name="reply_failed_no_topic">请先在设置中填写订阅主题</string>
+    <string name="reply_topic_set">已设置回复主题</string>
+    <string name="message_detail_reply_to">回复</string>
+    <string name="reply_to_default">使用默认主题</string>
+
+    <!-- Topic 选择器 -->
+    <string name="topic_picker_title">选择回复主题</string>
+    <string name="topic_picker_custom_hint">输入自定义主题…</string>
+    <string name="topic_picker_default">使用默认主题</string>
+    <string name="topic_picker_default_label">默认主题</string>
+    <string name="topic_picker_default_with_topic">使用默认主题 (%s)</string>
+    <string name="topic_picker_recent">最近收到的主题</string>
 
     <!-- 设置界面 -->
     <string name="settings_title">设置</string>

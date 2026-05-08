@@ -7,6 +7,7 @@ import android.content.Context
 import androidx.core.content.ContextCompat
 import com.github.i2534.notice.R
 import com.github.i2534.notice.util.AppLogger
+import com.github.i2534.notice.util.MessageBanner
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
 import com.github.i2534.notice.ui.SoftBreakPlugin
@@ -38,6 +39,7 @@ class NoticeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        MessageBanner.init(this)
         AppLogger.init(this)
         createNotificationChannels()
     }

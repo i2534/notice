@@ -2,6 +2,7 @@ import asyncio
 import gzip
 import json
 import base64
+import random
 import time
 import logging
 from abc import ABC
@@ -15,8 +16,26 @@ except ImportError:
     raise ImportError("paho-mqtt is required. Install with: pip install paho-mqtt")
 
 from gateway.config import Platform
-from gateway.platforms.base import BasePlatformAdapter, SendResult, MessageEvent, MessageType
+from gateway.platforms.base import BasePlatformAdapter, SendResult, MessageEvent, MessageType, ProcessingOutcome
 from gateway.session import SessionSource
+
+
+def _extract_config(config) -> dict:
+    """Extract config dict from various config formats."""
+    cfg = {}
+    if isinstance(config, dict):
+        if "extra" in config and isinstance(config["extra"], dict):
+            cfg = config["extra"]
+        else:
+            cfg = config
+    elif hasattr(config, "extra"):
+        if isinstance(config.extra, dict):
+            cfg = dict(config.extra)
+        else:
+            cfg = {}
+        if hasattr(config, "token") and config.token:
+            cfg.setdefault("token", config.token)
+    return cfg
 
 
 @dataclass
@@ -46,19 +65,7 @@ class NoticeAdapter(BasePlatformAdapter):
         super().__init__(config, Platform("notice"))
         self._raw_config = config
 
-        cfg = {}
-        if isinstance(config, dict):
-            if "extra" in config and isinstance(config["extra"], dict):
-                cfg = config["extra"]
-            else:
-                cfg = config
-        elif hasattr(config, "extra"):
-            if isinstance(config.extra, dict):
-                cfg = dict(config.extra)
-            else:
-                cfg = {}
-            if hasattr(config, "token") and config.token:
-                cfg.setdefault("token", config.token)
+        cfg = _extract_config(config)
 
         self.logger = logging.getLogger(__name__)
         self.logger.debug(f"NoticeAdapter config: brokerUrl={cfg.get('brokerUrl')}, token={cfg.get('token')}, topic={cfg.get('topic')}")
@@ -67,11 +74,37 @@ class NoticeAdapter(BasePlatformAdapter):
         self.token = cfg.get("token", "") or ""
         self.topic = cfg.get("topic", "notice/#") or "notice/#"
         self.server_url = cfg.get("serverUrl") or None
-        self.client_id = f"hermes-{int(time.time() * 1000)}"
+        self.client_id = f"hermes-{int(time.time() * 1000)}-{random.randint(1000, 9999)}"
+
+        # Send-typing / alive signal — fires every N seconds during processing.
+        # Configure via extra.typingInterval (default 20).
+        raw = cfg.get("typingInterval", "20")
+        try:
+            self.typing_interval = int(raw)
+        except (TypeError, ValueError):
+            self.typing_interval = 20
+        if self.typing_interval < 5:
+            self.typing_interval = 5  # floor: too fast = spam
+        self._last_typing_time: dict[str, float] = {}
 
         self._mqtt_client: Optional[Any] = None
+        # Kept as simple boolean; fine under CPython GIL since MQTT callbacks and send() run
+        # through the same event-loop thread context. The asyncio.Event in connect() handles
+        # the actual connection-waiting synchronization.
         self._connected = False
+        self._connect_event = asyncio.Event()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+        # Content coalescing for streaming responses.
+        # The stream consumer calls send() per delta + per tool commentary.
+        # MQTT has no edit_message, so each send() would be a separate message.
+        # Heuristic: if new content starts with buffered content (streaming
+        # append), coalesce with debounce. Otherwise (new segment, fallback
+        # chunk), flush pending and publish immediately.
+        self._debounce_delay = 0.3  # seconds
+        self._pending_content: dict[str, str] = {}
+        self._pending_meta: dict[str, dict] = {}
+        self._debounce_tasks: dict[str, asyncio.Task] = {}
 
     async def connect(self) -> bool:
         self.logger.info(f"Connecting to Notice broker: {self.broker_url}")
@@ -107,9 +140,11 @@ class NoticeAdapter(BasePlatformAdapter):
                 transport=transport
             )
 
+            self._mqtt_client.reconnect_delay_set(min_delay=1, max_delay=120)
+
             self._mqtt_client.username_pw_set(self.token, self.token)
 
-            if is_ws or parsed.scheme == "tls":
+            if parsed.scheme in ("wss", "tls"):
                 self._mqtt_client.tls_set()
                 self._mqtt_client.tls_insecure_set(False)
 
@@ -125,13 +160,19 @@ class NoticeAdapter(BasePlatformAdapter):
             await loop.run_in_executor(None, self._mqtt_client.connect, host, port, 60)
 
             self._mqtt_client.loop_start()
-            await asyncio.sleep(1)
+
+            self._connect_event.clear()
+            try:
+                await asyncio.wait_for(self._connect_event.wait(), timeout=10.0)
+            except asyncio.TimeoutError:
+                self.logger.error("Connection timeout")
+                return False
 
             if self._connected:
                 self.logger.info(f"Connected to Notice broker and subscribed to {self.topic}")
                 return True
             else:
-                self.logger.error("Connection timeout")
+                self.logger.error("Connection failed")
                 return False
 
         except Exception as e:
@@ -141,6 +182,14 @@ class NoticeAdapter(BasePlatformAdapter):
 
     async def disconnect(self) -> None:
         self.logger.info("Disconnecting from Notice broker")
+
+        # Cancel pending debounce tasks so they don't fire after disconnect.
+        for task in self._debounce_tasks.values():
+            if not task.done():
+                task.cancel()
+        self._debounce_tasks.clear()
+        self._pending_content.clear()
+        self._pending_meta.clear()
 
         if self._mqtt_client:
             try:
@@ -161,6 +210,7 @@ class NoticeAdapter(BasePlatformAdapter):
     def _on_connect(self, client, userdata, flags, rc, properties=None):
         if rc == 0:
             self._connected = True
+            self._connect_event.set()
             self.logger.info(f"MQTT connected, subscribing to {self.topic}")
             client.subscribe(self.topic, qos=1)
         else:
@@ -225,7 +275,8 @@ class NoticeAdapter(BasePlatformAdapter):
 
             self.logger.info(f"Scheduling message handler for event from {client_name}")
             if self._loop:
-                asyncio.run_coroutine_threadsafe(self.handle_message(event), self._loop)
+                future = asyncio.run_coroutine_threadsafe(self.handle_message(event), self._loop)
+                future.add_done_callback(lambda f: self.logger.error(f"Message handler failed: {f.exception()}") if f.exception() else None)
             else:
                 self.logger.error("Event loop not available, dropping message")
 
@@ -234,12 +285,9 @@ class NoticeAdapter(BasePlatformAdapter):
         except Exception as e:
             self.logger.error(f"Error processing message: {e}")
 
-    async def send(self, chat_id: str, content: str, metadata: dict, reply_to: Optional[str] = None) -> SendResult:
-        if not self._mqtt_client or not self._connected:
-            return SendResult(success=False, error="Not connected to broker")
-
+    async def _do_publish(self, chat_id: str, content: str, metadata: dict | None) -> SendResult:
+        """Publish a message to MQTT immediately."""
         timestamp = int(time.time() * 1000)
-
         encoded_content = content
         content_encoding = None
 
@@ -258,7 +306,7 @@ class NoticeAdapter(BasePlatformAdapter):
             "content": encoded_content,
             "client": "hermes",
             "timestamp": timestamp,
-            "extra": {}
+            "extra": {},
         }
 
         if content_encoding:
@@ -283,17 +331,65 @@ class NoticeAdapter(BasePlatformAdapter):
                 self._mqtt_client.publish,
                 topic,
                 json_payload,
-                0  # QoS 0 - fire and forget (broker doesn't ACK over WSS)
+                1,
             )
-            self.logger.info(f"Message sent to {topic}: {content[:50]}...")
+            self.logger.info(f"Sent {len(content)} chars to {topic}")
             return SendResult(success=True, message_id=str(result.mid))
-
         except Exception as e:
-            self.logger.error(f"Failed to send message: {e}")
+            self.logger.error(f"Failed to publish: {e}")
             return SendResult(success=False, error=str(e))
 
-    async def send_typing(self, chat_id: str) -> None:
-        pass
+    async def send(self, chat_id: str, content: str, metadata: dict, reply_to: Optional[str] = None) -> SendResult:
+        if not self._mqtt_client or not self._connected:
+            return SendResult(success=False, error="Not connected to broker")
+
+        # Cancel the pending debounce timer (it will be restarted below).
+        old_task = self._debounce_tasks.pop(chat_id, None)
+        if old_task and not old_task.done():
+            old_task.cancel()
+
+        old_content = self._pending_content.get(chat_id)
+
+        if old_content is not None and content.startswith(old_content):
+            # Streaming append: replace buffer, restart timer.
+            pass  # Fall through to buffer below.
+        else:
+            # Non-append content (new segment, commentary, fallback chunk):
+            # flush whatever was pending first, then buffer the new content.
+            if old_content is not None:
+                meta = self._pending_meta.pop(chat_id, None)
+                await self._do_publish(chat_id, old_content, meta)
+                self.logger.debug(f"Flushed pending for {chat_id}")
+
+        # Buffer the latest content and start/restart the debounce timer.
+        self._pending_content[chat_id] = content
+        if metadata:
+            self._pending_meta[chat_id] = metadata
+
+        async def _coalesced_publish():
+            try:
+                await asyncio.sleep(self._debounce_delay)
+                final_content = self._pending_content.pop(chat_id, None)
+                meta = self._pending_meta.pop(chat_id, None) if final_content else None
+                if final_content is not None:
+                    await self._do_publish(chat_id, final_content, meta)
+                    # Reset typing timer after real content is published so that
+                    # _keep_typing won't fire a stale "⏳" right after the reply.
+                    self._last_typing_time[chat_id] = time.monotonic()
+            except asyncio.CancelledError:
+                pass
+
+        task = asyncio.create_task(_coalesced_publish())
+        self._debounce_tasks[chat_id] = task
+        return SendResult(success=True, message_id="coalesced")
+
+    async def send_typing(self, chat_id: str, metadata=None) -> None:
+        now = time.monotonic()
+        if now - self._last_typing_time.get(chat_id, 0.0) < self.typing_interval:
+            return
+        self._last_typing_time[chat_id] = now
+        if self._mqtt_client and self._connected:
+            await self._do_publish(chat_id, "⏳", {"status": "typing"})
 
     async def send_image(self, chat_id: str, image_url: str, caption: str) -> SendResult:
         if not self._mqtt_client or not self._connected:
@@ -308,36 +404,42 @@ class NoticeAdapter(BasePlatformAdapter):
                 if os.path.exists(image_url):
                     self.logger.info(f"Uploading image to {self.server_url}")
 
-                    with open(image_url, "rb") as f:
-                        image_data = f.read()
+                    def _do_upload():
+                        with open(image_url, "rb") as f:
+                            image_data = f.read()
 
-                    boundary = f"----FormBoundary{int(time.time() * 1000)}"
-                    filename = os.path.basename(image_url)
+                        boundary = f"----FormBoundary{int(time.time() * 1000)}"
+                        filename = os.path.basename(image_url)
 
-                    body = []
-                    body.append(f"--{boundary}".encode())
-                    body.append(f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode())
-                    body.append(b"Content-Type: image/jpeg")
-                    body.append(b"")
-                    body.append(image_data)
-                    body.append(f"--{boundary}--".encode())
-                    body.append(b"")
-                    content_type = f"multipart/form-data; boundary={boundary}"
+                        body = []
+                        body.append(f"--{boundary}".encode())
+                        body.append(f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode())
+                        body.append(b"Content-Type: image/jpeg")
+                        body.append(b"")
+                        body.append(image_data)
+                        body.append(f"--{boundary}--".encode())
+                        body.append(b"")
+                        content_type = f"multipart/form-data; boundary={boundary}"
 
-                    import urllib.request
+                        import urllib.request
 
-                    req = urllib.request.Request(
-                        f"{self.server_url.rstrip('/')}/api/upload",
-                        data=b"\r\n".join(body),
-                        headers={
-                            "Authorization": f"Bearer {self.token}",
-                            "Content-Type": content_type
-                        },
-                        method="POST"
-                    )
+                        req = urllib.request.Request(
+                            f"{self.server_url.rstrip('/')}/api/upload",
+                            data=b"\r\n".join(body),
+                            headers={
+                                "Authorization": f"Bearer {self.token}",
+                                "Content-Type": content_type
+                            },
+                            method="POST"
+                        )
 
-                    with urllib.request.urlopen(req, timeout=30) as response:
-                        response_data = json.loads(response.read().decode())
+                        with urllib.request.urlopen(req, timeout=30) as response:
+                            response_data = json.loads(response.read().decode())
+
+                        return response_data
+
+                    loop = asyncio.get_running_loop()
+                    response_data = await loop.run_in_executor(None, _do_upload)
 
                     if response_data.get("success") and response_data.get("image_urls"):
                         final_url = response_data["image_urls"][0]
@@ -357,7 +459,7 @@ class NoticeAdapter(BasePlatformAdapter):
         else:
             markdown_image = f"![]({final_url})"
 
-        return await self.send(chat_id, markdown_image, None, {})
+        return await self.send(chat_id, markdown_image, {})
 
     async def get_chat_info(self, chat_id: str) -> dict:
         return {
@@ -368,15 +470,23 @@ class NoticeAdapter(BasePlatformAdapter):
             "is_active": True
         }
 
+    async def on_processing_start(self, event: MessageEvent) -> None:
+        if self._mqtt_client and self._connected:
+            await self._do_publish(event.source.chat_id, "🧠 正在处理...", {"status": "started"})
+        # Mark typing as just-sent so the first send_typing() won't
+        # fire another pulse right after — 🧠 already serves as alive signal.
+        self._last_typing_time[event.source.chat_id] = time.monotonic()
+
+    async def on_processing_complete(self, event: MessageEvent, outcome: ProcessingOutcome) -> None:
+        if outcome == ProcessingOutcome.SUCCESS:
+            return  # Final reply is the success signal — skip.
+        icon = "❌" if outcome == ProcessingOutcome.FAILURE else "⚠️"
+        if self._mqtt_client and self._connected:
+            await self._do_publish(event.source.chat_id, f"{icon} 处理未完成", {"status": outcome.value})
+
 
 def validate_config(config) -> tuple[bool, str | None]:
-    cfg = {}
-    if isinstance(config, dict):
-        cfg = config.get("extra", {}) or config
-    elif hasattr(config, "extra") and isinstance(config.extra, dict):
-        cfg = config.extra
-        if hasattr(config, "token") and config.token:
-            cfg.setdefault("token", config.token)
+    cfg = _extract_config(config)
 
     broker_url = cfg.get("brokerUrl", "")
     token = cfg.get("token", "")

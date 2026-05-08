@@ -3,8 +3,6 @@ package com.github.i2534.notice.ui
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ClipData
-import android.media.MediaRecorder
-import org.json.JSONObject
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
@@ -17,11 +15,14 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
+import android.text.TextWatcher
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.ImageView
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -37,22 +38,16 @@ import com.github.i2534.notice.R
 import com.github.i2534.notice.data.AppDatabase
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.NoticeMessage
-import com.github.i2534.notice.data.MediaCacheEntity
+import com.github.i2534.notice.data.RecentTopicStore
 import com.github.i2534.notice.databinding.ActivityMainBinding
 import com.github.i2534.notice.databinding.DialogConfirmBinding
 import com.github.i2534.notice.databinding.DialogMessageDetailBinding
 import com.github.i2534.notice.service.MqttService
-import com.github.i2534.notice.util.MediaCacheConstants
 import com.github.i2534.notice.util.MediaCacheLoader
-import com.github.i2534.notice.util.uploadMedia
-import com.google.android.material.snackbar.Snackbar
-import kotlinx.coroutines.Dispatchers
+import com.github.i2534.notice.util.TopicColor
+import com.github.i2534.notice.util.MessageBanner
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.security.MessageDigest
 
 class MainActivity : AppCompatActivity() {
 
@@ -64,14 +59,9 @@ class MainActivity : AppCompatActivity() {
     private val markwon get() = (application as NoticeApp).markwon
     private var mqttService: MqttService? = null
     private var serviceBound = false
-    private var replyToTopicOverride: String? = null
-    private lateinit var configStore: MqttConfigStore
-    private var mediaRecorder: MediaRecorder? = null
-    private var currentRecordFile: java.io.File? = null
-    private var isRecording = false
-    private var pendingVoiceFile: java.io.File? = null
-    private var isVoiceInputMode = false
-    private var voiceRecordingStartMs: Long = 0L
+    private var configStore: MqttConfigStore? = null
+    private var replyViewModel: ReplyViewModel? = null
+    private var topicPickerDialog: AlertDialog? = null
 
     private lateinit var bubbleAdapter: BubbleMessageAdapter
     private var lastBuiltItems: List<MessageListItem> = emptyList()
@@ -85,8 +75,8 @@ class MainActivity : AppCompatActivity() {
     private val recordAudioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (!isGranted) {
-            Snackbar.make(binding.root, R.string.voice_need_server_url, Snackbar.LENGTH_SHORT).show()
+        if (isGranted) {
+            replyViewModel?.startRecording()
         }
     }
 
@@ -96,6 +86,15 @@ class MainActivity : AppCompatActivity() {
             mqttService = binder.getService()
             serviceBound = true
             observeService()
+            val cm = configStore ?: return
+            replyViewModel = ReplyViewModel(
+                application = application,
+                mqttService = binder.getService(),
+                configStore = cm,
+                mediaCacheDao = AppDatabase.getInstance(this@MainActivity).mediaCacheDao(),
+                recentTopicStore = RecentTopicStore(AppDatabase.getInstance(this@MainActivity).messageDao())
+            )
+            observeReplyState()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -128,10 +127,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        topicPickerDialog?.dismiss()
+        topicPickerDialog = null
         if (serviceBound) {
             unbindService(serviceConnection)
             serviceBound = false
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        MessageBanner.dismissAll()
     }
 
     private fun setupUI() {
@@ -159,7 +165,7 @@ class MainActivity : AppCompatActivity() {
                     true
                 }
                 R.id.action_reply -> {
-                    toggleReplySection()
+                    replyViewModel?.toggleReplySection()
                     true
                 }
                 R.id.action_settings -> {
@@ -174,7 +180,7 @@ class MainActivity : AppCompatActivity() {
                     startActivity(Intent(this, LogsActivity::class.java))
                     true
                 }
-                         R.id.action_clear -> {
+                R.id.action_clear -> {
                     showClearAllDialog()
                     true
                 }
@@ -206,20 +212,56 @@ class MainActivity : AppCompatActivity() {
         )
         binding.messageList.adapter = bubbleAdapter
 
-        binding.replyCard.clipToOutline = false
+        
+
+        binding.replyInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                replyViewModel?.onContentChanged(s?.toString() ?: "")
+            }
+        })
         binding.replyInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
-                sendReply()
+replyViewModel?.sendReply()
                 true
             } else false
         }
-        binding.btnSendReply.setOnClickListener { sendReply() }
-        binding.btnInputModeToggleWrap.setOnClickListener { toggleVoiceTextMode() }
-        setupHoldToTalk()
-        binding.btnClearReplyToTopic.setOnClickListener {
-            replyToTopicOverride = null
-            updateReplyToTopicUI()
+
+        binding.btnSendReply.setOnClickListener {
+            Log.d("MainActivity", "btnSendReply clicked, content=${replyViewModel?.state?.value?.content}")
+            replyViewModel?.sendReply()
         }
+
+        binding.btnInputModeToggleWrap.setOnClickListener { replyViewModel?.toggleVoiceMode() }
+
+        binding.voiceHoldToTalk.setOnTouchListener { _, event ->
+            val isRec = replyViewModel?.state?.value?.isRecording == true
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (!isRec) {
+                        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+replyViewModel?.startRecording()
+                        } else {
+                            recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isRec) replyViewModel?.stopRecording()
+                    true
+                }
+                else -> false
+            }
+        }
+
+        binding.replyToTopicRow.setOnClickListener { replyViewModel?.toggleTopicPicker() }
+        binding.btnClearReplyToTopic.setOnClickListener {
+            replyViewModel?.clearReplyTopic()
+        }
+        binding.replyToTopicLabel.setOnClickListener { replyViewModel?.toggleTopicPicker() }
+        binding.btnToggleTopicPicker.setOnClickListener { replyViewModel?.toggleTopicPicker() }
 
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -234,176 +276,91 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun toggleReplySection() {
-        val isVisible = binding.replySection.visibility == View.VISIBLE
-        binding.replySection.visibility = if (isVisible) View.GONE else View.VISIBLE
-        if (!isVisible) binding.replyInput.requestFocus()
-        else binding.replyInput.clearFocus()
-    }
-
-    private fun updateReplyToTopicUI() {
-        val topic = replyToTopicOverride
-        if (!topic.isNullOrBlank()) {
-            binding.replyToTopicRow.visibility = View.VISIBLE
-            binding.replyToTopicLabel.text = getString(R.string.reply_to_topic, topic)
-        } else {
-            binding.replyToTopicRow.visibility = View.GONE
-        }
-    }
-
-    private fun sendReply() {
-        val pendingVoice = pendingVoiceFile
-        if (pendingVoice != null) { sendPendingVoice(pendingVoice); return }
-        val content = binding.replyInput.text?.toString()?.trim() ?: ""
-        if (content.isEmpty()) {
-            Snackbar.make(binding.root, R.string.reply_hint, Snackbar.LENGTH_SHORT).show()
-            return
-        }
-        val service = mqttService
-        if (service == null || service.connectionState.value != MqttService.ConnectionState.CONNECTED) {
-            Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-            return
-        }
-        val topicToUse = replyToTopicOverride?.trim()?.takeIf { it.isNotEmpty() } ?: service.getPublishTopic()
-        if (topicToUse.isNullOrBlank()) {
-            Snackbar.make(binding.root, R.string.reply_failed_no_topic, Snackbar.LENGTH_SHORT).show()
-            return
-        }
-        val sent = service.publishReply(content, topicToUse)
-        if (sent) {
-            binding.replyInput.text?.clear()
-            replyToTopicOverride = null
-            updateReplyToTopicUI()
-            Snackbar.make(binding.root, R.string.reply_sent, Snackbar.LENGTH_SHORT).show()
-        } else {
-            Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun sendPendingVoice(file: java.io.File) {
-        val service = mqttService
-        if (service == null || service.connectionState.value != MqttService.ConnectionState.CONNECTED) {
-            Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-            return
-        }
-        val topicToUse = replyToTopicOverride?.trim()?.takeIf { it.isNotEmpty() } ?: service.getPublishTopic()
-        if (topicToUse.isNullOrBlank()) {
-            Snackbar.make(binding.root, R.string.reply_failed_no_topic, Snackbar.LENGTH_SHORT).show()
-            return
-        }
-        pendingVoiceFile = null
-        lifecycleScope.launch(Dispatchers.IO) {
-            val settings = configStore.settings.first()
-            val mediaUrl = uploadMedia(settings.serverUrl, settings.authToken, file)
-            if (mediaUrl != null) {
-                val cacheDir = File(applicationContext.filesDir, MediaCacheConstants.DIR_NAME)
-                cacheDir.mkdirs()
-                val name = MessageDigest.getInstance("MD5").digest(mediaUrl.toByteArray(Charsets.UTF_8))
-                    .take(16).joinToString("") { "%02x".format(it) } + ".m4a"
-                val dest = File(cacheDir, name)
-                file.copyTo(dest, overwrite = true)
-                AppDatabase.getInstance(applicationContext).mediaCacheDao().insert(MediaCacheEntity(mediaUrl, dest.absolutePath))
-            }
-            try { file.delete() } catch (_: Exception) { }
-            withContext(Dispatchers.Main) {
-                if (mediaUrl != null) {
-                    if (service.publishReply(mediaUrl, topicToUse)) {
-                        replyToTopicOverride = null
-                        updateReplyToTopicUI()
-                        Snackbar.make(binding.root, R.string.reply_sent, Snackbar.LENGTH_SHORT).show()
-                    } else {
-                        Snackbar.make(binding.root, R.string.reply_failed_not_connected, Snackbar.LENGTH_SHORT).show()
-                    }
+    private fun observeReplyState() {
+        replyViewModel ?: return
+        lifecycleScope.launch {
+            replyViewModel!!.state.collectLatest { state ->
+                if (state.isReplySectionVisible) {
+                    binding.replySection.visibility = View.VISIBLE
+                    binding.replyInput.requestFocus()
                 } else {
-                    Snackbar.make(binding.root, R.string.voice_upload_failed, Snackbar.LENGTH_SHORT).show()
+                    binding.replySection.visibility = View.GONE
+                    binding.replyInput.clearFocus()
+                }
+
+                // 同步输入框内容（避免 ViewModel 清空时输入框不更新）
+                val currentText = binding.replyInput.text?.toString() ?: ""
+                if (currentText != state.content) {
+                    binding.replyInput.setText(state.content)
+                    binding.replyInput.setSelection(state.content.length)
+                }
+
+                if (state.isVoiceMode) {
+                    binding.replyInput.visibility = View.GONE
+                    binding.voiceHoldToTalk.visibility = View.VISIBLE
+                    binding.btnInputModeToggle.setImageResource(R.drawable.ic_keyboard)
+                    binding.btnInputModeToggleWrap.contentDescription = getString(R.string.voice_mode_keyboard)
+                    (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(binding.replyInput.windowToken, 0)
+                } else {
+                    binding.replyInput.visibility = View.VISIBLE
+                    binding.voiceHoldToTalk.visibility = View.GONE
+                    binding.btnInputModeToggle.setImageResource(R.drawable.ic_mic)
+                    binding.btnInputModeToggleWrap.contentDescription = getString(R.string.voice_btn_label)
+                }
+
+                if (!state.isRecording) {
+                    binding.voiceHoldToTalk.text = if (state.hasPendingVoice) {
+                        getString(R.string.voice_recorded_click_send, 0)
+                    } else {
+                        getString(R.string.voice_hold_to_talk)
+                    }
+                }
+
+          if (!state.replyToTopic.isNullOrBlank()) {
+                    binding.replyToTopicLabel.text = getString(R.string.reply_to_topic, state.replyToTopic)
+                    binding.btnClearReplyToTopic.visibility = View.VISIBLE
+                    binding.replyTopicDot.setBackgroundColor(TopicColor.forTopic(state.replyToTopic))
+                } else {
+                    binding.replyToTopicLabel.text = getString(R.string.reply_to_default)
+                    binding.btnClearReplyToTopic.visibility = View.GONE
+                    binding.replyTopicDot.setBackgroundColor(TopicColor.forTopic(binding.replyToTopicLabel.text.toString()))
+                }
+
+                val canSend = !state.isSending && (state.content.isNotBlank() || state.hasPendingVoice)
+                if (binding.btnSendReply.isEnabled != canSend) {
+                    binding.btnSendReply.isEnabled = canSend
+                }
+
+                if (state.isTopicPickerVisible && topicPickerDialog?.isShowing != true) {
+                    showTopicPickerFromState(state)
                 }
             }
         }
     }
 
-    private fun toggleVoiceTextMode() {
-        pendingVoiceFile?.let { f -> try { f.delete() } catch (_: Exception) { }; pendingVoiceFile = null }
-        isVoiceInputMode = !isVoiceInputMode
-        if (isVoiceInputMode) {
-            binding.replyInput.visibility = View.GONE
-            binding.voiceHoldToTalk.visibility = View.VISIBLE
-            binding.btnInputModeToggle.setImageResource(R.drawable.ic_keyboard)
-            binding.btnInputModeToggleWrap.contentDescription = getString(R.string.voice_mode_keyboard)
-            (getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(binding.replyInput.windowToken, 0)
-        } else {
-            binding.replyInput.visibility = View.VISIBLE
-            binding.voiceHoldToTalk.visibility = View.GONE
-            binding.btnInputModeToggle.setImageResource(R.drawable.ic_mic)
-            binding.btnInputModeToggleWrap.contentDescription = getString(R.string.voice_btn_label)
-        }
-    }
-
-    private fun setupHoldToTalk() {
-        binding.voiceHoldToTalk.setOnTouchListener { _, event ->
-            when (event.action) {
-                android.view.MotionEvent.ACTION_DOWN -> { if (!isRecording) tryStartHoldToTalk(); true }
-                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> { if (isRecording) stopVoiceRecording(); true }
-                else -> false
+    private fun showTopicPickerFromState(state: ReplyState) {
+        topicPickerDialog?.dismiss()
+        topicPickerDialog = showTopicPicker(
+            context = this,
+            state = state,
+            defaultTopic = replyViewModel?.getCurrentDefaultTopic(),
+            onDefaultSelected = {
+                replyViewModel?.selectDefaultTopic()
+                topicPickerDialog = null
+            },
+            onTopicSelected = { topic ->
+                replyViewModel?.selectTopic(topic)
+                topicPickerDialog = null
+            },
+            onCustomTopic = { topic ->
+                replyViewModel?.setCustomTopic(topic)
+                topicPickerDialog = null
             }
+        )
+        topicPickerDialog?.setOnDismissListener {
+            topicPickerDialog = null
+            replyViewModel?.hideTopicPicker()
         }
-    }
-
-    private fun tryStartHoldToTalk() {
-        lifecycleScope.launch {
-            val settings = configStore.settings.first()
-            if (settings.serverUrl.isBlank()) {
-                Snackbar.make(binding.root, R.string.voice_need_server_url, Snackbar.LENGTH_SHORT).show()
-                return@launch
-            }
-            when {
-                ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> startVoiceRecording()
-                else -> recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    private fun startVoiceRecording() {
-        pendingVoiceFile?.delete()
-        pendingVoiceFile = null
-        val file = java.io.File(cacheDir, "voice_${System.currentTimeMillis()}.m4a")
-        try {
-            val recorder = MediaRecorder(this).apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setOutputFile(file.absolutePath)
-                prepare()
-                start()
-            }
-            mediaRecorder = recorder
-            currentRecordFile = file
-            isRecording = true
-            voiceRecordingStartMs = System.currentTimeMillis()
-            binding.voiceHoldToTalk.text = getString(R.string.voice_recording)
-            binding.voiceHoldToTalk.setBackgroundResource(R.drawable.bg_hold_to_talk_recording)
-        } catch (e: Exception) {
-            currentRecordFile = null
-            file.delete()
-            Snackbar.make(binding.root, R.string.voice_record_failed, Snackbar.LENGTH_SHORT).show()
-        }
-    }
-
-    private fun stopVoiceRecording() {
-        val recorder = mediaRecorder
-        val file = currentRecordFile
-        mediaRecorder = null
-        currentRecordFile = null
-        isRecording = false
-        binding.voiceHoldToTalk.text = getString(R.string.voice_hold_to_talk)
-        binding.voiceHoldToTalk.setBackgroundResource(R.drawable.bg_hold_to_talk)
-        if (recorder == null || file == null) return
-        try { recorder.stop() } catch (_: Exception) { }
-        recorder.release()
-        pendingVoiceFile?.delete()
-        pendingVoiceFile = file
-        val durationSec = ((System.currentTimeMillis() - voiceRecordingStartMs) / 1000).toInt().coerceAtLeast(0)
-        Snackbar.make(binding.root, getString(R.string.voice_recorded_click_send, durationSec), Snackbar.LENGTH_SHORT).show()
     }
 
     private fun checkNotificationPermission() {
@@ -480,12 +437,12 @@ class MainActivity : AppCompatActivity() {
             }
 
             lifecycleScope.launch {
-               service.latestMessage.collectLatest { message ->
+                service.latestMessage.collectLatest { message ->
                     mqttService?.clearUnreadCount()
                 }
             }
         }
-  }
+    }
 
     private fun updateSelectModeUI() {
         val isSelect = bubbleAdapter.isSelectMode
@@ -514,7 +471,7 @@ class MainActivity : AppCompatActivity() {
     private fun deleteSelectedMessages() {
         val selectedIds = bubbleAdapter.getSelectedIds()
         if (selectedIds.isEmpty()) {
-            Snackbar.make(binding.root, R.string.no_message_selected, Snackbar.LENGTH_SHORT).show()
+            MessageBanner.showRes(this, R.string.no_message_selected, com.github.i2534.notice.util.BannerType.Warning)
             return
         }
         showConfirmDialog(
@@ -523,7 +480,7 @@ class MainActivity : AppCompatActivity() {
             onConfirm = {
                 mqttService?.deleteMessages(selectedIds)
                 exitSelectMode()
-                Snackbar.make(binding.root, getString(R.string.messages_deleted, selectedIds.size), Snackbar.LENGTH_SHORT).show()
+                MessageBanner.show(this, getString(R.string.messages_deleted, selectedIds.size), com.github.i2534.notice.util.BannerType.Success)
             }
         )
     }
@@ -571,11 +528,11 @@ class MainActivity : AppCompatActivity() {
     private fun showMessageDetailDialog(message: NoticeMessage) {
         val detailBinding = DialogMessageDetailBinding.inflate(layoutInflater)
 
-        if (message.isOutgoing) {
+            if (message.isOutgoing) {
             detailBinding.dialogTitle.visibility = View.GONE
         } else {
-            detailBinding.dialogTitle.visibility = View.VISIBLE
             detailBinding.dialogTitle.text = message.title
+            detailBinding.dialogTitle.visibility = if (message.title.isNotBlank()) View.VISIBLE else View.GONE
         }
         detailBinding.dialogSentByMe.visibility = if (message.isOutgoing) View.VISIBLE else View.GONE
         detailBinding.dialogHeader.setBackgroundResource(
@@ -608,10 +565,16 @@ class MainActivity : AppCompatActivity() {
                 .create()
             detailBinding.btnClose.setOnClickListener { dialog.dismiss() }
             detailBinding.btnCopy.setOnClickListener {
+                Log.d("MainActivity", "btnCopy clicked")
                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 clipboard.setPrimaryClip(ClipData.newPlainText(message.title, message.content))
-                Snackbar.make(binding.root, R.string.message_detail_copied, Snackbar.LENGTH_SHORT).show()
+                MessageBanner.showRes(this, R.string.message_detail_copied, com.github.i2534.notice.util.BannerType.Success)
                 dialog.dismiss()
+            }
+            detailBinding.btnReplyToTopic.setOnClickListener {
+                replyViewModel?.replyToMessageTopic(message.topic)
+                dialog.dismiss()
+                MessageBanner.showRes(this, R.string.reply_topic_set, com.github.i2534.notice.util.BannerType.Success)
             }
             dialog.window?.apply {
                 setBackgroundDrawableResource(android.R.color.transparent)

@@ -9,7 +9,7 @@ import com.github.i2534.notice.R
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.databinding.ActivitySettingsBinding
-import com.google.android.material.snackbar.Snackbar
+import com.github.i2534.notice.util.MessageBanner
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -109,7 +109,7 @@ class SettingsActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             configStore.save(settings)
-            Snackbar.make(binding.root, R.string.settings_saved, Snackbar.LENGTH_SHORT).show()
+            MessageBanner.showRes(this@SettingsActivity, R.string.settings_saved, com.github.i2534.notice.util.BannerType.Success)
             finish()
         }
     }

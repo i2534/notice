@@ -19,7 +19,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.i2534.notice.R
 import com.github.i2534.notice.databinding.ActivityLogsBinding
 import com.github.i2534.notice.util.AppLogger
-import com.google.android.material.snackbar.Snackbar
+import com.github.i2534.notice.util.MessageBanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -134,7 +134,7 @@ class LogsActivity : AppCompatActivity() {
             }
 
             if (allLogs.isEmpty()) {
-                Snackbar.make(binding.root, R.string.logs_empty, Snackbar.LENGTH_SHORT).show()
+    MessageBanner.showRes(this@LogsActivity, R.string.logs_empty, com.github.i2534.notice.util.BannerType.Warning)
                 return@launch
             }
 
@@ -163,7 +163,7 @@ class LogsActivity : AppCompatActivity() {
             } else {
                 getString(R.string.logs_copied_count, count)
             }
-            Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
+            MessageBanner.show(this@LogsActivity, message, com.github.i2534.notice.util.BannerType.Success, 4000)
         }
     }
 
@@ -173,7 +173,7 @@ class LogsActivity : AppCompatActivity() {
     }
 
     private fun shareLogs() {
-        Snackbar.make(binding.root, R.string.logs_exporting, Snackbar.LENGTH_SHORT).show()
+        MessageBanner.showRes(this@LogsActivity, R.string.logs_exporting, com.github.i2534.notice.util.BannerType.Info)
 
         lifecycleScope.launch {
             try {
@@ -190,7 +190,7 @@ class LogsActivity : AppCompatActivity() {
                 }
 
                 if (logFile == null) {
-                    Snackbar.make(binding.root, R.string.logs_empty, Snackbar.LENGTH_SHORT).show()
+        MessageBanner.showRes(this@LogsActivity, R.string.logs_empty, com.github.i2534.notice.util.BannerType.Warning)
                     return@launch
                 }
 
@@ -207,7 +207,7 @@ class LogsActivity : AppCompatActivity() {
                 }
                 startActivity(Intent.createChooser(shareIntent, getString(R.string.logs_share_title)))
             } catch (e: Exception) {
-                Snackbar.make(binding.root, R.string.logs_export_failed, Snackbar.LENGTH_SHORT).show()
+                MessageBanner.showRes(this@LogsActivity, R.string.logs_export_failed, com.github.i2534.notice.util.BannerType.Error)
             }
         }
     }

@@ -71,4 +71,14 @@ interface MessageDao {
 
     @Query("SELECT * FROM messages ORDER BY timestamp ASC")
     suspend fun getAllMessagesAsc(): List<NoticeMessage>
+
+    /**
+     * 获取最近 N 条消息（按时间升序），避免全量加载。
+     * 列表初始化/刷新时用此替代 getAllMessagesAsc()。
+     */
+    @Query("SELECT * FROM messages ORDER BY timestamp DESC LIMIT :limit")
+    suspend fun getRecentMessagesAsc(limit: Int = 500): List<NoticeMessage>
+
+    @Query("SELECT DISTINCT topic FROM messages WHERE isOutgoing = 0 ORDER BY (SELECT MAX(m2.timestamp) FROM messages m2 WHERE m2.topic = messages.topic) DESC")
+    suspend fun getDistinctTopicsOrderedByTime(): List<String>
 }

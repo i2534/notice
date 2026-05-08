@@ -2,10 +2,15 @@ package com.github.i2534.notice.data
 
 import android.util.Base64
 import androidx.room.Entity
+import androidx.room.Ignore
 import androidx.room.PrimaryKey
+import com.github.i2534.notice.ui.ContentBlock
+import com.github.i2534.notice.ui.ContentBlockParser
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
-import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.zip.GZIPInputStream
 
@@ -20,6 +25,27 @@ data class NoticeMessage(
     val client: String? = null,  // 发送端标识：web / android / cli / webhook
     val isOutgoing: Boolean = false  // true=本机回复发送的消息，false=收到的消息
 ) {
+    /** 运行时缓存：避免每次列表绑定或详情弹出时重复解析 */
+    @Ignore
+    var parsedBlocks: List<ContentBlock>? = null
+
+    @Ignore
+    var parsedMediaUrls: List<String>? = null
+
+    fun getBlocks(): List<ContentBlock> {
+        if (parsedBlocks == null) {
+            parsedBlocks = ContentBlockParser.parse(content)
+        }
+        return parsedBlocks!!
+    }
+
+    fun getMediaUrls(): List<String> {
+        if (parsedMediaUrls == null) {
+            parsedMediaUrls = ContentBlockParser.extractMediaAndImageUrls(content)
+        }
+        return parsedMediaUrls!!
+    }
+
     companion object {
         private const val CONTENT_ENCODING_GZIP_B64 = "gzip+base64"
 
@@ -32,9 +58,9 @@ data class NoticeMessage(
             }
         }
 
-        private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
-        private val dateTimeFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-        private val fullDateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+        private val dateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm")
+        private val fullDateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
         /**
          * 从 MQTT 消息解析
@@ -64,33 +90,22 @@ data class NoticeMessage(
                 )
             }
         }
-
-        private fun isSameDay(time1: Long, time2: Long): Boolean {
-            val cal1 = Calendar.getInstance().apply { timeInMillis = time1 }
-            val cal2 = Calendar.getInstance().apply { timeInMillis = time2 }
-            return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
-                    cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
-        }
-
-        private fun isSameYear(timestamp: Long): Boolean {
-            val cal1 = Calendar.getInstance().apply { timeInMillis = timestamp }
-            val cal2 = Calendar.getInstance()
-            return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR)
-        }
     }
 
     /**
-     * 格式化时间显示
+     * 格式化时间显示（线程安全，java.time 无 SimpleDateFormat 的竞态问题）
      * - 今天: 15:30
      * - 今年其他日期: 01-08 15:30
      * - 跨年: 2025-01-08 15:30
      */
     fun getFormattedTime(): String {
-        val now = System.currentTimeMillis()
+        val now = Instant.now()
+        val zdt = Instant.ofEpochMilli(timestamp).atZone(ZoneId.systemDefault())
+        val nowZdt = now.atZone(ZoneId.systemDefault())
         return when {
-            isSameDay(timestamp, now) -> timeFormat.format(Date(timestamp))
-            isSameYear(timestamp) -> dateTimeFormat.format(Date(timestamp))
-            else -> fullDateTimeFormat.format(Date(timestamp))
+            zdt.toLocalDate() == nowZdt.toLocalDate() -> timeFormatter.format(zdt)
+            zdt.year == nowZdt.year -> dateTimeFormatter.format(zdt)
+            else -> fullDateTimeFormatter.format(zdt)
         }
     }
 }

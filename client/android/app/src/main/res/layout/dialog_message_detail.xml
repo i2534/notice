@@ -91,7 +91,8 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:paddingVertical="12dp" />
+            android:paddingTop="4dp"
+            android:paddingBottom="12dp" />
     </ScrollView>
 
     <!-- 按钮区域 -->
@@ -117,8 +118,20 @@
             android:textColor="@color/text_secondary" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnReplyToTopic"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minHeight="40dp"
+            android:minWidth="56dp"
+            android:contentDescription="@string/message_detail_reply_to"
+            android:text="@string/message_detail_reply_to"
+            android:textColor="@color/text_secondary" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCopy"
-            style="@style/Widget.Material3.Button.TonalButton"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
@@ -126,7 +139,6 @@
             android:minWidth="56dp"
             android:contentDescription="@string/message_detail_copy_content_description"
             android:text="@string/message_detail_copy"
-            android:backgroundTint="@color/primary"
-            android:textColor="@color/white" />
+            android:textColor="@color/text_secondary" />
     </LinearLayout>
 </LinearLayout>
