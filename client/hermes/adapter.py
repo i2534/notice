@@ -533,7 +533,7 @@ class NoticeAdapter(BasePlatformAdapter):
         if self._mqtt_client and self._connected:
             await self._do_publish(chat_id, "⏳", {"status": "typing"})
 
-    async def send_image(self, chat_id: str, image_url: str, caption: str) -> SendResult:
+    async def send_image(self, chat_id: str, image_url: str, caption: str = "", metadata: Optional[dict] = None) -> SendResult:
         if not self._mqtt_client or not self._connected:
             return SendResult(success=False, error="Not connected to broker")
 
