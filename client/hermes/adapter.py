@@ -1,11 +1,10 @@
 import asyncio
 import gzip
 import json
-import base64
+import logging
+import os
 import random
 import time
-import logging
-from abc import ABC
 from typing import Any, Optional
 from dataclasses import dataclass
 
@@ -18,6 +17,21 @@ except ImportError:
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult, MessageEvent, MessageType, ProcessingOutcome
 from gateway.session import SessionSource
+from asr import Transcriber, CliTranscriber, _API_PROVIDERS
+
+PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_plugin_version() -> str:
+    try:
+        plugin_yaml = os.path.join(PLUGIN_DIR, "PLUGIN.yaml")
+        with open(plugin_yaml, "r") as f:
+            for line in f:
+                if line.startswith("version:"):
+                    return line.split(":", 1)[1].strip()
+    except Exception:
+        pass
+    return "unknown"
 
 
 def _extract_config(config) -> dict:
@@ -67,7 +81,8 @@ class NoticeAdapter(BasePlatformAdapter):
 
         cfg = _extract_config(config)
 
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("gateway.platforms.notice")
+        self.logger.info("notice plugin v%s loaded", _load_plugin_version())
         self.logger.debug(f"NoticeAdapter config: brokerUrl={cfg.get('brokerUrl')}, token={cfg.get('token')}, topic={cfg.get('topic')}")
 
         self.broker_url = cfg.get("brokerUrl", "") or ""
@@ -105,6 +120,47 @@ class NoticeAdapter(BasePlatformAdapter):
         self._pending_content: dict[str, str] = {}
         self._pending_meta: dict[str, dict] = {}
         self._debounce_tasks: dict[str, asyncio.Task] = {}
+
+        # Media audio (ASR) configuration
+        media_cfg = cfg.get("mediaAudio", {}) or {}
+        self._media_audio_enabled = bool(media_cfg.get("enabled", False))
+
+        backends = []
+        providers = media_cfg.get("providers", None)
+        if providers and isinstance(providers, list):
+            for prov in providers:
+                ptype = (prov.get("type") or "").lower()
+                if ptype == "cli":
+                    try:
+                        cli_timeout = int(prov.get("timeout", 60))
+                    except (TypeError, ValueError):
+                        cli_timeout = 60
+                    backends.append(
+                        CliTranscriber(
+                            command=prov["command"],
+                            args=prov.get("args") or [],
+                            timeout=cli_timeout,
+                        )
+                    )
+                else:
+                    cls = _API_PROVIDERS.get(ptype)
+                    if cls is None:
+                        self.logger.warning("Unknown ASR provider type: %s", ptype)
+                        continue
+                    if not prov.get("url"):
+                        continue
+                    try:
+                        api_timeout = int(prov.get("timeout", 300))
+                    except (TypeError, ValueError):
+                        api_timeout = 300
+                    backends.append(
+                        cls(
+                            url=prov["url"],
+                            token=prov.get("token", ""),
+                            timeout=api_timeout,
+                        )
+                    )
+        self._transcriber = Transcriber(backends=backends)
 
     async def connect(self) -> bool:
         self.logger.info(f"Connecting to Notice broker: {self.broker_url}")
@@ -251,9 +307,25 @@ class NoticeAdapter(BasePlatformAdapter):
             if client_name == "hermes":
                 return  # Skip our own messages to prevent echo loops
             timestamp = message_data.get("extra", {}).get("timestamp", message_data.get("timestamp", int(time.time() * 1000)))
-            extra = message_data.get("extra", {})
 
             chat_id = msg.topic
+
+            if self._media_audio_enabled and self._transcriber.is_voice_message(content):
+                if self._loop:
+                    audio_urls = self._transcriber.extract_audio_urls(content)
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._handle_voice_message(chat_id, audio_urls, client_name, timestamp),
+                        self._loop,
+                    )
+                    future.add_done_callback(
+                        lambda f: self.logger.error(f"Voice handler failed: {f.exception()}")
+                        if f.exception()
+                        else None
+                    )
+                else:
+                    self.logger.error("Event loop not available, dropping voice message")
+                return
+
             full_text = content
 
             source = SessionSource(
@@ -284,6 +356,76 @@ class NoticeAdapter(BasePlatformAdapter):
 
         except Exception as e:
             self.logger.error(f"Error processing message: {e}")
+
+    async def _handle_voice_message(
+        self,
+        chat_id: str,
+        audio_urls: list[str],
+        client_name: str,
+        timestamp: int,
+    ) -> None:
+        if not self._transcriber.has_backend:
+            await self._publish_error(
+                chat_id,
+                "⚠️ 语音转写未配置，请在 Hermes 配置中启用 mediaAudio",
+                client_name,
+                timestamp,
+            )
+            return
+
+        filepath = None
+        for url in audio_urls:
+            filepath = await self._transcriber.download_audio(url, self.token)
+            if filepath:
+                break
+
+        if not filepath:
+            await self._publish_error(
+                chat_id, "❌ 语音下载失败", client_name, timestamp
+            )
+            return
+
+        try:
+            text = await self._transcriber.transcribe_file(filepath)
+        finally:
+            try:
+                os.unlink(filepath)
+            except OSError:
+                pass
+
+        if not text:
+            await self._publish_error(
+                chat_id, "❌ 语音转写失败", client_name, timestamp
+            )
+            return
+
+        source = SessionSource(
+            platform=Platform("notice"),
+            chat_id=chat_id,
+            chat_name=client_name,
+            chat_type="dm",
+            user_id=client_name,
+            user_name=client_name,
+        )
+        event = MessageEvent(
+            text=text,
+            message_type=MessageType.TEXT,
+            source=source,
+            raw_message={},
+            message_id=str(timestamp),
+        )
+        await self.handle_message(event)
+
+    async def _publish_error(
+        self, chat_id: str, content: str, client_name: str, timestamp: int
+    ) -> None:
+        payload = {
+            "content": content,
+            "client": "hermes",
+            "timestamp": timestamp,
+            "extra": {"toUser": client_name},
+        }
+        await self._do_publish(chat_id, json.dumps(payload), None)
 
     async def _do_publish(self, chat_id: str, content: str, metadata: dict | None) -> SendResult:
         """Publish a message to MQTT immediately."""

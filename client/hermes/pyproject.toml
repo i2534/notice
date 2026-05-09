@@ -9,3 +9,6 @@ dependencies = [
 
 [project.entry-points."hermes_agent.plugins"]
 notice = "adapter"
+
+[tool.setuptools]
+py-modules = ["adapter", "asr"]
