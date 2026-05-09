@@ -1,0 +1,39 @@
+# 小爱音箱 Pro Notice 客户端配置
+
+# MQTT 配置
+mqtt:
+  # Notice Server 的 WebSocket 地址
+  broker_url: "wss://your-notice-server.com:9092"
+  # Notice Server 的认证 token
+  token: "your-notice-token"
+  # 订阅主题 (接收推送给小爱的消息)
+  subscribe_topic: "notice/xiaoai"
+  # 发布主题 (小爱语音发出的消息)
+  publish_topic: "notice/from-xiaoai"
+
+# 小爱音箱配置
+xiaoai:
+  # 小米账号
+  mi_user: "your-xiaomi-account@example.com"
+  # 小米密码
+  mi_pass: "your-xiaomi-password"
+  # 小爱设备 ID (可选，不填则自动选择第一个设备)
+  device_id: ""
+  # Token 缓存路径 (登录后会缓存，避免重复登录)
+  token_cache: "~/.config/xiaoai/mi_token.json"
+
+# 轮询配置 (小爱语音 -> Notice)
+poll:
+  # 是否启用轮询
+  enabled: true
+  # 轮询间隔 (秒)
+  interval: 5
+  # 过滤唤醒词前缀 (例如: "发送消息：" 会被去掉)
+  filter_prefix: ""
+
+# TTS 配置 (Notice -> 小爱播报)
+tts:
+  # 播报前缀 (可选)
+  prefix: ""
+  # 播报格式，{title} 和 {content} 为占位符
+  format: "{title}，{content}"
