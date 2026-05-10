@@ -128,13 +128,39 @@ class XiaoAiClient:
         self._running = False
 
     def _load_config(self, config_path: str) -> dict:
-        """加载配置文件"""
+        """加载配置文件，优先使用 .local 后缀的本地配置"""
         path = Path(config_path)
+
+        # 优先加载 .local 文件 (不提交到 git)
+        local_path = Path(str(path) + ".local")
+        if local_path.exists():
+            self.logger.info(f"Using local config: {local_path}")
+            with open(local_path, "r", encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+            # 加载基础配置作为默认值
+            if path.exists():
+                with open(path, "r", encoding="utf-8") as f:
+                    base_cfg = yaml.safe_load(f) or {}
+                # 深度合并：local 覆盖 base
+                return self._deep_merge(base_cfg, cfg)
+            return cfg
+
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {config_path}")
 
         with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f) or {}
+
+    @staticmethod
+    def _deep_merge(base: dict, override: dict) -> dict:
+        """深度合并两个字典，override 优先"""
+        result = base.copy()
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = XiaoAiClient._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
 
     async def _init_miservice(self) -> bool:
         """初始化 MiService"""
@@ -378,6 +404,50 @@ class XiaoAiClient:
         except Exception as e:
             self.logger.error(f"TTS failed: {e}")
 
+    async def _get_conversation_records(self) -> list[dict]:
+        """通过 conversation API 获取最近对话记录 (OH2P 兼容)"""
+        if not self._mi_account or not self.device_id or not self._session:
+            return []
+
+        token = self._mi_account.token
+        if not token or "micoapi" not in token:
+            return []
+
+        service_token = token["micoapi"][1]
+        cookies = {
+            "userId": str(token["userId"]),
+            "serviceToken": service_token,
+            "deviceId": self.device_id,
+        }
+
+        # 从设备信息获取 hardware 型号
+        hardware = "OH2P"
+        if self._mi_na and self.device_id in getattr(self._mi_na, "device2hardware", {}):
+            hardware = self._mi_na.device2hardware[self.device_id]
+
+        timestamp = int(time.time() * 1000)
+        url = (
+            f"https://userprofile.mina.mi.com/device_profile/v2/conversation"
+            f"?source=dialogu&hardware={hardware}&timestamp={timestamp}&limit=10"
+        )
+
+        try:
+            async with self._session.request(
+                "GET", url, cookies=cookies, ssl=False
+            ) as resp:
+                result = await resp.json(content_type=None)
+
+            if result.get("code") != 0:
+                self.logger.debug(f"Conversation API error: {result.get('message')}")
+                return []
+
+            data = json.loads(result["data"])
+            return data.get("records", [])
+
+        except Exception as e:
+            self.logger.debug(f"Failed to fetch conversation: {e}")
+            return []
+
     async def _poll_conversation(self) -> None:
         """轮询小爱对话 -> 发布到 Notice"""
         while self._running:
@@ -387,18 +457,13 @@ class XiaoAiClient:
                 if not self._mi_na or not self.device_id or not self._connected:
                     continue
 
-                # 获取最近对话
-                asks = await self._mi_na.get_latest_ask(self.device_id)
-                if not asks:
+                # 获取最近对话 (使用 conversation API)
+                records = await self._get_conversation_records()
+                if not records:
                     continue
 
-                for ask in asks:
-                    # 解析时间戳
-                    ask_time = 0
-                    if hasattr(ask, "time"):
-                        ask_time = ask.time
-                    elif isinstance(ask, dict):
-                        ask_time = ask.get("time", 0)
+                for record in records:
+                    ask_time = record.get("time", 0)
 
                     # 只处理新对话
                     if ask_time <= self._last_ask_time:
@@ -406,12 +471,8 @@ class XiaoAiClient:
 
                     self._last_ask_time = ask_time
 
-                    # 提取对话内容
-                    text = ""
-                    if hasattr(ask, "content"):
-                        text = ask.content
-                    elif isinstance(ask, dict):
-                        text = ask.get("content", "")
+                    # 提取用户语音内容
+                    text = record.get("query", "") or record.get("transcription", "")
 
                     if not text:
                         continue

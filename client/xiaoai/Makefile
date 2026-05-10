@@ -1,13 +1,13 @@
-.PHONY: prepare start stop logs
+.PHONY: prepare start stop logs test
 
 CONFIG ?= config.yaml
 
 prepare:
 	python3 -m venv .venv
-	. .venv/bin/activate && pip install -r requirements.txt
+	.venv/bin/pip install -r requirements.txt
 
 start:
-	@nohup . .venv/bin/activate && python3 xiaoai.py --config $(CONFIG) > xiaoai.log 2>&1 & echo $$! > .pid
+	@nohup .venv/bin/python3 xiaoai.py --config $(CONFIG) > xiaoai.log 2>&1 & echo $$! > .pid
 	@echo "started (pid $$(cat .pid))"
 
 stop:
@@ -15,3 +15,6 @@ stop:
 
 logs:
 	@tail -f xiaoai.log
+
+test:
+	.venv/bin/python3 test_xiaoai.py

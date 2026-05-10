@@ -32,6 +32,7 @@ client/linux/notice-client
 *.aab
 *.ap_
 *.dex
+*.local
 
 # IDE
 .idea/
@@ -51,3 +52,4 @@ vibe/
 __pycache__/
 *.egg-info/
 *.pyc
+.venv
