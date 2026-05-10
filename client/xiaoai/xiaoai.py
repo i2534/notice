@@ -477,8 +477,10 @@ class XiaoAiClient:
                     if not text:
                         continue
 
-                    # 过滤前缀
-                    if self.filter_prefix and text.startswith(self.filter_prefix):
+                    # 前缀过滤：设置了前缀时，只转发带前缀的消息
+                    if self.filter_prefix:
+                        if not text.startswith(self.filter_prefix):
+                            continue
                         text = text[len(self.filter_prefix) :].strip()
 
                     if not text:
