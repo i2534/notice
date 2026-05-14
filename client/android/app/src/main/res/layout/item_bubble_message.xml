@@ -75,4 +75,22 @@
 
     </FrameLayout>
 
+    <!-- 合并消息徽章（在气泡外右下角） -->
+    <TextView
+        android:id="@+id/bubbleMergedBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="0dp"
+        android:layout_marginBottom="0dp"
+        android:background="@drawable/bg_merged_badge"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="1dp"
+        android:textColor="@android:color/white"
+        android:textSize="10sp"
+        android:visibility="gone"
+        tools:text="×3" />
+
 </FrameLayout>

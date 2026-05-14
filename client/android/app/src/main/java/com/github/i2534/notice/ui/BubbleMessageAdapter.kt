@@ -134,6 +134,7 @@ class BubbleMessageAdapter(
                 } else { null }
                 (holder as BubbleViewHolder).bind(
                     item.message,
+                    item.mergedCount,
                     isSelectMode,
                     selectedIds.contains(item.message.id),
                     prevIsOutgoing,
@@ -188,6 +189,7 @@ class BubbleMessageAdapter(
         private val bubbleTime: TextView = itemView.findViewById(R.id.bubbleTime)
         private val contentContainer: ViewGroup = itemView.findViewById(R.id.bubbleContentContainer)
         private val bubbleMore: TextView = itemView.findViewById(R.id.bubbleMore)
+        private val bubbleMergedBadge: TextView = itemView.findViewById(R.id.bubbleMergedBadge)
 
         fun setSpacing(density: Float) {
             val lp = root.layoutParams as ViewGroup.MarginLayoutParams
@@ -196,6 +198,7 @@ class BubbleMessageAdapter(
 
         fun bind(
             message: NoticeMessage,
+            mergedCount: Int,
             isSelectMode: Boolean,
             isSelected: Boolean,
             prevIsOutgoing: Boolean?,
@@ -257,6 +260,23 @@ class BubbleMessageAdapter(
                         else ContextCompat.getColor(ctx, R.color.primary_light)
                     )
                 }
+            }
+
+            if (mergedCount > 1) {
+                bubbleMergedBadge.text = "×$mergedCount"
+                val badgeGravity = if (isOutgoing) Gravity.BOTTOM or Gravity.START else Gravity.BOTTOM or Gravity.END
+                bubbleMergedBadge.layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    badgeGravity
+                )
+                bubbleMergedBadge.setTextColor(
+                    if (isOutgoing) android.graphics.Color.parseColor("#FFFFFF")
+                    else ContextCompat.getColor(ctx, R.color.primary_light)
+                )
+                bubbleMergedBadge.visibility = View.VISIBLE
+            } else {
+                bubbleMergedBadge.visibility = View.GONE
             }
 
             root.setOnClickListener { onClick(message) }

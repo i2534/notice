@@ -10,11 +10,15 @@ import java.util.concurrent.locks.ReentrantLock
 sealed class MessageListItem {
     data class TopicHeader(val topic: String) : MessageListItem()
     data class DateSeparator(val dateLabel: String) : MessageListItem()
-    data class MessageBubble(val message: NoticeMessage) : MessageListItem()
+    data class MessageBubble(
+        val message: NoticeMessage,
+        val mergedCount: Int = 1
+    ) : MessageListItem()
 }
 
 object BubbleListBuilder {
 
+    private const val MERGE_THRESHOLD_MS = 30_000L
     private val calendarLock = ReentrantLock()
 
     private fun safeCalendar(): Calendar {
@@ -24,6 +28,11 @@ object BubbleListBuilder {
         } finally {
             calendarLock.unlock()
         }
+    }
+
+    private fun NoticeMessage.isDuplicateOf(other: NoticeMessage): Boolean {
+        return isOutgoing == other.isOutgoing &&
+            content.trim() == other.content.trim()
     }
 
     fun buildMessages(messages: List<NoticeMessage>): List<MessageListItem> {
@@ -71,7 +80,13 @@ object BubbleListBuilder {
                 prevDateBucket = msgBucket
             }
 
-            result.add(MessageListItem.MessageBubble(message))
+            val lastBubble = (result.lastOrNull() as? MessageListItem.MessageBubble)
+            if (lastBubble != null && message.isDuplicateOf(lastBubble.message) &&
+                message.timestamp - lastBubble.message.timestamp <= MERGE_THRESHOLD_MS) {
+                result[result.size - 1] = lastBubble.copy(mergedCount = lastBubble.mergedCount + 1)
+            } else {
+                result.add(MessageListItem.MessageBubble(message))
+            }
         }
 
         return result
