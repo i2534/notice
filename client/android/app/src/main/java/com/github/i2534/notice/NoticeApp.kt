@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.provider.Settings
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import com.github.i2534.notice.R
@@ -38,10 +39,14 @@ class NoticeApp : Application() {
         const val CHANNEL_MESSAGE = "mqtt_message"
     }
 
-  override fun onCreate() {
+    override fun onCreate() {
         super.onCreate()
-        // 跟随系统深色模式（华为设备需要在 onCreate 中设置）
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        // 跟随系统深色模式（华为设备 MODE_NIGHT_FOLLOW_SYSTEM 和 Configuration 均不生效，直接读 Settings.Global）
+        val uiMode = Settings.Global.getString(contentResolver, "ui_mode") ?: ""
+        val isNight = uiMode.contains("night:2")
+        AppCompatDelegate.setDefaultNightMode(
+            if (isNight) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+        )
         MessageBanner.init(this)
         AppLogger.init(this)
         createNotificationChannels()
