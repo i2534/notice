@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import gzip
 import json
 import logging
@@ -613,11 +614,12 @@ class NoticeAdapter(BasePlatformAdapter):
         }
 
     async def on_processing_start(self, event: MessageEvent) -> None:
+        # Mark typing as just-sent BEFORE publishing — prevents _keep_typing
+        # from firing "⏳" during the await window (run_in_executor yields
+        # the event loop, giving _keep_typing a chance to check the stale timer).
+        self._last_typing_time[event.source.chat_id] = time.monotonic()
         if self._mqtt_client and self._connected:
             await self._do_publish(event.source.chat_id, "🧠 正在处理...", {"status": "started"})
-        # Mark typing as just-sent so the first send_typing() won't
-        # fire another pulse right after — 🧠 already serves as alive signal.
-        self._last_typing_time[event.source.chat_id] = time.monotonic()
 
     async def on_processing_complete(self, event: MessageEvent, outcome: ProcessingOutcome) -> None:
         if outcome == ProcessingOutcome.SUCCESS:
