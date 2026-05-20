@@ -1,10 +1,14 @@
 package com.github.i2534.notice.ui
 
+import android.content.Intent
 import android.os.Bundle
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.github.i2534.notice.BuildConfig
 import com.github.i2534.notice.R
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
@@ -36,81 +40,176 @@ class SettingsActivity : AppCompatActivity() {
 
         configStore = MqttConfigStore(this)
 
-        setupUI()
+        setupToolbar()
+        setupClickListeners()
         loadSettings()
     }
 
-    private fun setupUI() {
+    private fun setupToolbar() {
         binding.toolbar.setNavigationOnClickListener {
             finish()
         }
+    }
 
-        binding.toolbar.setOnMenuItemClickListener { menuItem ->
-            when (menuItem.itemId) {
-                R.id.action_save -> {
-                    saveSettings()
-                    true
-                }
-                else -> false
+    private fun setupClickListeners() {
+        // 连接
+        binding.settingBrokerAddress.setOnClickListener { showBrokerDialog() }
+        binding.settingAuth.setOnClickListener { showAuthDialog() }
+        binding.settingDefaultTopic.setOnClickListener { showTopicDialog() }
+
+        // 通知
+        binding.settingPushNotification.setOnClickListener {
+            binding.switchPush.isChecked = !binding.switchPush.isChecked
+            savePushSetting()
+        }
+        binding.switchPush.setOnCheckedChangeListener { _, isChecked ->
+            binding.settingPushNotification.findViewById<android.view.View>(R.id.settingPushNotification)?.let {
+                // Toggle already handled
             }
+        }
+        binding.settingSound.setOnClickListener {
+            binding.switchSound.isChecked = !binding.switchSound.isChecked
+            saveSoundSetting()
+        }
+
+        // 数据
+        binding.settingClearMessages.setOnClickListener { showClearMessagesDialog() }
+        binding.settingLogs.setOnClickListener {
+            startActivity(Intent(this, LogsActivity::class.java))
+        }
+
+        // 关于
+        binding.settingVersion.setOnClickListener {
+            startActivity(Intent(this, AboutActivity::class.java))
         }
     }
 
     private fun loadSettings() {
         lifecycleScope.launch {
             val settings = configStore.settings.first()
-            binding.inputBrokerUrl.setText(settings.brokerUrl)
-            binding.inputClientId.setText(settings.clientId)
-            binding.inputTopic.setText(settings.topic)
-            binding.inputSendTopic.setText(settings.sendTopic)
-            binding.inputKeepAlive.setText(settings.keepAlive.toString())
-            binding.inputAuthToken.setText(settings.authToken)
-            binding.inputServerUrl.setText(settings.serverUrl)
-            binding.switchAutoConnect.isChecked = settings.autoConnect
+            binding.settingBrokerValue.text = settings.brokerUrl
+            binding.settingDefaultTopicValue.text = settings.topic
+            binding.settingVersionValue.text = "${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})"
+
+            // 通知开关
+            binding.switchPush.isChecked = settings.pushNotification
+            binding.switchSound.isChecked = settings.soundEnabled
         }
     }
 
-    private fun saveSettings() {
-        val brokerUrl = binding.inputBrokerUrl.text.toString().trim()
-        val clientId = binding.inputClientId.text.toString().trim()
-        val topic = binding.inputTopic.text.toString().trim()
-        val sendTopic = binding.inputSendTopic.text.toString().trim()
-        val keepAlive = binding.inputKeepAlive.text.toString().toIntOrNull() ?: 30
-        val authToken = binding.inputAuthToken.text.toString().trim()
-        val serverUrl = binding.inputServerUrl.text.toString().trim()
-        val autoConnect = binding.switchAutoConnect.isChecked
-
-        if (brokerUrl.isBlank()) {
-            binding.inputBrokerUrl.error = getString(R.string.settings_error_broker_required)
-            return
-        }
-        if (!brokerUrl.startsWith("tcp://") &&
-            !brokerUrl.startsWith("ssl://") &&
-            !brokerUrl.startsWith("ws://") &&
-            !brokerUrl.startsWith("wss://")) {
-            binding.inputBrokerUrl.error = getString(R.string.settings_error_broker_format)
-            return
-        }
-        if (topic.isBlank()) {
-            binding.inputTopic.error = getString(R.string.settings_error_topic_required)
-            return
-        }
-
-        val settings = MqttSettings(
-            brokerUrl = brokerUrl,
-            clientId = clientId,
-            topic = topic,
-            sendTopic = sendTopic,
-            keepAlive = keepAlive,
-            authToken = authToken,
-            serverUrl = serverUrl,
-            autoConnect = autoConnect
-        )
-
+    private fun showBrokerDialog() {
         lifecycleScope.launch {
-            configStore.save(settings)
-            MessageBanner.showRes(this@SettingsActivity, R.string.settings_saved, com.github.i2534.notice.util.BannerType.Success)
-            finish()
+            val current = configStore.settings.first().brokerUrl
+            val input = androidx.appcompat.app.AlertDialog.Builder(this@SettingsActivity)
+                .setTitle(R.string.settings_broker_address)
+                .setView(R.layout.dialog_edit_text)
+                .setPositiveButton(android.R.string.ok, null)
+                .create()
+
+            input.show()
+            val editText = input.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.dialogEditText)
+            editText?.setText(current)
+            input.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                val value = editText?.text?.toString()?.trim() ?: ""
+                if (value.isNotBlank() && (value.startsWith("tcp://") || value.startsWith("ssl://") || value.startsWith("ws://") || value.startsWith("wss://"))) {
+                    saveBrokerUrl(value)
+                }
+                input.dismiss()
+            }
         }
+    }
+
+    private fun showAuthDialog() {
+        lifecycleScope.launch {
+            val current = configStore.settings.first().authToken
+            val input = androidx.appcompat.app.AlertDialog.Builder(this@SettingsActivity)
+                .setTitle(R.string.settings_auth)
+                .setView(R.layout.dialog_edit_text)
+                .setPositiveButton(android.R.string.ok, null)
+                .create()
+
+            input.show()
+            val editText = input.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.dialogEditText)
+            editText?.setText(current)
+            input.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                val value = editText?.text?.toString()?.trim() ?: ""
+                saveAuthToken(value)
+                input.dismiss()
+            }
+        }
+    }
+
+    private fun showTopicDialog() {
+        lifecycleScope.launch {
+            val current = configStore.settings.first().topic
+            val input = androidx.appcompat.app.AlertDialog.Builder(this@SettingsActivity)
+                .setTitle(R.string.settings_default_topic)
+                .setView(R.layout.dialog_edit_text)
+                .setPositiveButton(android.R.string.ok, null)
+                .create()
+
+            input.show()
+            val editText = input.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.dialogEditText)
+            editText?.setText(current)
+            input.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                val value = editText?.text?.toString()?.trim() ?: ""
+                if (value.isNotBlank()) {
+                    saveDefaultTopic(value)
+                }
+                input.dismiss()
+            }
+        }
+    }
+
+    private fun saveBrokerUrl(value: String) {
+        lifecycleScope.launch {
+            val settings = configStore.settings.first()
+            configStore.save(settings.copy(brokerUrl = value))
+            binding.settingBrokerValue.text = value
+            MessageBanner.showRes(this@SettingsActivity, R.string.settings_broker_saved, com.github.i2534.notice.util.BannerType.Success)
+        }
+    }
+
+    private fun saveAuthToken(value: String) {
+        lifecycleScope.launch {
+            val settings = configStore.settings.first()
+            configStore.save(settings.copy(authToken = value))
+            MessageBanner.showRes(this@SettingsActivity, R.string.settings_auth_saved, com.github.i2534.notice.util.BannerType.Success)
+        }
+    }
+
+    private fun saveDefaultTopic(value: String) {
+        lifecycleScope.launch {
+            val settings = configStore.settings.first()
+            configStore.save(settings.copy(topic = value))
+            binding.settingDefaultTopicValue.text = value
+            MessageBanner.showRes(this@SettingsActivity, R.string.settings_topic_saved, com.github.i2534.notice.util.BannerType.Success)
+        }
+    }
+
+    private fun savePushSetting() {
+        lifecycleScope.launch {
+            val settings = configStore.settings.first()
+            configStore.save(settings.copy(pushNotification = binding.switchPush.isChecked))
+        }
+    }
+
+    private fun saveSoundSetting() {
+        lifecycleScope.launch {
+            val settings = configStore.settings.first()
+            configStore.save(settings.copy(soundEnabled = binding.switchSound.isChecked))
+        }
+    }
+
+    private fun showClearMessagesDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.dialog_clear_title)
+            .setMessage(R.string.dialog_clear_message)
+            .setPositiveButton(R.string.dialog_clear_confirm) { _, _ ->
+                // Clear messages via service
+                finish()
+            }
+            .setNegativeButton(R.string.dialog_clear_cancel, null)
+            .show()
     }
 }

@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-  <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/bubbleRoot"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginStart="6dp"
-    android:layout_marginTop="0dp"
+    android:layout_marginTop="2dp"
     android:layout_marginEnd="6dp"
     android:clipChildren="false"
     android:clipToPadding="false"
@@ -23,31 +23,31 @@
         android:focusable="false"
         android:focusableInTouchMode="false">
 
-        <!-- 时间戳 -->
-        <TextView
-            android:id="@+id/bubbleTime"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top|end"
-            android:layout_marginStart="14dp"
-            android:layout_marginTop="6dp"
-            android:layout_marginEnd="10dp"
-            android:textColor="@color/text_secondary"
-            android:textSize="10sp"
-            tools:text="10:30" />
-
-        <!-- 内容 -->
+        <!-- 内容 + 时间戳 同行 -->
         <LinearLayout
             android:id="@+id/bubbleContentContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-          android:layout_marginStart="14dp"
-            android:layout_marginTop="20dp"
-            android:layout_marginEnd="14dp"
-            android:layout_marginBottom="10dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="8dp"
             android:clipChildren="false"
             android:clipToPadding="false"
             android:orientation="vertical" />
+
+        <!-- 时间戳（同行，底部靠右） -->
+        <TextView
+            android:id="@+id/bubbleTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="4dp"
+            android:alpha="0.5"
+            android:textColor="@color/text_secondary"
+            android:textSize="10sp"
+            tools:text="14:30" />
 
         <!-- 内容截断提示 -->
         <TextView
@@ -55,10 +55,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|end"
-            android:layout_marginEnd="14dp"
-            android:layout_marginBottom="8dp"
+            android:layout_marginEnd="12dp"
+            android:layout_marginBottom="4dp"
             android:text="@string/message_content_more"
-            android:textColor="@color/primary_light"
+            android:textColor="@color/accent"
             android:textSize="10sp"
             android:visibility="gone" />
 
@@ -68,8 +68,8 @@
             android:layout_width="match_parent"
             android:layout_height="24dp"
             android:layout_gravity="bottom"
-            android:layout_marginStart="14dp"
-            android:layout_marginEnd="14dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
             android:background="#00000000"
             android:visibility="gone" />
 
@@ -88,7 +88,7 @@
         android:paddingEnd="4dp"
         android:paddingTop="2dp"
         android:paddingBottom="1dp"
-        android:textColor="@android:color/white"
+        android:textColor="@color/merged_text"
         android:textSize="10sp"
         android:visibility="gone"
         tools:text="×3" />

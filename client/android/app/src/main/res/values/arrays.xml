@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="logs_days_options">
+        <item>1天</item>
+        <item>3天</item>
+        <item>7天</item>
+    </string-array>
+</resources>

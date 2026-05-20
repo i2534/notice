@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ===== 深色主题 (Dark) ===== -->
+    <color name="bg_primary">#0B0E11</color>
+    <color name="bg_secondary">#14181C</color>
+    <color name="bg_tertiary">#1C2128</color>
+    <color name="bg_elevated">#232830</color>
+
+    <color name="accent">#4A9EFF</color>
+    <color name="accent_dim">#2A6FC7</color>
+    <color name="accent_subtle">#1F4A9EFF</color>
+    <color name="outgoing">#1B6EF7</color>
+    <color name="outgoing_text">#FFFFFF</color>
+
+    <color name="text_primary">#E8EAED</color>
+    <color name="text_secondary">#9AA0A6</color>
+    <color name="text_tertiary">#5F6368</color>
+
+    <color name="divider">#0FFFFFFF</color>
+    <color name="border">#14FFFFFF</color>
+
+    <color name="success">#34C759</color>
+    <color name="warning">#FF9F0A</color>
+    <color name="error">#FF453A</color>
+
+    <!-- Topic 颜色 -->
+    <color name="topic_alert">#FF6B6B</color>
+    <color name="topic_alert_bg">#1FFF6B6B</color>
+    <color name="topic_nga">#FFB347</color>
+    <color name="topic_nga_bg">#1FFFB347</color>
+    <color name="topic_quark">#64B5F6</color>
+    <color name="topic_quark_bg">#1F64B5F6</color>
+    <color name="topic_bot">#81C784</color>
+    <color name="topic_bot_bg">#1F81C784</color>
+
+    <!-- 合并消息徽标 -->
+    <color name="merged_bg">#26FFFFFF</color>
+    <color name="merged_text">#4A9EFF</color>
+
+    <!-- 兼容旧引用 -->
+    <color name="primary">#4A9EFF</color>
+    <color name="primary_dark">#2A6FC7</color>
+    <color name="primary_light">#4A9EFF</color>
+    <color name="secondary">#FF9F0A</color>
+    <color name="secondary_dark">#E08900</color>
+    <color name="background">#0B0E11</color>
+    <color name="surface">#14181C</color>
+    <color name="surface_variant">#1C2128</color>
+    <color name="ripple">#1FFFFFFF</color>
+    <color name="selected_background">#1F4A9EFF</color>
+    <color name="message_outgoing_bg">#1F1B6EF7</color>
+
+    <!-- 基础色 -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

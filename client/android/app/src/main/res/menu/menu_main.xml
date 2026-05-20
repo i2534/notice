@@ -2,45 +2,48 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- 连接状态指示 -->
     <item
         android:id="@+id/action_connection"
         android:icon="@drawable/ic_status_disconnected"
         android:title="@string/status_disconnected"
         app:showAsAction="always" />
 
-    <item
-        android:id="@+id/action_reply"
-        android:icon="@drawable/ic_reply"
-        android:title="@string/message_detail_reply"
-        app:iconTint="@color/text_primary"
-        app:showAsAction="always" />
-
+    <!-- 设置按钮 -->
     <item
         android:id="@+id/action_settings"
         android:icon="@drawable/ic_settings"
         android:title="@string/btn_settings"
-        app:iconTint="@color/text_primary"
+        android:visible="true"
+        app:iconTint="@color/text_secondary"
         app:showAsAction="always" />
 
-    <item
-        android:id="@+id/action_about"
+    <!-- 溢出菜单 -->
+       <item
+            android:id="@+id/action_reply"
+            android:icon="@drawable/ic_send"
+            android:title="@string/action_reply"
+            app:showAsAction="ifRoom" />
+
+        <item
+            android:id="@+id/action_about"
         android:icon="@drawable/ic_info"
         android:title="@string/about_title"
-        app:iconTint="@color/text_primary"
+        app:iconTint="@color/text_secondary"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_logs"
         android:icon="@drawable/ic_logs"
         android:title="@string/logs_title"
-        app:iconTint="@color/text_primary"
+        app:iconTint="@color/text_secondary"
         app:showAsAction="never" />
 
     <item
         android:id="@+id/action_clear"
         android:icon="@drawable/ic_delete"
         android:title="@string/clear_history"
-        app:iconTint="@color/text_primary"
+        app:iconTint="@color/error"
         app:showAsAction="never" />
 
     <!-- 多选模式专用按钮 -->
@@ -56,7 +59,7 @@
         android:id="@+id/action_select_done"
         android:icon="@drawable/ic_check"
         android:title="@string/select_mode_done"
-        app:iconTint="@color/primary"
+        app:iconTint="@color/accent"
         app:showAsAction="always"
         android:visible="false" />
 

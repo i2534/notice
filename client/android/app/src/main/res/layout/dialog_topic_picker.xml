@@ -1,94 +1,92 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:background="@drawable/bg_dialog_topic_picker">
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_dialog_topic_picker"
+    android:orientation="vertical">
 
+    <!-- 拖拽指示条 -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="8dp"
+        android:background="@color/bg_elevated" />
+
+    <!-- 标题 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:text="@string/topic_picker_title"
+        android:textColor="@color/text_primary"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <!-- 分割线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <!-- Topic 列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/topicList"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:maxHeight="240dp"
+        android:paddingVertical="4dp"
+        tools:itemCount="4"
+        tools:listitem="@layout/item_topic_picker" />
+
+    <!-- 分割线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <!-- 自定义输入 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp">
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="20dp">
 
-        <!-- Title -->
-        <TextView
-            android:layout_width="wrap_content"
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/customTopicInput"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="@string/topic_picker_title"
+            android:layout_weight="1"
+            android:background="@color/bg_tertiary"
+            android:hint="@string/topic_custom_hint"
+            android:paddingStart="12dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="8dp"
             android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:textColorHint="@color/text_tertiary"
+            android:textSize="13sp" />
 
-        <!-- Custom input -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:hint="@string/topic_picker_custom_hint"
-            app:boxBackgroundColor="@color/background"
-            app:boxStrokeColor="@color/primary"
-            app:hintTextColor="@color/text_secondary"
-            app:boxCollapsedPaddingTop="0dp">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editTextTopic"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="textNoSuggestions"
-                android:maxLines="1"
-                android:paddingTop="2dp"
-                android:paddingBottom="2dp"
-                android:textColor="@color/text_primary"
-                android:textSize="12sp" />
-        </com.google.android.material.textfield.TextInputLayout>
-
-        <!-- Default option -->
-        <FrameLayout
-            android:id="@+id/wrapDefault"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="0dp"
-            android:background="?attr/selectableItemBackground"
-            android:clickable="true"
-            android:focusable="true"
-            android:paddingVertical="4dp"
-            android:paddingHorizontal="8dp">
-
-            <RadioButton
-                android:id="@+id/radioButtonDefault"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:clickable="false"
-                android:focusable="false" />
-
-            <TextView
-                android:id="@+id/textViewDefaultTopic"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
-                android:layout_marginStart="8dp"
-                android:textColor="@color/text_primary"
-                android:textSize="12sp" />
-        </FrameLayout>
-
-        <!-- Recent topics header -->
-        <TextView
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnUseCustom"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:layout_marginBottom="2dp"
-            android:text="@string/topic_picker_recent"
-            android:textColor="@color/text_hint"
-            android:textSize="10sp" />
-
-        <!-- Recent topics list -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recyclerViewTopics"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:maxHeight="150dp" />
+            android:layout_marginStart="10dp"
+            android:minWidth="60dp"
+            android:minHeight="36dp"
+            android:text="@string/topic_use_custom"
+            android:textColor="@color/accent" />
 
     </LinearLayout>
-</FrameLayout>
+
+</LinearLayout>

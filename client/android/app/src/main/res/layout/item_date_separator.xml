@@ -5,30 +5,20 @@
     android:layout_height="wrap_content"
     android:gravity="center"
     android:orientation="horizontal"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp">
-
-    <View
-        android:layout_width="0dp"
-        android:layout_height="1dp"
-        android:layout_weight="1"
-        android:background="@color/text_hint"
-        android:alpha="0.5" />
+    android:paddingTop="10dp"
+    android:paddingBottom="6dp">
 
     <TextView
         android:id="@+id/dateText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="12dp"
-        android:textColor="@color/text_secondary"
+        android:background="@drawable/bg_topic_chip"
+        android:paddingStart="12dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="2dp"
+        android:textColor="@color/text_tertiary"
         android:textSize="11sp"
-        tools:text="昨天" />
-
-    <View
-        android:layout_width="0dp"
-        android:layout_height="1dp"
-        android:layout_weight="1"
-        android:alpha="0.5"
-        android:background="@color/text_hint" />
+        tools:text="Today" />
 
 </LinearLayout>

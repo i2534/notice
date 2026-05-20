@@ -58,6 +58,18 @@ class ReplyViewModel(
         _state.value = _state.value.copy(isReplySectionVisible = !_state.value.isReplySectionVisible)
     }
 
+    fun showReplySection() {
+        if (!_state.value.isReplySectionVisible) {
+            _state.value = _state.value.copy(isReplySectionVisible = true)
+        }
+    }
+
+    fun hideReplySection() {
+        if (_state.value.isReplySectionVisible) {
+            _state.value = _state.value.copy(isReplySectionVisible = false)
+        }
+    }
+
     fun onContentChanged(content: String) {
         _state.value = _state.value.copy(content = content, error = null)
     }

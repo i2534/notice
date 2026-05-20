@@ -1,24 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Notice" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- 标题栏高度（默认 56dp，略缩减为 48dp） -->
+        <!-- 标题栏高度 -->
         <item name="actionBarSize">48dp</item>
-        <!-- 主色调 - 深蓝绿色 -->
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryDark">@color/primary_dark</item>
+
+        <!-- 主色调 -->
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorPrimaryDark">@color/accent_dim</item>
         <item name="colorOnPrimary">@color/white</item>
 
         <!-- 次要色 -->
-        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorSecondary">@color/accent</item>
         <item name="colorOnSecondary">@color/white</item>
 
         <!-- 背景色 -->
-        <item name="android:colorBackground">@color/background</item>
-        <item name="colorSurface">@color/surface</item>
+        <item name="android:colorBackground">@color/bg_primary</item>
+        <item name="colorSurface">@color/bg_secondary</item>
 
         <!-- 状态栏 -->
-        <item name="android:statusBarColor">@color/surface</item>
-        <item name="android:navigationBarColor">@color/background</item>
+        <item name="android:statusBarColor">@color/bg_secondary</item>
+        <item name="android:navigationBarColor">@color/bg_primary</item>
 
         <!-- 刘海屏适配 -->
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
@@ -31,12 +32,40 @@
         <item name="alpha">0.85</item>
     </style>
 
-    <!-- 消息详情弹窗主题 -->
-    <style name="Theme.Notice.Dialog" parent="Theme.Material3.DayNight.Dialog">
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorSurface">@color/surface</item>
-        <item name="android:windowBackground">@color/surface</item>
+    <!-- 消息详情底部面板主题 -->
+    <style name="Theme.Notice.BottomSheet" parent="Theme.Material3.DayNight.Dialog">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorSurface">@color/bg_secondary</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
         <item name="android:backgroundDimAmount">0.6</item>
-        <item name="dialogCornerRadius">16dp</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@style/BottomSheetAnimation</item>
+    </style>
+
+    <!-- 通用对话框主题 -->
+    <style name="Theme.Notice.Dialog" parent="Theme.Material3.DayNight.Dialog">
+        <item name="colorPrimary">@color/accent</item>
+        <item name="colorSurface">@color/bg_secondary</item>
+        <item name="android:windowBackground">@drawable/bg_dialog_topic_picker</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.4</item>
+    </style>
+
+    <!-- 底部面板动画 -->
+    <style name="BottomSheetAnimation">
+        <item name="android:windowEnterAnimation">@android:anim/slide_in_left</item>
+        <item name="android:windowExitAnimation">@android:anim/slide_out_right</item>
+    </style>
+
+    <!-- FAB 圆角样式 -->
+    <style name="FabShape" parent="ShapeAppearance.Material3.SmallComponent">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">16dp</item>
     </style>
 </resources>

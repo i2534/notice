@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notice App - UI Redesign Mockup v4</title>
+<style>
+  :root {
+    --bg-primary: #0B0E11;
+    --bg-secondary: #14181C;
+    --bg-tertiary: #1C2128;
+    --bg-elevated: #232830;
+    --accent: #4A9EFF;
+    --accent-dim: #2A6FC7;
+    --accent-subtle: rgba(74, 158, 255, 0.12);
+    --outgoing: #1B6EF7;
+    --outgoing-text: #fff;
+    --text-primary: #E8EAED;
+    --text-secondary: #9AA0A6;
+    --text-tertiary: #5F6368;
+    --divider: rgba(255,255,255,0.06);
+    --border: rgba(255,255,255,0.08);
+    --success: #34C759;
+    --warning: #FF9F0A;
+    --error: #FF453A;
+    --merged-bg: rgba(255,255,255,0.15);
+    --overlay-bg: rgba(0,0,0,0.6);
+    --page-bg: #0A0A0A;
+    --phone-shadow: rgba(0,0,0,0.5);
+    --toggle-bg: #232830;
+    --scrollbar-thumb: #333;
+  }
+
+  /* Shared constants (both themes) */
+  :root, [data-theme="light"] {
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-full: 999px;
+    --topic-alert: #FF6B6B;
+    --topic-nga: #FFB347;
+    --topic-quark: #64B5F6;
+    --topic-bot: #81C784;
+  }
+
+  [data-theme="light"] {
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F5F5F7;
+    --bg-tertiary: #E8E8ED;
+    --bg-elevated: #D2D2D7;
+    --accent: #007AFF;
+    --accent-dim: #0056CC;
+    --accent-subtle: rgba(0, 122, 255, 0.1);
+    --outgoing: #007AFF;
+    --outgoing-text: #fff;
+    --text-primary: #1C1C1E;
+    --text-secondary: #636366;
+    --text-tertiary: #AEAEB2;
+    --divider: rgba(0,0,0,0.06);
+    --border: rgba(0,0,0,0.1);
+    --success: #34C759;
+    --warning: #FF9F0A;
+    --error: #FF3B30;
+    --merged-bg: rgba(0,0,0,0.08);
+    --overlay-bg: rgba(0,0,0,0.35);
+    --page-bg: #E5E5EA;
+    --phone-shadow: rgba(0,0,0,0.15);
+    --toggle-bg: #D2D2D7;
+    --scrollbar-thumb: #ccc;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    background: var(--page-bg); color: var(--text-primary);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 40px 20px; gap: 60px;
+  }
+  h1 { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; text-align: center; }
+  .design-note { max-width: 700px; text-align: center; color: var(--text-secondary); font-size: 14px; line-height: 1.7; margin-top: -30px; }
+  .screens-row { display: flex; gap: 40px; flex-wrap: wrap; justify-content: center; }
+  .phone {
+    width: 360px; height: 720px; background: var(--bg-primary);
+    border-radius: 32px; border: 2px solid var(--bg-elevated);
+    overflow: hidden; position: relative; flex-shrink: 0;
+    box-shadow: 0 20px 60px var(--phone-shadow);
+  }
+  .phone-label { text-align: center; font-size: 13px; color: var(--text-secondary); margin-top: 12px; font-weight: 500; }
+  .phone-column { display: flex; flex-direction: column; align-items: center; }
+  .status-bar { height: 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+  .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; height: 52px; }
+  .toolbar-title { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  .toolbar-actions { display: flex; align-items: center; gap: 4px; }
+  .toolbar-btn { width: 36px; height: 36px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; background: transparent; color: var(--text-secondary); font-size: 18px; cursor: pointer; border: none; }
+  .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 6px rgba(52, 199, 89, 0.4); }
+  .connection-dot.disconnected { background: var(--error); }
+  .content { flex: 1; overflow-y: auto; padding: 0 12px; padding-bottom: 72px; }
+  .content.no-fab { padding-bottom: 8px; }
+  .content.with-reply { padding-bottom: 120px; }
+  .content::-webkit-scrollbar { width: 0; }
+  .topic-header { display: flex; align-items: center; gap: 8px; padding: 12px 4px 6px; }
+  .topic-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; letter-spacing: 0.2px; }
+  .topic-chip.alert { background: rgba(255,107,107,0.12); color: var(--topic-alert); }
+  .topic-chip.nga { background: rgba(255,179,71,0.12); color: var(--topic-nga); }
+  .topic-chip.quark { background: rgba(100,181,246,0.12); color: var(--topic-quark); }
+  .topic-chip.bot { background: rgba(129,199,132,0.12); color: var(--topic-bot); }
+  .topic-chip-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .topic-chip.alert .topic-chip-dot { background: var(--topic-alert); }
+  .topic-chip.nga .topic-chip-dot { background: var(--topic-nga); }
+  .topic-chip.quark .topic-chip-dot { background: var(--topic-quark); }
+  .topic-chip.bot .topic-chip-dot { background: var(--topic-bot); }
+  .topic-count { font-size: 10px; color: var(--text-tertiary); margin-left: auto; }
+
+  /* ===== Message bubble ===== */
+  .message-row { display: flex; padding: 2px 0; }
+  .message-row.incoming { justify-content: flex-start; }
+  .message-row.outgoing { justify-content: flex-end; }
+  .bubble { max-width: 82%; padding: 8px 12px; border-radius: var(--radius-lg); position: relative; }
+  .bubble.incoming { background: var(--bg-tertiary); border-bottom-left-radius: 4px; }
+  .bubble.outgoing { background: var(--outgoing); border-bottom-right-radius: 4px; }
+  .bubble-content { display: flex; align-items: baseline; gap: 6px; }
+  .bubble-text { flex: 1 1 auto; font-size: 13.5px; line-height: 1.45; }
+  .bubble.incoming .bubble-text { color: var(--text-primary); }
+  .bubble.outgoing .bubble-text { color: var(--outgoing-text); }
+  .bubble-time { flex-shrink: 0; font-size: 10px; }
+  .bubble.incoming .bubble-time { color: var(--text-secondary); opacity: 0.5; }
+.bubble.outgoing .bubble-time { color: var(--outgoing-text); opacity: 0.55; }
+ .bubble-merged { font-size: 10px; color: var(--accent); background: var(--accent-subtle); padding: 1px 6px; border-radius: var(--radius-full); position: absolute; bottom: -8px; right: 4px; }
+ .bubble.outgoing .bubble-merged { color: var(--outgoing-text); background: var(--merged-bg); left: 4px; right: auto; }
+
+  /* Date separator */
+  .date-separator { text-align: center; padding: 10px 0 6px; font-size: 11px; color: var(--text-tertiary); font-weight: 500; }
+  .date-separator span { background: var(--bg-primary); padding: 2px 12px; border: 1px solid var(--divider); border-radius: var(--radius-full); }
+
+  /* FAB */
+  .fab-reply { position: absolute; bottom: 20px; right: 16px; width: 52px; height: 52px; border-radius: 16px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 16px var(--accent-subtle); cursor: pointer; border: none; z-index: 10; }
+  .fab-reply.hidden { display: none; }
+
+  /* Reply bar */
+  .reply-bar { position: absolute; bottom: 0; left: 0; right: 0; padding: 8px 12px 24px; background: var(--bg-primary); border-top: 1px solid var(--border); }
+  .reply-bar.hidden { display: none; }
+  .reply-input-wrap { display: flex; align-items: flex-end; gap: 8px; background: var(--bg-tertiary); border-radius: var(--radius-xl); padding: 6px 6px 6px 14px; border: 1px solid var(--border); }
+  .reply-input-wrap:focus-within { border-color: var(--accent-dim); box-shadow: 0 0 0 2px var(--accent-subtle); }
+  .reply-input { flex: 1; background: none; border: none; outline: none; color: var(--text-primary); font-size: 14px; padding: 6px 0; font-family: inherit; }
+  .reply-input::placeholder { color: var(--text-tertiary); }
+  .reply-btn { width: 34px; height: 34px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; font-size: 16px; flex-shrink: 0; }
+  .reply-btn.mic { background: transparent; color: var(--text-secondary); }
+  .reply-btn.send { background: var(--accent); color: #fff; }
+  .reply-btn.send:disabled { background: var(--bg-elevated); color: var(--text-tertiary); }
+  .reply-btn.close { background: transparent; color: var(--text-secondary); font-size: 18px; }
+  .reply-topic-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 0 4px; }
+  .reply-topic-label { font-size: 11px; color: var(--text-secondary); }
+  .reply-topic-arrow { font-size: 10px; color: var(--text-tertiary); }
+
+  /* Detail overlay */
+  .detail-overlay { position: absolute; inset: 0; background: var(--overlay-bg); display: flex; align-items: flex-end; }
+  .detail-card { width: 100%; background: var(--bg-secondary); border-radius: var(--radius-xl) var(--radius-xl) 0 0; overflow: hidden; border-top: 1px solid var(--border); max-height: 60%; display: flex; flex-direction: column; }
+  .detail-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--bg-elevated); margin: 8px auto 0; }
+  .detail-header { padding: 12px 16px 10px; border-bottom: 1px solid var(--divider); }
+  .detail-title-row { display: flex; align-items: center; justify-content: space-between; }
+  .detail-title { font-size: 15px; font-weight: 600; }
+  .detail-badge { font-size: 10px; padding: 2px 8px; border-radius: var(--radius-full); background: var(--accent-subtle); color: var(--accent); font-weight: 500; }
+  .detail-meta { display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-tertiary); }
+  .detail-body { flex: 1; padding: 14px 16px; font-size: 13.5px; line-height: 1.55; overflow-y: auto; }
+  .detail-actions { display: flex; gap: 4px; padding: 10px 16px 20px; border-top: 1px solid var(--divider); }
+  .detail-action-btn { flex: 1; padding: 10px; border-radius: var(--radius-md); border: none; background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .detail-action-btn.primary { background: var(--accent-subtle); color: var(--accent); }
+
+  /* Picker */
+  .picker-overlay { position: absolute; inset: 0; background: var(--overlay-bg); display: flex; align-items: flex-end; }
+  .picker-sheet { width: 100%; background: var(--bg-secondary); border-radius: var(--radius-xl) var(--radius-xl) 0 0; padding: 12px 16px 32px; }
+  .picker-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--bg-elevated); margin: 0 auto 16px; }
+  .picker-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .picker-item { display: flex; align-items: center; gap: 12px; padding: 12px 8px; border-radius: var(--radius-md); cursor: pointer; }
+  .picker-item:hover { background: var(--bg-tertiary); }
+  .picker-radio { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--text-tertiary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .picker-radio.checked { border-color: var(--accent); }
+  .picker-radio.checked::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+  .picker-item-label { font-size: 14px; flex: 1; }
+  .picker-divider { height: 1px; background: var(--divider); margin: 4px 8px; }
+  .picker-input { margin: 12px 8px; padding: 10px 14px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-primary); font-size: 14px; outline: none; font-family: inherit; width: calc(100% - 16px); }
+  .picker-input::placeholder { color: var(--text-tertiary); }
+
+  /* Settings */
+  .settings-section { padding: 16px 12px 8px; }
+  .settings-section-title { font-size: 12px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px; margin-bottom: 8px; }
+  .settings-card { background: var(--bg-tertiary); border-radius: var(--radius-md); overflow: hidden; }
+  .settings-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid var(--divider); }
+  .settings-item:last-child { border-bottom: none; }
+  .settings-icon { width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .settings-icon.blue { background: var(--accent-subtle); color: var(--accent); }
+  .settings-icon.green { background: rgba(52,199,89,0.12); color: var(--success); }
+  .settings-icon.orange { background: rgba(255,159,10,0.12); color: var(--warning); }
+  .settings-icon.red { background: rgba(255,69,58,0.12); color: var(--error); }
+  .settings-item-content { flex: 1; }
+  .settings-item-title { font-size: 14px; }
+  .settings-item-subtitle { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+  .settings-chevron { color: var(--text-tertiary); font-size: 14px; }
+  .toggle { width: 44px; height: 24px; border-radius: 12px; background: var(--toggle-bg); position: relative; cursor: pointer; }
+  .toggle.on { background: var(--accent); }
+  .toggle::after { content: ''; position: absolute; width: 20px; height: 20px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: transform 0.2s; }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* Empty state */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 40px; text-align: center; }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-text { font-size: 14px; color: var(--text-tertiary); }
+
+  /* Palette */
+  .palette-section { max-width: 600px; width: 100%; }
+  .palette-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; text-align: center; }
+  .palette-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .palette-swatch { border-radius: var(--radius-md); padding: 12px; text-align: center; }
+  .palette-swatch .color-name { font-size: 10px; font-weight: 600; margin-bottom: 4px; opacity: 0.8; }
+  .palette-swatch .color-hex { font-size: 10px; font-family: monospace; opacity: 0.6; }
+
+  /* Principles */
+  .principles { max-width: 600px; width: 100%; }
+  .principles h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; text-align: center; }
+  .principle-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--divider); }
+  .principle-num { width: 28px; height: 28px; border-radius: var(--radius-full); background: var(--accent-subtle); color: var(--accent); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .principle-text { font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+  .principle-text strong { color: var(--text-primary); }
+
+  /* Comparison */
+  .comparison { max-width: 600px; width: 100%; }
+  .comparison h2 { font-size: 18px; font-weight: 600; margin-bottom: 16px; text-align: center; }
+  .comparison-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .comparison-table th { text-align: left; padding: 8px 12px; color: var(--text-tertiary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; border-bottom: 1px solid var(--divider); }
+  .comparison-table td { padding: 10px 12px; border-bottom: 1px solid var(--divider); color: var(--text-secondary); line-height: 1.5; }
+  .comparison-table td:first-child { color: var(--text-primary); font-weight: 500; }
+  .badge-old { display: inline-block; padding: 1px 6px; border-radius: 4px; background: rgba(255,69,58,0.12); color: var(--error); font-size: 10px; font-weight: 600; }
+  .badge-new { display: inline-block; padding: 1px 6px; border-radius: 4px; background: rgba(52,199,89,0.12); color: var(--success); font-size: 10px; font-weight: 600; }
+
+  /* Theme toggle */
+  .theme-toggle-wrap { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: -30px; margin-bottom: 10px; }
+  .theme-toggle-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+  .theme-toggle-btn {
+    display: flex; align-items: center; gap: 8px; padding: 8px 16px;
+    border-radius: var(--radius-full); border: 1px solid var(--border);
+    background: var(--bg-tertiary); color: var(--text-primary); font-size: 13px;
+    cursor: pointer; font-family: inherit; font-weight: 500;
+  }
+  .theme-toggle-btn:hover { background: var(--bg-elevated); }
+  .theme-icon { font-size: 16px; }
+</style>
+</head>
+<body>
+
+<h1>Notice App UI Redesign v4</h1>
+<p class="design-note">v5 调整：深色/浅色双主题（点击顶部按钮切换），所有颜色通过 CSS 变量控制</p>
+<div class="theme-toggle-wrap">
+  <button class="theme-toggle-btn" onclick="toggleTheme()">
+    <span class="theme-icon" id="themeIcon">&#9790;</span>
+    <span id="themeText">切换浅色</span>
+  </button>
+</div>
+
+<!-- ==================== SCREEN 1: Main with FAB ==================== -->
+<div class="screens-row">
+<div class="phone-column">
+<div class="phone">
+  <div class="status-bar"><span>9:41</span><span>100%</span></div>
+  <div class="toolbar">
+    <span class="toolbar-title">Notice</span>
+    <div class="toolbar-actions">
+      <div class="toolbar-btn"><div class="connection-dot"></div></div>
+      <div class="toolbar-btn">&#9881;</div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="date-separator"><span>Today</span></div>
+    <div class="topic-header">
+      <span class="topic-chip alert"><span class="topic-chip-dot"></span>notice/alert</span>
+      <span class="topic-count">3</span>
+    </div>
+    <div class="message-row incoming">
+      <div class="bubble incoming">
+        <div class="bubble-content">
+          <div class="bubble-text">AI 未能确认签到结果，请检查截图</div>
+          <span class="bubble-time">14:30</span>
+        </div>
+      </div>
+    </div>
+    <div class="message-row incoming">
+      <div class="bubble incoming">
+        <div class="bubble-content">
+          <div class="bubble-text">Analysis Steps:<br>1. Check login status<br>2. Verify streak counter</div>
+          <span class="bubble-time">14:31</span>
+        </div>
+      </div>
+    </div>
+    <div class="message-row outgoing">
+      <div class="bubble outgoing">
+        <div class="bubble-content">
+          <div class="bubble-text">已重新检查，签到成功</div>
+          <span class="bubble-time">14:32</span>
+        </div>
+      </div>
+    </div>
+    <div class="topic-header">
+      <span class="topic-chip nga"><span class="topic-chip-dot"></span>notice/nga</span>
+      <span class="topic-count">1</span>
+    </div>
+    <div class="message-row incoming">
+      <div class="bubble incoming">
+        <div class="bubble-content">
+          <div class="bubble-text">NGA 签到通知 | 账号: 9e6 | 签到成功</div>
+          <span class="bubble-time">15:00</span>
+        </div>
+        <div class="bubble-merged">x3</div>
+      </div>
+    </div>
+    <div class="topic-header">
+      <span class="topic-chip quark"><span class="topic-chip-dot"></span>notice/quark</span>
+      <span class="topic-count">1</span>
+    </div>
+    <div class="message-row incoming">
+      <div class="bubble incoming">
+        <div class="bubble-content">
+          <div class="bubble-text">夸克网盘签到成功！检测到更新 10.9.2.113</div>
+          <span class="bubble-time">15:05</span>
+        </div>
+      </div>
+    </div>
+    <div class="message-row outgoing">
+      <div class="bubble outgoing">
+        <div class="bubble-content">
+          <div class="bubble-text">知道了</div>
+          <span class="bubble-time">15:06</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <button class="fab-reply">&#10148;</button>
+  <div class="reply-bar hidden">
+    <div class="reply-topic-row">
+      <span class="topic-chip bot" style="font-size:10px;padding:2px 8px;"><span class="topic-chip-dot"></span>notice/alert</span>
+      <span class="reply-topic-arrow">&#9662;</span>
+    </div>
+    <div class="reply-input-wrap">
+      <button class="reply-btn mic">&#127908;</button>
+      <input class="reply-input" type="text" placeholder="输入消息...">
+      <button class="reply-btn send">&#10148;</button>
+    </div>
+  </div>
+</div>
+<div class="phone-label">主界面 - FAB 不遮挡底部内容</div>
+</div>
+
+<!-- ==================== SCREEN 2: Reply Open ==================== -->
+<div class="phone-column">
+<div class="phone">
+  <div class="status-bar"><span>9:41</span><span>100%</span></div>
+  <div class="toolbar">
+    <span class="toolbar-title">Notice</span>
+    <div class="toolbar-actions">
+      <div class="toolbar-btn"><div class="connection-dot"></div></div>
+      <div class="toolbar-btn">&#9881;</div>
+    </div>
+  </div>
+  <div class="content with-reply">
+    <div class="date-separator"><span>Today</span></div>
+    <div class="topic-header">
+      <span class="topic-chip alert"><span class="topic-chip-dot"></span>notice/alert</span>
+      <span class="topic-count">3</span>
+    </div>
+    <div class="message-row incoming">
+      <div class="bubble incoming">
+        <div class="bubble-content">
+          <div class="bubble-text">AI 未能确认签到结果，请检查截图</div>
+          <span class="bubble-time">14:30</span>
+        </div>
+      </div>
+    </div>
+    <div class="message-row incoming">
+      <div class="bubble incoming">
+        <div class="bubble-content">
+          <div class="bubble-text">Analysis Steps:<br>1. Check login status<br>2. Verify streak counter</div>
+          <span class="bubble-time">14:31</span>
+        </div>
+      </div>
+    </div>
+    <div class="message-row outgoing">
+      <div class="bubble outgoing">
+        <div class="bubble-content">
+          <div class="bubble-text">已重新检查，签到成功</div>
+          <span class="bubble-time">14:32</span>
+        </div>
+      </div>
+    </div>
+    <div class="topic-header">
+      <span class="topic-chip nga"><span class="topic-chip-dot"></span>notice/nga</span>
+      <span class="topic-count">1</span>
+    </div>
+    <div class="message-row incoming">
+      <div class="bubble incoming">
+        <div class="bubble-content">
+          <div class="bubble-text">NGA 签到通知 | 账号: 9e6 | 签到成功</div>
+          <span class="bubble-time">15:00</span>
+        </div>
+        <div class="bubble-merged">x3</div>
+      </div>
+    </div>
+    <div class="topic-header">
+      <span class="topic-chip quark"><span class="topic-chip-dot"></span>notice/quark</span>
+      <span class="topic-count">1</span>
+    </div>
+    <div class="message-row incoming">
+      <div class="bubble incoming">
+        <div class="bubble-content">
+          <div class="bubble-text">夸克网盘签到成功！检测到更新 10.9.2.113</div>
+          <span class="bubble-time">15:05</span>
+        </div>
+      </div>
+    </div>
+    <div class="message-row outgoing">
+      <div class="bubble outgoing">
+        <div class="bubble-content">
+          <div class="bubble-text">知道了</div>
+          <span class="bubble-time">15:06</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <button class="fab-reply hidden">&#10148;</button>
+  <div class="reply-bar">
+    <div class="reply-topic-row">
+      <span class="topic-chip bot" style="font-size:10px;padding:2px 8px;"><span class="topic-chip-dot"></span>notice/alert</span>
+      <span class="reply-topic-arrow">&#9662;</span>
+      <span style="margin-left:auto;"><button class="reply-btn close" style="width:24px;height:24px;font-size:14px;">&#10005;</button></span>
+    </div>
+    <div class="reply-input-wrap">
+      <button class="reply-btn mic">&#127908;</button>
+      <input class="reply-input" type="text" placeholder="输入消息..." value="重新检查">
+      <button class="reply-btn send">&#10148;</button>
+    </div>
+  </div>
+</div>
+<div class="phone-label">回复栏展开 - content 加大 padding</div>
+</div>
+
+<!-- ==================== SCREEN 3: Message Detail ==================== -->
+<div class="phone-column">
+<div class="phone">
+  <div class="status-bar"><span>9:41</span><span>100%</span></div>
+  <div class="toolbar">
+    <span class="toolbar-title">Notice</span>
+    <div class="toolbar-actions">
+      <div class="toolbar-btn"><div class="connection-dot"></div></div>
+      <div class="toolbar-btn">&#9881;</div>
+    </div>
+  </div>
+  <div class="content no-fab" style="opacity:0.3;">
+    <div class="date-separator"><span>Today</span></div>
+    <div class="topic-header"><span class="topic-chip alert"><span class="topic-chip-dot"></span>notice/alert</span></div>
+    <div class="message-row incoming"><div class="bubble incoming"><div class="bubble-content"><div class="bubble-text">...</div><span class="bubble-time">--:--</span></div></div></div>
+  </div>
+  <div class="detail-overlay">
+    <div class="detail-card">
+      <div class="detail-handle"></div>
+      <div class="detail-header">
+        <div class="detail-title-row">
+          <span class="detail-title">签到结果分析</span>
+          <span class="detail-badge">incoming</span>
+        </div>
+        <div class="detail-meta">
+          <span>05-07 14:30:22</span>
+          <span class="topic-chip alert" style="font-size:10px;padding:1px 6px;"><span class="topic-chip-dot" style="width:4px;height:4px;"></span>notice/alert</span>
+        </div>
+      </div>
+      <div class="detail-body">
+        AI 未能确认签到结果。<br><br>
+        截图文件: result_20260507_143022.png<br><br>
+        分析步骤:<br>
+        1. 检查登录状态 - 未找到明确标识<br>
+        2. 验证连续签到天数 - 需要人工确认<br><br>
+        建议: 请手动检查截图确认签到是否成功。
+      </div>
+      <div class="detail-actions">
+        <button class="detail-action-btn">&#128203; 复制</button>
+        <button class="detail-action-btn primary">&#8617; 回复此主题</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="phone-label">消息详情 - 底部面板</div>
+</div>
+</div>
+
+<!-- ==================== ROW 2 ==================== -->
+<div class="screens-row" style="margin-top:20px;">
+
+<!-- SCREEN 4: Topic Picker -->
+<div class="phone-column">
+<div class="phone">
+  <div class="status-bar"><span>9:41</span><span>100%</span></div>
+  <div class="toolbar">
+    <span class="toolbar-title">Notice</span>
+    <div class="toolbar-actions">
+      <div class="toolbar-btn"><div class="connection-dot"></div></div>
+      <div class="toolbar-btn">&#9881;</div>
+    </div>
+  </div>
+  <div class="content with-reply" style="opacity:0.4;">
+    <div class="date-separator"><span>Today</span></div>
+    <div class="message-row incoming"><div class="bubble incoming"><div class="bubble-content"><div class="bubble-text">...</div><span class="bubble-time">--:--</span></div></div></div>
+  </div>
+  <div class="reply-bar">
+    <div class="reply-topic-row">
+      <span class="topic-chip bot" style="font-size:10px;padding:2px 8px;"><span class="topic-chip-dot"></span>notice/alert</span>
+      <span class="reply-topic-arrow">&#9650;</span>
+      <span style="margin-left:auto;"><button class="reply-btn close" style="width:24px;height:24px;font-size:14px;">&#10005;</button></span>
+    </div>
+    <div class="reply-input-wrap">
+      <button class="reply-btn mic">&#127908;</button>
+      <input class="reply-input" type="text" placeholder="输入消息...">
+      <button class="reply-btn send">&#10148;</button>
+    </div>
+  </div>
+  <div class="picker-overlay">
+    <div class="picker-sheet">
+      <div class="picker-handle"></div>
+      <div class="picker-title">选择主题</div>
+      <div class="picker-item">
+        <div class="picker-radio checked"></div>
+        <span class="picker-item-label">默认主题 (notice/alert)</span>
+      </div>
+      <div class="picker-divider"></div>
+      <div class="picker-item">
+        <div class="picker-radio"></div>
+        <span class="picker-item-label">notice/nga</span>
+      </div>
+      <div class="picker-item">
+        <div class="picker-radio"></div>
+        <span class="picker-item-label">notice/quark</span>
+      </div>
+      <div class="picker-item">
+        <div class="picker-radio"></div>
+        <span class="picker-item-label">notice/bot</span>
+      </div>
+      <div class="picker-divider"></div>
+      <input class="picker-input" type="text" placeholder="输入自定义主题...">
+    </div>
+  </div>
+</div>
+<div class="phone-label">Topic 选择器</div>
+</div>
+
+<!-- SCREEN 5: Empty / Disconnected -->
+<div class="phone-column">
+<div class="phone">
+  <div class="status-bar"><span>9:41</span><span>100%</span></div>
+  <div class="toolbar">
+    <span class="toolbar-title">Notice</span>
+    <div class="toolbar-actions">
+      <div class="toolbar-btn"><div class="connection-dot disconnected"></div></div>
+      <div class="toolbar-btn">&#9881;</div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="empty-state">
+      <div class="empty-icon">&#128276;</div>
+      <div class="empty-text">暂无消息<br><span style="font-size:12px;opacity:0.6;">连接服务器后消息将显示在这里</span></div>
+    </div>
+  </div>
+  <button class="fab-reply" style="background:var(--bg-elevated);box-shadow:none;opacity:0.4;">&#10148;</button>
+</div>
+<div class="phone-label">空状态 - 未连接</div>
+</div>
+
+<!-- SCREEN 6: Settings -->
+<div class="phone-column">
+<div class="phone">
+  <div class="status-bar"><span>9:41</span><span>100%</span></div>
+  <div class="toolbar">
+    <span class="toolbar-title" style="margin-left:8px;">&#8592; 设置</span>
+    <div class="toolbar-actions"></div>
+  </div>
+  <div class="content no-fab">
+    <div class="settings-section">
+      <div class="settings-section-title">连接</div>
+      <div class="settings-card">
+        <div class="settings-item">
+          <div class="settings-icon blue">&#127968;</div>
+          <div class="settings-item-content">
+            <div class="settings-item-title">Broker 地址</div>
+            <div class="settings-item-subtitle">wss://notice.9e6.xyz/ws</div>
+          </div>
+          <span class="settings-chevron">&#8250;</span>
+        </div>
+        <div class="settings-item">
+          <div class="settings-icon green">&#128274;</div>
+          <div class="settings-item-content">
+            <div class="settings-item-title">认证</div>
+            <div class="settings-item-subtitle">已配置 Bearer Token</div>
+          </div>
+          <span class="settings-chevron">&#8250;</span>
+        </div>
+        <div class="settings-item">
+          <div class="settings-icon orange">&#128260;</div>
+          <div class="settings-item-content">
+            <div class="settings-item-title">默认主题</div>
+            <div class="settings-item-subtitle">notice/alert</div>
+          </div>
+          <span class="settings-chevron">&#8250;</span>
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">通知</div>
+      <div class="settings-card">
+        <div class="settings-item">
+          <div class="settings-icon blue">&#128276;</div>
+          <div class="settings-item-content">
+            <div class="settings-item-title">系统通知</div>
+            <div class="settings-item-subtitle">新消息时推送通知</div>
+          </div>
+          <div class="toggle on"></div>
+        </div>
+        <div class="settings-item">
+          <div class="settings-icon green">&#128264;</div>
+          <div class="settings-item-content">
+            <div class="settings-item-title">声音</div>
+            <div class="settings-item-subtitle">收到消息时播放提示音</div>
+          </div>
+          <div class="toggle on"></div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">数据</div>
+      <div class="settings-card">
+        <div class="settings-item">
+          <div class="settings-icon red">&#128465;</div>
+          <div class="settings-item-content">
+            <div class="settings-item-title">清除消息</div>
+            <div class="settings-item-subtitle">删除本地所有消息记录</div>
+          </div>
+          <span class="settings-chevron">&#8250;</span>
+        </div>
+        <div class="settings-item">
+          <div class="settings-icon blue">&#128196;</div>
+          <div class="settings-item-content">
+            <div class="settings-item-title">运行日志</div>
+            <div class="settings-item-subtitle">查看 MQTT 连接日志</div>
+          </div>
+          <span class="settings-chevron">&#8250;</span>
+        </div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <div class="settings-section-title">关于</div>
+      <div class="settings-card">
+        <div class="settings-item">
+          <div class="settings-icon blue">&#128218;</div>
+          <div class="settings-item-content">
+            <div class="settings-item-title">版本</div>
+            <div class="settings-item-subtitle">1.0.0 (build 42)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="phone-label">设置页</div>
+</div>
+</div>
+
+<!-- Palette -->
+<div class="palette-section">
+  <div class="palette-title">配色方案</div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:center;">
+    <div style="flex:1;min-width:280px;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;text-align:center;">&#9790; 深色主题</div>
+      <div class="palette-grid">
+        <div class="palette-swatch" style="background:#0B0E11;color:#fff;"><div class="color-name">Background</div><div class="color-hex">#0B0E11</div></div>
+        <div class="palette-swatch" style="background:#1C2128;color:#fff;"><div class="color-name">Surface</div><div class="color-hex">#1C2128</div></div>
+        <div class="palette-swatch" style="background:#4A9EFF;color:#fff;"><div class="color-name">Accent</div><div class="color-hex">#4A9EFF</div></div>
+        <div class="palette-swatch" style="background:#1B6EF7;color:#fff;"><div class="color-name">Outgoing</div><div class="color-hex">#1B6EF7</div></div>
+        <div class="palette-swatch" style="background:#E8EAED;color:#000;"><div class="color-name">Text</div><div class="color-hex">#E8EAED</div></div>
+        <div class="palette-swatch" style="background:#9AA0A6;color:#000;"><div class="color-name">Secondary</div><div class="color-hex">#9AA0A6</div></div>
+        <div class="palette-swatch" style="background:#34C759;color:#fff;"><div class="color-name">Success</div><div class="color-hex">#34C759</div></div>
+        <div class="palette-swatch" style="background:#FF453A;color:#fff;"><div class="color-name">Error</div><div class="color-hex">#FF453A</div></div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px;">
+      <div style="font-size:13px;font-weight:600;color:#636366;margin-bottom:8px;text-align:center;">&#9728; 浅色主题</div>
+      <div class="palette-grid">
+        <div class="palette-swatch" style="background:#FFFFFF;color:#000;border:1px solid #ddd;"><div class="color-name">Background</div><div class="color-hex">#FFFFFF</div></div>
+        <div class="palette-swatch" style="background:#E8E8ED;color:#000;border:1px solid #ddd;"><div class="color-name">Surface</div><div class="color-hex">#E8E8ED</div></div>
+        <div class="palette-swatch" style="background:#007AFF;color:#fff;"><div class="color-name">Accent</div><div class="color-hex">#007AFF</div></div>
+        <div class="palette-swatch" style="background:#007AFF;color:#fff;"><div class="color-name">Outgoing</div><div class="color-hex">#007AFF</div></div>
+        <div class="palette-swatch" style="background:#1C1C1E;color:#fff;"><div class="color-name">Text</div><div class="color-hex">#1C1C1E</div></div>
+        <div class="palette-swatch" style="background:#636366;color:#fff;"><div class="color-name">Secondary</div><div class="color-hex">#636366</div></div>
+        <div class="palette-swatch" style="background:#34C759;color:#fff;"><div class="color-name">Success</div><div class="color-hex">#34C759</div></div>
+        <div class="palette-swatch" style="background:#FF3B30;color:#fff;"><div class="color-name">Error</div><div class="color-hex">#FF3B30</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Principles -->
+<div class="principles">
+  <h2>设计原则与改动说明</h2>
+  <div class="principle-item">
+    <div class="principle-num">1</div>
+    <div class="principle-text"><strong>FAB 切换输入栏</strong> -- 右下角浮动按钮（蓝色圆角方形，发送图标），点击展开输入栏，X 关闭。默认隐藏不占空间。发送后自动收起。FAB 不遮挡内容 -- content 底部 padding 72px 预留空间。</div>
+  </div>
+  <div class="principle-item">
+    <div class="principle-num">2</div>
+    <div class="principle-text"><strong>时间戳与文字同行</strong> -- 气泡内用 flex row（baseline 对齐），文字 flex:1 占据剩余空间，时间戳 10px 靠右。同一行，不单独占行。</div>
+  </div>
+  <div class="principle-item">
+    <div class="principle-num">3</div>
+    <div class="principle-text"><strong>Topic Chip 标签</strong> -- 圆角胶囊标签替代线+色块。每个 Topic 独立颜色，右侧显示消息数。</div>
+  </div>
+  <div class="principle-item">
+    <div class="principle-num">4</div>
+    <div class="principle-text"><strong>双向对话气泡</strong> -- 入站左（深色 #1C2128），出站右（蓝色 #1B6EF7）。圆角 16px，对话角 4px。</div>
+  </div>
+  <div class="principle-item">
+    <div class="principle-num">5</div>
+    <div class="principle-text"><strong>底部面板弹窗</strong> -- 消息详情和 Topic 选择器从底部滑出，带拖拽指示条，点击外部关闭。</div>
+  </div>
+  <div class="principle-item">
+    <div class="principle-num">6</div>
+    <div class="principle-text"><strong>Toolbar 精简</strong> -- 仅连接状态（绿/红点）和设置按钮。</div>
+  </div>
+  <div class="principle-item">
+    <div class="principle-num">7</div>
+    <div class="principle-text"><strong>配色</strong> -- 蓝绿 (#0D7377) 改为现代蓝 (#4A9EFF)。背景深蓝灰 (#0B0E11) 替代纯黑。</div>
+  </div>
+  <div class="principle-item">
+    <div class="principle-num">8</div>
+    <div class="principle-text"><strong>设置页卡片分组</strong> -- 连接/通知/数据/关于，每组圆角卡片，图标+副标题。</div>
+  </div>
+  <div class="principle-item">
+    <div class="principle-num">9</div>
+    <div class="principle-text"><strong>深色/浅色双主题</strong> -- 所有颜色通过 CSS 变量控制，[data-theme="light"] 覆盖。深色：深蓝灰底 (#0B0E11) + 蓝 (#4A9EFF)。浅色：白底 (#FFFFFF) + iOS 蓝 (#007AFF)。</div>
+  </div>
+</div>
+
+<!-- Comparison -->
+<div class="comparison">
+  <h2>改动对比</h2>
+  <table class="comparison-table">
+    <thead><tr><th>项目</th><th>当前</th><th>新设计</th></tr></thead>
+    <tbody>
+      <tr><td>输入栏</td><td><span class="badge-old">Toolbar 按钮</span> 顶部按钮触发</td><td><span class="badge-new">FAB 切换</span> 右下角浮动按钮</td></tr>
+      <tr><td>时间戳</td><td><span class="badge-old">气泡右上角</span> 占位</td><td><span class="badge-new">底部同行</span> 10px flex baseline</td></tr>
+      <tr><td>Topic 分隔</td><td><span class="badge-old">线+色块</span> 横线+小色块</td><td><span class="badge-new">Chip 标签</span> 圆角胶囊+数量</td></tr>
+      <tr><td>消息气泡</td><td><span class="badge-old">全左对齐</span></td><td><span class="badge-new">双向对话</span> 入站左/出站右</td></tr>
+      <tr><td>消息详情</td><td><span class="badge-old">居中全屏弹窗</span></td><td><span class="badge-new">底部面板</span></td></tr>
+      <tr><td>Toolbar</td><td><span class="badge-old">4图标</span> 连接/回复/设置/关于</td><td><span class="badge-new">2图标</span> 连接+设置</td></tr>
+      <tr><td>主色调</td><td><span class="badge-old">#0D7377</span></td><td><span class="badge-new">#4A9EFF</span></td></tr>
+      <tr><td>背景色</td><td><span class="badge-old">#121212</span></td><td><span class="badge-new">#0B0E11</span></td></tr>
+      <tr><td>Topic 选择器</td><td><span class="badge-old">AlertDialog</span></td><td><span class="badge-new">Bottom Sheet</span></td></tr>
+      <tr><td>设置页</td><td><span class="badge-old">文字列表</span></td><td><span class="badge-new">卡片分组</span></td></tr>
+      <tr><td>主题</td><td><span class="badge-old">仅深色</span></td><td><span class="badge-new">深色 + 浅色</span> 双主题切换</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  const icon = document.getElementById('themeIcon');
+  const text = document.getElementById('themeText');
+  if (html.getAttribute('data-theme') === 'light') {
+    html.removeAttribute('data-theme');
+    icon.innerHTML = '&#9790;';
+    text.textContent = '切换浅色';
+  } else {
+    html.setAttribute('data-theme', 'light');
+    icon.innerHTML = '&#9728;';
+    text.textContent = '切换深色';
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,82 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 根布局 match_parent 配合窗口固定高度，ScrollView weight=1 占满中间，保证底部按钮始终可见 -->
+<!-- 底部面板样式：顶部圆角，底部平齐 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/dialog_background"
-    android:orientation="vertical">
+    android:background="@drawable/bg_dialog_topic_picker"
+    android:orientation="vertical"
+    tools:maxHeight="360dp">
 
-    <!-- 标题区域（圆角头部） -->
+    <!-- 拖拽指示条 -->
+    <View
+        android:layout_width="36dp"
+        android:layout_height="4dp"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="8dp"
+        android:background="@color/bg_elevated"
+        android:radius="2dp" />
+
+    <!-- 标题区域 -->
     <LinearLayout
         android:id="@+id/dialogHeader"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingHorizontal="16dp"
-        android:paddingVertical="12dp"
-        android:background="@drawable/bg_dialog_message_header">
+        android:paddingTop="12dp"
+        android:paddingBottom="10dp">
 
+        <!-- 标题行 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/dialogTitle"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:textColor="@color/text_primary"
-                android:textSize="16sp"
-                android:textStyle="bold"
                 android:accessibilityHeading="true"
-                tools:text="消息标题" />
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                tools:text="签到结果分析" />
 
             <TextView
                 android:id="@+id/dialogSentByMe"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
+                android:background="@color/accent_subtle"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
                 android:text="@string/message_sent_by_me"
-                android:textColor="@color/primary_light"
-                android:textSize="12sp"
+                android:textColor="@color/accent"
+                android:textSize="10sp"
                 android:visibility="gone"
                 tools:visibility="visible" />
+
         </LinearLayout>
 
-        <!-- 时间与主题同一行 -->
+        <!-- 时间与主题 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:layout_marginTop="6dp"
             android:gravity="center_vertical"
-            android:layout_marginTop="4dp">
+            android:orientation="horizontal">
 
             <TextView
                 android:id="@+id/dialogTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/text_hint"
+                android:textColor="@color/text_tertiary"
                 android:textSize="11sp"
-                tools:text="01-10 15:30" />
+                tools:text="05-07 14:30:22" />
 
             <TextView
                 android:id="@+id/dialogTopic"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:layout_marginStart="12dp"
+                android:background="@color/accent_subtle"
                 android:ellipsize="end"
                 android:maxLines="1"
-                android:textColor="@color/primary_light"
-                android:textSize="11sp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:paddingTop="1dp"
+                android:paddingBottom="1dp"
+                android:textColor="@color/accent"
+                android:textSize="10sp"
                 tools:text="notice/alert" />
+
         </LinearLayout>
+
     </LinearLayout>
 
-    <!-- 内容区域：占满中间空间，底部按钮固定可见；不获取焦点避免首次点击被消费 -->
+    <!-- 分割线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <!-- 内容区域 -->
     <ScrollView
         android:id="@+id/dialogScrollView"
         android:layout_width="match_parent"
@@ -91,54 +120,59 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:paddingTop="4dp"
+            android:paddingTop="14dp"
             android:paddingBottom="12dp" />
+
     </ScrollView>
+
+    <!-- 分割线 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
 
     <!-- 按钮区域 -->
     <LinearLayout
         android:id="@+id/dialogButtons"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="end"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="12dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="12dp">
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="20dp">
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnClose"
+            android:id="@+id/btnCopy"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:minHeight="40dp"
-            android:minWidth="56dp"
-            android:contentDescription="@string/message_detail_close_content_description"
-            android:text="@string/message_detail_close"
+            android:text="@string/message_detail_copy"
             android:textColor="@color/text_secondary" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnReplyToTopic"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_weight="1"
             android:minHeight="40dp"
-            android:minWidth="56dp"
-            android:contentDescription="@string/message_detail_reply_to"
             android:text="@string/message_detail_reply_to"
-            android:textColor="@color/text_secondary" />
+            android:textColor="@color/accent" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCopy"
+            android:id="@+id/btnClose"
             style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_weight="1"
             android:minHeight="40dp"
-            android:minWidth="56dp"
-            android:contentDescription="@string/message_detail_copy_content_description"
-            android:text="@string/message_detail_copy"
+            android:text="@string/message_detail_close"
             android:textColor="@color/text_secondary" />
+
     </LinearLayout>
+
 </LinearLayout>

@@ -164,10 +164,6 @@ class MainActivity : AppCompatActivity() {
                     }
                     true
                 }
-                R.id.action_reply -> {
-                    replyViewModel?.toggleReplySection()
-                    true
-                }
                 R.id.action_settings -> {
                     startActivity(Intent(this, SettingsActivity::class.java))
                     true
@@ -194,6 +190,20 @@ class MainActivity : AppCompatActivity() {
                 }
                 else -> false
             }
+        }
+
+        // FAB 点击展开/收起回复栏
+        binding.fabReply.setOnClickListener {
+            if (binding.replySection.visibility == View.VISIBLE) {
+                replyViewModel?.hideReplySection()
+            } else {
+                replyViewModel?.showReplySection()
+            }
+        }
+
+        // 关闭按钮收起回复栏
+        binding.btnCloseReply.setOnClickListener {
+            replyViewModel?.hideReplySection()
         }
 
         binding.messageList.apply {
@@ -276,15 +286,17 @@ replyViewModel?.startRecording()
         }
     }
 
-    private fun observeReplyState() {
+      private fun observeReplyState() {
         replyViewModel ?: return
         lifecycleScope.launch {
             replyViewModel!!.state.collectLatest { state ->
                 if (state.isReplySectionVisible) {
                     binding.replySection.visibility = View.VISIBLE
+                    binding.fabReply.visibility = View.GONE
                     binding.replyInput.requestFocus()
                 } else {
                     binding.replySection.visibility = View.GONE
+                    binding.fabReply.visibility = View.VISIBLE
                     binding.replyInput.clearFocus()
                 }
 

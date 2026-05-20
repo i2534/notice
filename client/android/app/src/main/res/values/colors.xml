@@ -1,42 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 主色调 - 青蓝色系 -->
-    <color name="primary">#0D7377</color>
-    <color name="primary_dark">#095052</color>
-    <color name="primary_light">#14A4A8</color>
+    <!-- ===== 浅色主题 (Light) ===== -->
+    <color name="bg_primary">#FFFFFF</color>
+    <color name="bg_secondary">#F5F5F7</color>
+    <color name="bg_tertiary">#E8E8ED</color>
+    <color name="bg_elevated">#D2D2D7</color>
 
-    <!-- 次要色 - 橙色 -->
-    <color name="secondary">#FF6B35</color>
-    <color name="secondary_dark">#D94F1A</color>
+    <color name="accent">#007AFF</color>
+    <color name="accent_dim">#0056CC</color>
+    <color name="accent_subtle">#1A007AFF</color>
+    <color name="outgoing">#007AFF</color>
+    <color name="outgoing_text">#FFFFFF</color>
 
-    <!-- 背景色 -->
-    <color name="background">#121212</color>
-    <color name="surface">#1E1E1E</color>
-    <color name="surface_variant">#2D2D2D</color>
+    <color name="text_primary">#1C1C1E</color>
+    <color name="text_secondary">#636366</color>
+    <color name="text_tertiary">#AEAEB2</color>
 
-    <!-- 文字颜色 -->
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#B3B3B3</color>
-    <color name="text_hint">#666666</color>
+    <color name="divider">#0F000000</color>
+    <color name="border">#1A000000</color>
 
-    <!-- 状态颜色：成功=绿，连接中=黄，失败=红 -->
-    <color name="status_connected">#4CAF50</color>
-    <color name="status_disconnected">#F44336</color>
-    <color name="status_connecting">#FFC107</color>
+    <color name="success">#34C759</color>
+    <color name="warning">#FF9F0A</color>
+    <color name="error">#FF3B30</color>
 
-    <!-- 错误/警告色 -->
-    <color name="error">#CF6679</color>
-    <color name="warning">#FFB74D</color>
+    <!-- Topic 颜色 -->
+    <color name="topic_alert">#FF6B6B</color>
+    <color name="topic_alert_bg">#1AFF6B6B</color>
+    <color name="topic_nga">#FFB347</color>
+    <color name="topic_nga_bg">#1AFFB347</color>
+    <color name="topic_quark">#64B5F6</color>
+    <color name="topic_quark_bg">#1A64B5F6</color>
+    <color name="topic_bot">#81C784</color>
+    <color name="topic_bot_bg">#1A81C784</color>
+
+    <!-- 合并消息徽标 -->
+    <color name="merged_bg">#14000000</color>
+    <color name="merged_text">#007AFF</color>
+
+    <!-- 兼容旧引用 -->
+    <color name="primary">#007AFF</color>
+    <color name="primary_dark">#0056CC</color>
+    <color name="primary_light">#007AFF</color>
+    <color name="secondary">#FF9F0A</color>
+    <color name="secondary_dark">#E08900</color>
+    <color name="background">#FFFFFF</color>
+    <color name="surface">#F5F5F7</color>
+    <color name="surface_variant">#E8E8ED</color>
+    <color name="ripple">#1A000000</color>
+    <color name="selected_background">#1A007AFF</color>
+    <color name="message_outgoing_bg">#1A007AFF</color>
 
     <!-- 基础色 -->
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
 
-    <!-- 交互色 -->
-    <color name="ripple">#33FFFFFF</color>
-    <color name="_109090">#0D7377</color>
-    <color name="_383838">#2A2A2A</color>
-    <color name="selected_background">#260D7377</color>
-    <!-- 本机发送的消息卡片背景（明显区别于选中态） -->
-    <color name="message_outgoing_bg">#0A0D7377</color>
+    <!-- 状态指示 -->
+    <color name="status_connected">#34C759</color>
+    <color name="status_connecting">#FF9F0A</color>
+    <color name="status_disconnected">#FF3B30</color>
+
+    <!-- 提示文本 -->
+    <color name="text_hint">#AEAEB2</color>
 </resources>
