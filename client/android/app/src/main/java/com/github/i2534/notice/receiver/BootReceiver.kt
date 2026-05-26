@@ -21,12 +21,17 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             AppLogger.d(TAG, "Boot completed, checking auto-connect setting")
 
+            val pendingResult = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
-                val settings = MqttConfigStore(context).settings.first()
-                if (settings.autoConnect) {
-                    AppLogger.d(TAG, "Auto-connect enabled, starting MqttService")
-                    val serviceIntent = Intent(context, MqttService::class.java)
-                    context.startForegroundService(serviceIntent)
+                try {
+                    val settings = MqttConfigStore(context).settings.first()
+                    if (settings.autoConnect) {
+                        AppLogger.d(TAG, "Auto-connect enabled, starting MqttService")
+                        val serviceIntent = Intent(context, MqttService::class.java)
+                        context.startForegroundService(serviceIntent)
+                    }
+                } finally {
+                    pendingResult.finish()
                 }
             }
         }

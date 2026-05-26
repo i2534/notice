@@ -61,10 +61,13 @@ class MessageHandler(
 
         scope.launch {
             messageDao.insert(message)
+            _messagesAsc.update { list ->
+                val updated = list + message
+                if (updated.size > 500) updated.takeLast(500) else updated
+            }
             if (messageInsertCount.incrementAndCheck()) {
                 messageDao.trimToSize(500)
             }
-            _messagesAsc.value = messageDao.getRecentMessagesAsc(500).asReversed()
         }
 
         _unreadCount.update { it + 1 }
@@ -156,14 +159,14 @@ class MessageHandler(
             paths.forEach { path -> java.io.File(path).delete() }
             mediaCacheDao.deleteAll()
             messageDao.deleteAll()
-            _messagesAsc.value = messageDao.getRecentMessagesAsc(500).asReversed()
+            _messagesAsc.value = emptyList()
         }
     }
 
     fun deleteMessage(messageId: String) {
         scope.launch {
             messageDao.delete(messageId)
-            _messagesAsc.value = messageDao.getRecentMessagesAsc(500).asReversed()
+            _messagesAsc.update { it.filter { m -> m.id != messageId } }
         }
     }
 

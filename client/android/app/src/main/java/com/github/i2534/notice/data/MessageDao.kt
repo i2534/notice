@@ -1,6 +1,5 @@
 package com.github.i2534.notice.data
 
-import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
@@ -8,12 +7,6 @@ import androidx.room.Query
 
 @Dao
 interface MessageDao {
-
-    /**
-     * 获取分页消息（按时间倒序）
-     */
-    @Query("SELECT * FROM messages ORDER BY timestamp DESC")
-    fun getMessagesPaging(): PagingSource<Int, NoticeMessage>
 
     /**
      * 获取最新的一条消息

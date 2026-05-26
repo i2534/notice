@@ -2,6 +2,8 @@
 .vscode/
 # OpenCode
 .opencode/
+# Reasonix
+REASONIX.md
 
 # Server
 server/logs/

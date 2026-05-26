@@ -30,7 +30,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.i2534.notice.NoticeApp
 import com.github.i2534.notice.R
@@ -424,29 +426,35 @@ class MainActivity : AppCompatActivity() {
     private fun observeService() {
         mqttService?.let { service ->
             lifecycleScope.launch {
-                service.connectionState.collectLatest { state -> updateConnectionUI(state) }
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    service.connectionState.collectLatest { state -> updateConnectionUI(state) }
+                }
             }
 
             lifecycleScope.launch {
-                service.messagesAsc.collectLatest { messages ->
-                    val newItems = BubbleListBuilder.buildMessages(messages)
-                    bubbleAdapter.submitDiff(lastBuiltItems, newItems)
-                    lastBuiltItems = newItems
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    service.messagesAsc.collectLatest { messages ->
+                        val newItems = BubbleListBuilder.buildMessages(messages)
+                        bubbleAdapter.submitDiff(lastBuiltItems, newItems)
+                        lastBuiltItems = newItems
 
-                    val isEmpty = messages.isEmpty()
-                    binding.emptyText.visibility = if (isEmpty) View.VISIBLE else View.GONE
+                        val isEmpty = messages.isEmpty()
+                        binding.emptyText.visibility = if (isEmpty) View.VISIBLE else View.GONE
 
-                    binding.messageList.post {
-                        if (!isEmpty) {
-                            binding.messageList.scrollToPosition(bubbleAdapter.itemCount - 1)
+                        binding.messageList.post {
+                            if (!isEmpty) {
+                                binding.messageList.scrollToPosition(bubbleAdapter.itemCount - 1)
+                            }
                         }
                     }
                 }
             }
 
             lifecycleScope.launch {
-                service.latestMessage.collectLatest { message ->
-                    mqttService?.clearUnreadCount()
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    service.latestMessage.collectLatest { message ->
+                        mqttService?.clearUnreadCount()
+                    }
                 }
             }
         }

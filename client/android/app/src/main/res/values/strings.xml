@@ -56,6 +56,7 @@
     <string name="toast_sent">已发送</string>
     <string name="toast_send_failed">发送失败</string>
     <string name="toast_cleared">已清除</string>
+    <string name="messages_cleared">消息已清除</string>
     <string name="toast_save_failed">保存失败</string>
     <string name="toast_save_success">已保存</string>
     <string name="toast_auth_saved">认证已保存</string>

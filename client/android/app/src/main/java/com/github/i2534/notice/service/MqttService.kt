@@ -19,6 +19,7 @@ class MqttService : Service() {
     companion object {
         private const val TAG = "MqttService"
         const val ACTION_KEEP_ALIVE = "com.github.i2534.notice.KEEP_ALIVE"
+        const val ACTION_CLEAR_MESSAGES = "com.github.i2534.notice.CLEAR_MESSAGES"
     }
 
     enum class ConnectionState {
@@ -31,9 +32,8 @@ class MqttService : Service() {
 
     private val binder = LocalBinder()
 
-    // ── Coroutine scopes (P3: split by dispatcher) ──────────────────────
+    // ── Coroutine scopes ───────────────────────────────────────────────
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + CoroutineName("Mqtt-IO"))
-    private val defaultScope = CoroutineScope(Dispatchers.Default + SupervisorJob() + CoroutineName("Mqtt-Default"))
 
     // ── Config / db ─────────────────────────────────────────────────────
     private val configStore by lazy { MqttConfigStore(this) }
@@ -121,6 +121,7 @@ class MqttService : Service() {
 
         when (intent?.action) {
             ACTION_KEEP_ALIVE -> connectionManager.handleKeepAlive()
+            ACTION_CLEAR_MESSAGES -> clearMessages()
             else -> {
                 if (_connectionState.value == ConnectionState.DISCONNECTED) {
                     connectionManager.tryAutoConnect()
@@ -136,7 +137,6 @@ class MqttService : Service() {
         connectionManager.stopHeartbeat()
         disconnect()
         ioScope.cancel()
-        defaultScope.cancel()
         super.onDestroy()
     }
 
@@ -197,8 +197,11 @@ class MqttService : Service() {
                     isOutgoing = true
                 )
                 messageDao.insert(msg)
+                _messagesAsc.update { list ->
+                    val updated = list + msg
+                    if (updated.size > 500) updated.takeLast(500) else updated
+                }
                 messageDao.trimToSize(500)
-                _messagesAsc.value = messageDao.getRecentMessagesAsc(500).asReversed()
             } catch (e: Exception) {
                 AppLogger.e(TAG, "Publish reply failed: ${e.message}")
                 messageHandler.lastSentReplyContent = null
@@ -222,14 +225,14 @@ class MqttService : Service() {
             paths.forEach { java.io.File(it).delete() }
             mediaCacheDao.deleteAll()
             messageDao.deleteAll()
-            _messagesAsc.value = messageDao.getRecentMessagesAsc(500).asReversed()
+            _messagesAsc.value = emptyList()
         }
     }
 
     fun deleteMessage(messageId: String) {
         ioScope.launch {
             messageDao.delete(messageId)
-            _messagesAsc.value = messageDao.getRecentMessagesAsc(500).asReversed()
+            _messagesAsc.update { it.filter { m -> m.id != messageId } }
         }
     }
 
@@ -243,7 +246,7 @@ class MqttService : Service() {
                 mediaCacheDao.deleteByUrls(urls)
             }
             messageDao.deleteByIds(messageIds.toList())
-            _messagesAsc.value = messageDao.getRecentMessagesAsc(500).asReversed()
+            _messagesAsc.update { it.filter { m -> m.id !in messageIds } }
         }
     }
 

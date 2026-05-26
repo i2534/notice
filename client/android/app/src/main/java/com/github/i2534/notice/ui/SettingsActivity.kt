@@ -13,6 +13,8 @@ import com.github.i2534.notice.R
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.databinding.ActivitySettingsBinding
+import com.github.i2534.notice.service.MqttService
+import com.github.i2534.notice.util.BannerType
 import com.github.i2534.notice.util.MessageBanner
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -206,7 +208,11 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(R.string.dialog_clear_title)
             .setMessage(R.string.dialog_clear_message)
             .setPositiveButton(R.string.dialog_clear_confirm) { _, _ ->
-                // Clear messages via service
+                Intent(this, MqttService::class.java).also {
+                    it.action = MqttService.ACTION_CLEAR_MESSAGES
+                    startService(it)
+                }
+                MessageBanner.showRes(this, R.string.messages_cleared, BannerType.Success)
                 finish()
             }
             .setNegativeButton(R.string.dialog_clear_cancel, null)
