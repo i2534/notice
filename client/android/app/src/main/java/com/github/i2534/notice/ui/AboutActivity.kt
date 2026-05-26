@@ -44,7 +44,7 @@ class AboutActivity : AppCompatActivity() {
 
         // 版本信息
         binding.versionName.text = getString(R.string.about_version_format, BuildConfig.VERSION_NAME)
-        binding.versionCode.text = getString(R.string.about_version_code_format, BuildConfig.VERSION_CODE)
+        binding.versionCode.text = getString(R.string.about_version_code_format, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE)
 
         // 项目地址点击
         binding.projectUrlCard.setOnClickListener {

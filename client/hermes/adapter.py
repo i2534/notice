@@ -25,7 +25,7 @@ PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def _load_plugin_version() -> str:
     try:
-        plugin_yaml = os.path.join(PLUGIN_DIR, "PLUGIN.yaml")
+        plugin_yaml = os.path.join(PLUGIN_DIR, "plugin.yaml")
         with open(plugin_yaml, "r") as f:
             for line in f:
                 if line.startswith("version:"):
@@ -653,6 +653,199 @@ def check_requirements() -> tuple[bool, str | None]:
     return True, None
 
 
+async def _standalone_send(pconfig, chat_id, message, *, thread_id=None, media_files=None, force_document=False):
+    """Out-of-process sender for notice (e.g. cron jobs running separately from gateway).
+
+    Uploads local images to the Notice server, then publishes via MQTT.
+    """
+    cfg = _extract_config(pconfig)
+    broker_url = cfg.get("brokerUrl", "") or ""
+    token = cfg.get("token", "") or ""
+    topic = cfg.get("topic", "notice/#") or "notice/#"
+    server_url = cfg.get("serverUrl") or None
+
+    if not broker_url or not token:
+        return {"error": "Notice: brokerUrl and token are required in platform config"}
+
+    # --- Upload images & build content ---
+    content = message.strip()
+    media_files = media_files or []
+
+    image_urls = []
+    for media_path, _is_voice in media_files:
+        import os as _os
+
+        if not _os.path.exists(media_path):
+            return {"error": f"Notice: media file not found: {media_path}"}
+
+        final_url = media_path
+        if server_url and not media_path.startswith(("http://", "https://", "//")):
+            try:
+                import urllib.request as _ur
+
+                with open(media_path, "rb") as _f:
+                    image_data = _f.read()
+
+                boundary = f"----FormBoundary{int(time.time() * 1000)}"
+                filename = _os.path.basename(media_path)
+
+                body = []
+                body.append(f"--{boundary}".encode())
+                body.append(f'Content-Disposition: form-data; name="file"; filename="{filename}"'.encode())
+                body.append(b"Content-Type: image/jpeg")
+                body.append(b"")
+                body.append(image_data)
+                body.append(f"--{boundary}--".encode())
+                body.append(b"")
+                content_type = f"multipart/form-data; boundary={boundary}"
+
+                req = _ur.Request(
+                    f"{server_url.rstrip('/')}/api/upload",
+                    data=b"\r\n".join(body),
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": content_type,
+                    },
+                    method="POST",
+                )
+
+                with _ur.urlopen(req, timeout=30) as _resp:
+                    _resp_data = json.loads(_resp.read().decode())
+
+                if _resp_data.get("success") and _resp_data.get("image_urls"):
+                    final_url = _resp_data["image_urls"][0]
+                    if not final_url.startswith("http"):
+                        final_url = server_url.rstrip("/") + "/" + final_url.lstrip("/")
+            except Exception as e:
+                return {"error": f"Notice: image upload failed: {e}"}
+
+        image_urls.append(final_url)
+
+    # Build final content
+    if len(image_urls) == 1:
+        if content:
+            content = f"{content}\n\n![]({image_urls[0]})"
+        else:
+            content = f"![]({image_urls[0]})"
+    elif len(image_urls) > 1:
+        # Multiple images: join as markdown
+        images_md = "\n\n".join(f"![]({u})" for u in image_urls)
+        if content:
+            content = f"{content}\n\n{images_md}"
+        else:
+            content = images_md
+
+    # --- Publish via MQTT ---
+    from urllib.parse import urlparse as _urlparse
+
+    parsed = _urlparse(broker_url)
+    host = parsed.hostname or "localhost"
+    port = parsed.port
+    path = parsed.path or "/"
+    is_ws = parsed.scheme.startswith("ws")
+
+    if not port:
+        if parsed.scheme in ("wss", "tls"):
+            port = 443
+        elif parsed.scheme in ("ws",):
+            port = 80
+        else:
+            port = 1883
+
+    transport = "websockets" if is_ws else "tcp"
+
+    client_id = f"hermes-standalone-{int(time.time() * 1000)}-{random.randint(1000, 9999)}"
+
+    try:
+        mqttc = mqtt.Client(
+            callback_api_version=CallbackAPIVersion.VERSION2,
+            client_id=client_id,
+            transport=transport,
+        )
+        mqttc.reconnect_delay_set(min_delay=1, max_delay=10)
+        mqttc.username_pw_set(token, token)
+
+        if parsed.scheme in ("wss", "tls"):
+            mqttc.tls_set()
+            mqttc.tls_insecure_set(False)
+
+        if is_ws:
+            mqttc.ws_set_options(path=path)
+
+        connect_ok = asyncio.Event()
+
+        def _on_connect(c, u, flags, rc, props=None):
+            if rc == 0:
+                connect_ok.set()
+            else:
+                connect_ok.set()  # Unblock on error too
+
+        mqttc.on_connect = _on_connect
+
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, mqttc.connect, host, port, 60)
+        mqttc.loop_start()
+
+        try:
+            await asyncio.wait_for(connect_ok.wait(), timeout=10.0)
+        except asyncio.TimeoutError:
+            mqttc.loop_stop()
+            return {"error": "Notice: MQTT connection timeout"}
+
+        # Resolve topic
+        if ":" in chat_id:
+            topic_name = chat_id
+            if topic_name.startswith("topic:"):
+                topic_name = topic_name[6:]
+        else:
+            topic_name = chat_id
+
+        # Build payload
+        timestamp = int(time.time() * 1000)
+        encoded_content = content
+        content_encoding = None
+
+        if len(content) >= 256:
+            try:
+                compressed = gzip.compress(content.encode("utf-8"))
+                encoded = base64.b64encode(compressed).decode("ascii")
+                if len(encoded) < len(content):
+                    encoded_content = encoded
+                    content_encoding = "gzip+base64"
+            except Exception:
+                pass
+
+        payload = {
+            "title": "",
+            "content": encoded_content,
+            "client": "hermes",
+            "timestamp": timestamp,
+            "extra": {},
+        }
+
+        if content_encoding:
+            payload["content_encoding"] = content_encoding
+
+        if thread_id:
+            payload["extra"]["thread_id"] = thread_id
+
+        json_payload = json.dumps(payload)
+
+        result = await loop.run_in_executor(
+            None, mqttc.publish, topic_name, json_payload, 1
+        )
+
+        mqttc.loop_stop()
+        mqttc.disconnect()
+
+        return {"success": True, "message_id": str(result.mid)}
+
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        return {"error": f"Notice standalone send failed: {e}"}
+
+
 def register(ctx):
     ctx.register_platform(
         name="notice",
@@ -660,6 +853,7 @@ def register(ctx):
         adapter_factory=lambda cfg: NoticeAdapter(cfg),
         check_fn=check_requirements,
         validate_config=validate_config,
+        standalone_sender_fn=_standalone_send,
         platform_hint="You are on Notice. Supports markdown, images (gzip+base64 compression), and real-time messaging via MQTT.",
         max_message_length=65536,
         emoji="🔔",

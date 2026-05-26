@@ -12,6 +12,8 @@
     <string name="btn_send_reply">发送回复</string>
     <string name="reply_hint">输入消息…</string>
     <string name="no_message">暂无消息\n<small>连接服务器后消息将显示在这里</small></string>
+    <string name="empty_state_title">暂无消息</string>
+    <string name="empty_state_subtitle">连接服务器后，消息将显示在这里</string>
     <string name="topic_picker_title">选择主题</string>
     <string name="topic_custom_hint">输入自定义主题…</string>
     <string name="topic_use_custom">使用</string>
@@ -21,6 +23,8 @@
     <string name="message_detail_close">关闭</string>
     <string name="message_detail_reply_to">回复此主题</string>
     <string name="message_sent_by_me">我发送的</string>
+    <string name="message_direction_incoming">incoming</string>
+    <string name="message_direction_outgoing">outgoing</string>
     <string name="message_delete_title">删除选中</string>
     <string name="message_deleted">已删除 %d 条消息</string>
     <string name="select_mode_done">完成</string>
@@ -97,8 +101,6 @@
     <string name="voice_need_server_url">请先配置服务器地址</string>
     <string name="voice_record_failed">录音失败</string>
     <string name="voice_upload_failed">上传失败</string>
-    <string name="latest_message">最新消息</string>
-    <string name="message_history">消息历史</string>
     <string name="voice_command_title">语音指令</string>
     <string name="voice_confirm_transcribe">转文字</string>
     <string name="voice_confirm_send">发送</string>
@@ -110,7 +112,6 @@
     <string name="logs_share">分享</string>
     <string name="logs_clear">清除</string>
     <string name="settings_save">保存</string>
-    <string name="action_reply">回复</string>
     <string name="select_mode_title">选择模式 (%d)</string>
     <string name="no_message_selected">未选择消息</string>
     <string name="message_delete_selected_confirm">确定要删除选中的消息吗？</string>

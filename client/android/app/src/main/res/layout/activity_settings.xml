@@ -71,13 +71,13 @@
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="12dp">
 
-                        <TextView
+                        <ImageView
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_marginEnd="12dp"
-                            android:gravity="center"
-                            android:text="🌐"
-                            android:textSize="14sp" />
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_settings_broker"
+                            app:tint="@color/text_secondary" />
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -130,13 +130,13 @@
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="12dp">
 
-                        <TextView
+                        <ImageView
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_marginEnd="12dp"
-                            android:gravity="center"
-                            android:text="🔒"
-                            android:textSize="14sp" />
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_settings_auth"
+                            app:tint="@color/text_secondary" />
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -187,13 +187,13 @@
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="12dp">
 
-                        <TextView
+                        <ImageView
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_marginEnd="12dp"
-                            android:gravity="center"
-                            android:text="🎯"
-                            android:textSize="14sp" />
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_settings_topic"
+                            app:tint="@color/text_secondary" />
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -266,13 +266,13 @@
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="12dp">
 
-                        <TextView
+                        <ImageView
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_marginEnd="12dp"
-                            android:gravity="center"
-                            android:text="🔔"
-                            android:textSize="14sp" />
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_settings_notification"
+                            app:tint="@color/text_secondary" />
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -321,13 +321,13 @@
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="12dp">
 
-                        <TextView
+                        <ImageView
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_marginEnd="12dp"
-                            android:gravity="center"
-                            android:text="🔊"
-                            android:textSize="14sp" />
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_settings_sound"
+                            app:tint="@color/text_secondary" />
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -398,13 +398,13 @@
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="12dp">
 
-                        <TextView
+                        <ImageView
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_marginEnd="12dp"
-                            android:gravity="center"
-                            android:text="🗑️"
-                            android:textSize="14sp" />
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_settings_clear"
+                            app:tint="@color/text_secondary" />
 
                         <LinearLayout
                             android:layout_width="0dp"
@@ -454,13 +454,13 @@
                         android:paddingHorizontal="16dp"
                         android:paddingVertical="12dp">
 
-                        <TextView
+                        <ImageView
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_marginEnd="12dp"
-                            android:gravity="center"
-                            android:text="📖"
-                            android:textSize="14sp" />
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_settings_logs"
+                            app:tint="@color/text_secondary" />
 
                         <LinearLayout
                             android:layout_width="0dp"

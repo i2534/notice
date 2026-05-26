@@ -93,7 +93,7 @@ platforms:
         enabled: true
         providers:
           - type: qwen
-            url: "http:/localhost:12000/v1/chat/completions"
+            url: "http://localhost:12000/v1/chat/completions"
             token: "xxxxxx"
             timeout: 300
           - type: cli
@@ -134,7 +134,7 @@ platforms:
 `asr.py` 提供 `register_api_provider` 函数，支持注册自定义 API 后端实现：
 
 ```python
-from hermes.asr import register_api_provider, ApiTranscriber
+from asr import register_api_provider, ApiTranscriber
 
 class MyApiTranscriber(ApiTranscriber):
     def _build_payload(self, b64_audio, mime):
@@ -201,14 +201,107 @@ providers:
 export NOTICE_ALLOW_ALL_USERS=1
 ```
 
+## 发送媒体消息的工作流程
+
+Hermes Agent 调用 `send_message` 发送媒体文件到 Notice 平台时，走的是**专用 standalone 发送路径**，而非通用的 `_send_via_adapter`。
+
+### 调用链
+
+```
+send_message_tool.py
+  → notice 早期处理器（在 Feishu 处理器之后、白名单检查之前拦截）
+  → _send_notice_standalone()
+  → platform_registry.get("notice").standalone_sender_fn
+  → adapter.py: _standalone_send(message, media_files)
+  → 上传到 Notice Server /api/upload → MQTT 推送 markdown ![](url)
+```
+
+### 为什么不走 `_send_via_adapter`
+
+`_send_via_adapter` 存在一个已知缺陷：当 Gateway 运行时（live adapter 路径），它调用 `adapter.send()` **不传递 `media_files` 参数**，导致媒体附件被静默丢弃。Notice 平台（以及 Matrix、Signal）通过专用函数绕过这个问题，直接调用 `standalone_sender_fn` 确保 `media_files` 完整透传。
+
+### `_standalone_send` 实现
+
+- 接收 `message`（文本）和 `media_files`（文件路径列表）
+- 将本地文件上传到 Notice Server `/api/upload`
+- 上传成功后构建 markdown 图片 `![](url)` 通过 MQTT 推送
+- 支持图片、音频、视频等任意类型附件
+
+### ⚠️ MEDIA 路径安全限制
+
+`send_message` 中的 `MEDIA:<path>` 受 Hermes 安全策略过滤，文件必须在允许的目录中：
+
+**默认允许的目录（新路径优先，旧路径兼容）：**
+- `~/.hermes/cache/images/` 或 `~/.hermes/image_cache/`
+- `~/.hermes/cache/audio/` 或 `~/.hermes/audio_cache/`
+- `~/.hermes/cache/videos/` 或 `~/.hermes/video_cache/`
+- `~/.hermes/cache/documents/` 或 `~/.hermes/document_cache/`
+- `~/.hermes/cache/screenshots/` 或 `~/.hermes/browser_screenshots/`
+
+**自定义目录：** 通过环境变量 `HERMES_MEDIA_ALLOW_DIRS` 追加。
+
+**常见陷阱：** 文件放在 `/tmp/` 或其他非允许目录时，会被**静默丢弃**，只发送纯文本部分。
+
+```
+# ❌ 不会被发送（/tmp 不在允许列表中）
+send_message(target="notice", message="MEDIA:/tmp/image.png")
+
+# ✅ 正确做法 — 先复制到允许目录
+cp /tmp/image.png ~/.hermes/image_cache/
+send_message(target="notice", message="MEDIA:/home/user/.hermes/image_cache/image.png")
+```
+
 ## 故障排除
 
 ### 插件未加载
+
 Gateway 日志显示 `No messaging platforms enabled`:
+
+**常见原因 1 — 相对导入失败**
+```
+Failed to load plugin 'notice': attempted relative import with no known parent package
+```
+Gateway 的插件加载器以单文件方式加载 `__init__.py`，不设置 parent package。
+**解决方法**：`__init__.py` 和 `adapter.py` 中使用**绝对导入**而非相对导入：
+```python
+# ✅ 正确 — 绝对导入
+from adapter import register
+from asr import register_api_provider
+
+# ❌ 错误 — 相对导入（在插件加载器中会失败）
+from .adapter import register
+from .asr import register_api_provider
+```
+
+**常见原因 2 — `plugin.yaml` 文件名大小写**
+插件扫描器只识别小写的 `plugin.yaml` 或 `plugin.yml`。如果文件名为 `PLUGIN.yaml` 或 `Plugin.yaml`，插件不会被发现。
+```bash
+# 检查文件名
+ls ~/.hermes/plugins/notice/plugin.yaml  # 必须是小写
+```
+
+**常见原因 3 — 缺少依赖**
+```
+ModuleNotFoundError: No module named 'paho'
+```
+```bash
+pip install paho-mqtt
+```
+
+**通用排查步骤**：
 - 确认 `plugins.enabled` 包含 `notice`
 - 检查软链接是否正确：`ls -la ~/.hermes/plugins/notice/`
+- 清除 `__pycache__`：`rm -rf ~/.hermes/plugins/notice/__pycache__`
 - 重启 gateway：`hermes gateway restart`
 - 查看日志确认加载：`tail -f ~/.hermes/logs/gateway.log | grep notice`
+
+### 媒体消息发送失败
+
+**错误提示**：`send_message MEDIA delivery is currently only supported for telegram, discord, matrix...`
+
+**原因**：`send_message_tool.py` 中的白名单检查不包含 notice。
+
+**解决方法**：在 `send_message_tool.py` 中，notice 处理器必须在 Feishu 处理器之后、白名单检查**之前**拦截，调用 `_send_notice_standalone` 而非 `_send_via_adapter`。
 
 ### 连接失败
 ```log
@@ -231,6 +324,7 @@ Error: MQTT connection failed with code 5
 
 ### 日志位置
 - **主日志**：`~/.hermes/logs/gateway.log`（记录 `gateway.*` 模块日志，包括插件版本信息）
+- **错误日志**：`~/.hermes/logs/errors.log`（记录插件加载失败、工具调用错误等）
 - **Systemd 日志**：`journalctl --user -u hermes-gateway`（可能有缓冲延迟）
 
 ## 开发
@@ -242,8 +336,8 @@ ln -sf /path/to/client/hermes ~/.hermes/plugins/notice
 # 重启 gateway 加载新代码
 hermes gateway restart
 
-# 查看插件注册信息
-hermes plugins list | grep notice
+# 查看插件是否加载成功（gateway 日志中搜索）
+grep "notice" ~/.hermes/logs/gateway.log
 
 # 实时查看日志
 tail -f ~/.hermes/logs/gateway.log | grep notice
@@ -251,7 +345,7 @@ tail -f ~/.hermes/logs/gateway.log | grep notice
 
 ### 版本号管理
 
-版本号在 `PLUGIN.yaml` 中配置，Gateway 启动时会自动读取并记录到日志：
+版本号在 `plugin.yaml`（必须小写）中配置，Gateway 启动时会自动读取并记录到日志：
 ```yaml
 name: notice
 version: 0.1.0

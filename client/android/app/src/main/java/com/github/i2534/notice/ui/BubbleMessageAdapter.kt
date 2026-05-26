@@ -191,6 +191,16 @@ class BubbleMessageAdapter(
         private val bubbleMore: TextView = itemView.findViewById(R.id.bubbleMore)
         private val bubbleMergedBadge: TextView = itemView.findViewById(R.id.bubbleMergedBadge)
 
+        // Cached LayoutParams to avoid GC pressure in bind()
+        private val bubbleCardLp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        )
+        private val badgeLp = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        )
+
         fun setSpacing(density: Float) {
             val lp = root.layoutParams as ViewGroup.MarginLayoutParams
             lp.topMargin = (6 * density).toInt()
@@ -211,9 +221,9 @@ class BubbleMessageAdapter(
             // 气泡 80% 宽度，通过 gravity 控制左右对齐
             val containerWidth = ctx.resources.displayMetrics.widthPixels
             val bubbleWidth = (containerWidth * 0.85).toInt()
-            val lp = FrameLayout.LayoutParams(bubbleWidth, FrameLayout.LayoutParams.WRAP_CONTENT)
-            lp.gravity = if (isOutgoing) Gravity.END else Gravity.START
-            bubbleCard.layoutParams = lp
+            bubbleCardLp.width = bubbleWidth
+            bubbleCardLp.gravity = if (isOutgoing) Gravity.END else Gravity.START
+            bubbleCard.layoutParams = bubbleCardLp
 
             bubbleCard.background = ContextCompat.getDrawable(
                 ctx,
@@ -243,7 +253,7 @@ class BubbleMessageAdapter(
             } else {
                 listOf(ContentBlock.Text(message.content))
             }
-      MessageContentRenderer.render(
+            MessageContentRenderer.render(
                 container = contentContainer,
                 blocks = previewBlocks,
                 markwon = markwon,
@@ -264,12 +274,8 @@ class BubbleMessageAdapter(
 
             if (mergedCount > 1) {
                 bubbleMergedBadge.text = "×$mergedCount"
-                val badgeGravity = if (isOutgoing) Gravity.BOTTOM or Gravity.START else Gravity.BOTTOM or Gravity.END
-                bubbleMergedBadge.layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    badgeGravity
-                )
+                badgeLp.gravity = if (isOutgoing) Gravity.BOTTOM or Gravity.START else Gravity.BOTTOM or Gravity.END
+                bubbleMergedBadge.layoutParams = badgeLp
                 bubbleMergedBadge.setTextColor(
                     if (isOutgoing) android.graphics.Color.parseColor("#FFFFFF")
                     else ContextCompat.getColor(ctx, R.color.primary_light)

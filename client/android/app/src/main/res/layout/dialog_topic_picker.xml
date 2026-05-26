@@ -12,7 +12,7 @@
         android:layout_height="4dp"
         android:layout_gravity="top|center_horizontal"
         android:layout_marginTop="8dp"
-        android:background="@color/bg_elevated" />
+        android:background="@drawable/bg_drag_handle" />
 
     <!-- 标题 -->
     <TextView

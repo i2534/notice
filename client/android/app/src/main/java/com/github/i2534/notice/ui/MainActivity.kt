@@ -15,7 +15,6 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings
-import android.util.Log
 import android.text.TextWatcher
 import android.view.MotionEvent
 import android.view.View
@@ -40,12 +39,12 @@ import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.data.RecentTopicStore
 import com.github.i2534.notice.databinding.ActivityMainBinding
-import com.github.i2534.notice.databinding.DialogConfirmBinding
 import com.github.i2534.notice.databinding.DialogMessageDetailBinding
 import com.github.i2534.notice.service.MqttService
 import com.github.i2534.notice.util.MediaCacheLoader
 import com.github.i2534.notice.util.TopicColor
 import com.github.i2534.notice.util.MessageBanner
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -61,7 +60,7 @@ class MainActivity : AppCompatActivity() {
     private var serviceBound = false
     private var configStore: MqttConfigStore? = null
     private var replyViewModel: ReplyViewModel? = null
-    private var topicPickerDialog: AlertDialog? = null
+    private var topicPickerDialog: com.google.android.material.bottomsheet.BottomSheetDialog? = null
 
     private lateinit var bubbleAdapter: BubbleMessageAdapter
     private var lastBuiltItems: List<MessageListItem> = emptyList()
@@ -220,9 +219,7 @@ class MainActivity : AppCompatActivity() {
             onEnterSelectMode = { updateSelectModeUI() },
             onSelectionChanged = { count -> updateSelectionCount(count) }
         )
-        binding.messageList.adapter = bubbleAdapter
-
-        
+      binding.messageList.adapter = bubbleAdapter
 
         binding.replyInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -233,13 +230,12 @@ class MainActivity : AppCompatActivity() {
         })
         binding.replyInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
-replyViewModel?.sendReply()
+                replyViewModel?.sendReply()
                 true
             } else false
         }
 
         binding.btnSendReply.setOnClickListener {
-            Log.d("MainActivity", "btnSendReply clicked, content=${replyViewModel?.state?.value?.content}")
             replyViewModel?.sendReply()
         }
 
@@ -251,7 +247,7 @@ replyViewModel?.sendReply()
                 MotionEvent.ACTION_DOWN -> {
                     if (!isRec) {
                         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-replyViewModel?.startRecording()
+                            replyViewModel?.startRecording()
                         } else {
                             recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                         }
@@ -286,7 +282,7 @@ replyViewModel?.startRecording()
         }
     }
 
-      private fun observeReplyState() {
+    private fun observeReplyState() {
         replyViewModel ?: return
         lifecycleScope.launch {
             replyViewModel!!.state.collectLatest { state ->
@@ -328,7 +324,7 @@ replyViewModel?.startRecording()
                     }
                 }
 
-          if (!state.replyToTopic.isNullOrBlank()) {
+                if (!state.replyToTopic.isNullOrBlank()) {
                     binding.replyToTopicLabel.text = getString(R.string.reply_to_topic, state.replyToTopic)
                     binding.btnClearReplyToTopic.visibility = View.VISIBLE
                     binding.replyTopicDot.setBackgroundColor(TopicColor.forTopic(state.replyToTopic))
@@ -461,7 +457,6 @@ replyViewModel?.startRecording()
         binding.toolbar.title = if (isSelect) getString(R.string.select_mode_title, bubbleAdapter.getSelectedCount()) else getString(R.string.app_name)
         binding.toolbar.menu.apply {
             findItem(R.id.action_connection).isVisible = !isSelect
-            findItem(R.id.action_reply).isVisible = !isSelect
             findItem(R.id.action_settings).isVisible = !isSelect
             findItem(R.id.action_about).isVisible = !isSelect
             findItem(R.id.action_logs).isVisible = !isSelect
@@ -515,38 +510,25 @@ replyViewModel?.startRecording()
         isDestructive: Boolean = true,
         onConfirm: () -> Unit
     ) {
-        val confirmBinding = DialogConfirmBinding.inflate(layoutInflater)
-        confirmBinding.dialogTitle.text = title
-        confirmBinding.dialogMessage.text = message
-
-        val dialog = AlertDialog.Builder(this, R.style.Theme_Notice_Dialog)
-            .setView(confirmBinding.root)
-            .create()
-
-        confirmBinding.btnPositive.apply {
-            text = positiveText
-            if (!isDestructive) backgroundTintList = ContextCompat.getColorStateList(context, R.color.primary)
-            setOnClickListener { onConfirm(); dialog.dismiss() }
-        }
-        confirmBinding.btnNegative.apply {
-            text = negativeText
-            setOnClickListener { dialog.dismiss() }
-        }
-
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.show()
+        AlertDialog.Builder(this, R.style.Theme_Notice_Dialog)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton(positiveText) { _, _ -> onConfirm() }
+            .setNegativeButton(negativeText, null)
+            .show()
     }
 
     private fun showMessageDetailDialog(message: NoticeMessage) {
         val detailBinding = DialogMessageDetailBinding.inflate(layoutInflater)
 
-            if (message.isOutgoing) {
+        if (message.isOutgoing) {
             detailBinding.dialogTitle.visibility = View.GONE
         } else {
             detailBinding.dialogTitle.text = message.title
             detailBinding.dialogTitle.visibility = if (message.title.isNotBlank()) View.VISIBLE else View.GONE
         }
-        detailBinding.dialogSentByMe.visibility = if (message.isOutgoing) View.VISIBLE else View.GONE
+        detailBinding.dialogSentByMe.visibility = View.VISIBLE
+        detailBinding.dialogSentByMe.text = if (message.isOutgoing) getString(R.string.message_direction_outgoing) else getString(R.string.message_direction_incoming)
         detailBinding.dialogHeader.setBackgroundResource(
             if (message.isOutgoing) R.drawable.bg_dialog_message_header_outgoing
             else R.drawable.bg_dialog_message_header
@@ -572,12 +554,9 @@ replyViewModel?.startRecording()
             )
             detailBinding.dialogTopic.text = message.topic
             detailBinding.dialogTime.text = message.getFormattedTime()
-            val dialog = AlertDialog.Builder(this, R.style.Theme_Notice_Dialog)
-                .setView(detailBinding.root)
-                .create()
-            detailBinding.btnClose.setOnClickListener { dialog.dismiss() }
+            val dialog = BottomSheetDialog(this, R.style.Theme_Notice_BottomSheet)
+            dialog.setContentView(detailBinding.root)
             detailBinding.btnCopy.setOnClickListener {
-                Log.d("MainActivity", "btnCopy clicked")
                 val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 clipboard.setPrimaryClip(ClipData.newPlainText(message.title, message.content))
                 MessageBanner.showRes(this, R.string.message_detail_copied, com.github.i2534.notice.util.BannerType.Success)
@@ -594,6 +573,7 @@ replyViewModel?.startRecording()
                 setLayout(WindowManager.LayoutParams.MATCH_PARENT, maxHeight)
             }
             dialog.show()
+            dialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
             detailBinding.dialogContentContainer.post {
                 val contentWidth = detailBinding.dialogContentContainer.width
                 if (contentWidth > 0) {
@@ -618,14 +598,16 @@ replyViewModel?.startRecording()
     }
 
     private fun updateConnectionUI(state: MqttService.ConnectionState) {
-        val (statusTitleRes, iconRes) = when (state) {
-            MqttService.ConnectionState.DISCONNECTED -> R.string.status_disconnected to R.drawable.ic_status_disconnected
-            MqttService.ConnectionState.CONNECTING -> R.string.status_connecting to R.drawable.ic_status_connecting
-            MqttService.ConnectionState.CONNECTED -> R.string.status_connected to R.drawable.ic_status_connected
+        val (statusTitleRes, colorRes) = when (state) {
+            MqttService.ConnectionState.DISCONNECTED -> R.string.status_disconnected to R.color.status_disconnected
+            MqttService.ConnectionState.CONNECTING -> R.string.status_connecting to R.color.status_connecting
+            MqttService.ConnectionState.CONNECTED -> R.string.status_connected to R.color.status_connected
         }
         binding.toolbar.menu.findItem(R.id.action_connection)?.let { item ->
             item.title = getString(statusTitleRes)
-            item.setIcon(iconRes)
+            item.icon?.setTintList(android.content.res.ColorStateList.valueOf(
+                getResources().getColor(colorRes, theme)
+            ))
         }
     }
 }

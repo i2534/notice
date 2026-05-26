@@ -3,10 +3,10 @@ package com.github.i2534.notice.ui
 import android.content.Context
 import android.text.TextWatcher
 import android.view.LayoutInflater
-import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.github.i2534.notice.R
 import com.github.i2534.notice.databinding.DialogTopicPickerBinding
+import com.google.android.material.bottomsheet.BottomSheetDialog
 
 fun showTopicPicker(
     context: Context,
@@ -15,7 +15,7 @@ fun showTopicPicker(
     onDefaultSelected: () -> Unit,
     onTopicSelected: (String) -> Unit,
     onCustomTopic: (String) -> Unit
-): AlertDialog {
+): BottomSheetDialog {
     val binding = DialogTopicPickerBinding.inflate(LayoutInflater.from(context))
     val adapter = TopicListAdapter(onTopicSelected)
 
@@ -40,15 +40,9 @@ fun showTopicPicker(
         if (!topic.isNullOrBlank()) onCustomTopic(topic)
     }
 
-    return AlertDialog.Builder(context, R.style.Theme_Notice_BottomSheet)
-        .setView(binding.root)
-        .create().also { dialog ->
-            dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-            dialog.show()
-            val window = dialog.window
-            val displayMetrics = context.resources.displayMetrics
-            val screenWidth = displayMetrics.widthPixels
-            val dialogWidth = (screenWidth * 0.85).toInt()
-            window?.setLayout(dialogWidth, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
-        }
+    return BottomSheetDialog(context, R.style.Theme_Notice_BottomSheet).apply {
+        setContentView(binding.root)
+        show()
+        behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+    }
 }

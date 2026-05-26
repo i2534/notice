@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto">
+xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <!-- 连接状态指示 -->
     <item
         android:id="@+id/action_connection"
-        android:icon="@drawable/ic_status_disconnected"
+        android:icon="@drawable/ic_connection_dot"
         android:title="@string/status_disconnected"
+        app:iconTint="@color/status_disconnected"
         app:showAsAction="always" />
 
     <!-- 设置按钮 -->
@@ -19,14 +20,8 @@
         app:showAsAction="always" />
 
     <!-- 溢出菜单 -->
-       <item
-            android:id="@+id/action_reply"
-            android:icon="@drawable/ic_send"
-            android:title="@string/action_reply"
-            app:showAsAction="ifRoom" />
-
-        <item
-            android:id="@+id/action_about"
+    <item
+        android:id="@+id/action_about"
         android:icon="@drawable/ic_info"
         android:title="@string/about_title"
         app:iconTint="@color/text_secondary"

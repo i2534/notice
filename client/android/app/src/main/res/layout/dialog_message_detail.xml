@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 底部面板样式：顶部圆角，底部平齐 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -14,8 +15,7 @@
         android:layout_height="4dp"
         android:layout_gravity="top|center_horizontal"
         android:layout_marginTop="8dp"
-        android:background="@color/bg_elevated"
-        android:radius="2dp" />
+        android:background="@drawable/bg_drag_handle" />
 
     <!-- 标题区域 -->
     <LinearLayout
@@ -55,11 +55,9 @@
                 android:paddingEnd="8dp"
                 android:paddingTop="2dp"
                 android:paddingBottom="2dp"
-                android:text="@string/message_sent_by_me"
                 android:textColor="@color/accent"
                 android:textSize="10sp"
-                android:visibility="gone"
-                tools:visibility="visible" />
+                tools:text="incoming" />
 
         </LinearLayout>
 
@@ -112,7 +110,8 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:focusable="false"
-        android:focusableInTouchMode="false">
+        android:focusableInTouchMode="false"
+        android:nestedScrollingEnabled="false">
 
         <LinearLayout
             android:id="@+id/dialogContentContainer"
@@ -141,37 +140,70 @@
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:paddingTop="10dp"
-        android:paddingBottom="20dp">
+        android:paddingBottom="20dp"
+        android:showDividers="middle"
+        android:divider="@drawable/bg_button_divider"
+        android:dividerPadding="12dp">
 
-        <com.google.android.material.button.MaterialButton
+        <LinearLayout
             android:id="@+id/btnCopy"
-            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_weight="1"
-            android:minHeight="40dp"
-            android:text="@string/message_detail_copy"
-            android:textColor="@color/text_secondary" />
+            android:background="@drawable/bg_action_button_ripple"
+            android:gravity="center_vertical|center_horizontal"
+            android:orientation="horizontal"
+            android:clipToOutline="true"
+            android:clickable="true"
+            android:focusable="true">
 
-        <com.google.android.material.button.MaterialButton
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_content_copy"
+                android:contentDescription="@string/message_detail_copy"
+                app:tint="@color/text_secondary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/message_detail_copy"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <LinearLayout
             android:id="@+id/btnReplyToTopic"
-            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_weight="1"
-            android:minHeight="40dp"
-            android:text="@string/message_detail_reply_to"
-            android:textColor="@color/accent" />
+            android:background="@drawable/bg_action_button_primary_ripple"
+            android:gravity="center_vertical|center_horizontal"
+            android:orientation="horizontal"
+            android:clipToOutline="true"
+            android:clickable="true"
+            android:focusable="true">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnClose"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:minHeight="40dp"
-            android:text="@string/message_detail_close"
-            android:textColor="@color/text_secondary" />
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_reply"
+                android:contentDescription="@string/message_detail_reply_to"
+                app:tint="@color/accent" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="@string/message_detail_reply_to"
+                android:textColor="@color/accent"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
