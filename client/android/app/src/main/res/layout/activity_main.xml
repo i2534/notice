@@ -95,7 +95,7 @@
             android:src="@drawable/ic_send"
             app:backgroundTint="@color/accent"
             app:elevation="4dp"
-            app:fabSize="normal"
+            app:fabSize="mini"
             app:shapeAppearanceOverlay="@style/FabShape"
             app:tint="@color/white" />
 

@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 class NoticeApp : Application() {
 
@@ -49,7 +50,9 @@ class NoticeApp : Application() {
         CoroutineScope(Dispatchers.IO).launch {
             val configStore = MqttConfigStore(this@NoticeApp)
             val themeMode = configStore.settings.first().themeMode
-            applyThemeMode(themeMode)
+            withContext(Dispatchers.Main) {
+                applyThemeMode(themeMode)
+            }
         }
         MessageBanner.init(this)
         AppLogger.init(this)
