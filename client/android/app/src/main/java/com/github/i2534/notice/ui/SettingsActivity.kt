@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -74,6 +75,9 @@ class SettingsActivity : AppCompatActivity() {
             saveSoundSetting()
         }
 
+        // 外观
+        binding.settingThemeMode.setOnClickListener { showThemeDialog() }
+
         // 数据
         binding.settingClearMessages.setOnClickListener { showClearMessagesDialog() }
         binding.settingLogs.setOnClickListener {
@@ -96,6 +100,69 @@ class SettingsActivity : AppCompatActivity() {
             // 通知开关
             binding.switchPush.isChecked = settings.pushNotification
             binding.switchSound.isChecked = settings.soundEnabled
+
+            // 主题模式
+            binding.settingThemeValue.text = when (settings.themeMode) {
+                1 -> getString(R.string.settings_theme_light)
+                2 -> getString(R.string.settings_theme_dark)
+                else -> getString(R.string.settings_theme_system)
+            }
+        }
+    }
+
+    private fun showThemeDialog() {
+        val options = arrayOf(
+            getString(R.string.settings_theme_light),
+            getString(R.string.settings_theme_dark),
+            getString(R.string.settings_theme_system)
+        )
+        var selectedMode = when (AppCompatDelegate.getDefaultNightMode()) {
+            AppCompatDelegate.MODE_NIGHT_NO -> 1
+            AppCompatDelegate.MODE_NIGHT_YES -> 2
+            else -> 0
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_theme_mode)
+            .setSingleChoiceItems(options, currentThemeSelection()) { _, which ->
+                selectedMode = when (which) {
+                    0 -> 1  // 浅色
+                    1 -> 2  // 深色
+                    else -> 0 // 跟随系统
+                }
+            }
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                saveThemeMode(selectedMode)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun currentThemeSelection(): Int {
+        return when (AppCompatDelegate.getDefaultNightMode()) {
+            AppCompatDelegate.MODE_NIGHT_NO -> 0
+            AppCompatDelegate.MODE_NIGHT_YES -> 1
+            else -> 2
+        }
+    }
+
+    private fun saveThemeMode(mode: Int) {
+        lifecycleScope.launch {
+            val settings = configStore.settings.first()
+            configStore.save(settings.copy(themeMode = mode))
+            AppCompatDelegate.setDefaultNightMode(
+                when (mode) {
+                    1 -> AppCompatDelegate.MODE_NIGHT_NO
+                    2 -> AppCompatDelegate.MODE_NIGHT_YES
+                    else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                }
+            )
+            binding.settingThemeValue.text = when (mode) {
+                1 -> getString(R.string.settings_theme_light)
+                2 -> getString(R.string.settings_theme_dark)
+                else -> getString(R.string.settings_theme_system)
+            }
+            // 重启 Activity 以应用新主题
+            recreate()
         }
     }
 

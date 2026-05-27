@@ -4,15 +4,19 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.provider.Settings
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import com.github.i2534.notice.R
+import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.util.AppLogger
 import com.github.i2534.notice.util.MessageBanner
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.tables.TablePlugin
 import com.github.i2534.notice.ui.SoftBreakPlugin
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 
 class NoticeApp : Application() {
 
@@ -41,15 +45,25 @@ class NoticeApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // 跟随系统深色模式（华为设备 MODE_NIGHT_FOLLOW_SYSTEM 和 Configuration 均不生效，直接读 Settings.Global）
-        val uiMode = Settings.Global.getString(contentResolver, "ui_mode") ?: ""
-        val isNight = uiMode.contains("night:2")
-        AppCompatDelegate.setDefaultNightMode(
-            if (isNight) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-        )
+        // 读取用户主题设置（0=跟随系统, 1=浅色, 2=深色）
+        CoroutineScope(Dispatchers.IO).launch {
+            val configStore = MqttConfigStore(this@NoticeApp)
+            val themeMode = configStore.settings.first().themeMode
+            applyThemeMode(themeMode)
+        }
         MessageBanner.init(this)
         AppLogger.init(this)
         createNotificationChannels()
+    }
+
+    private fun applyThemeMode(mode: Int) {
+        AppCompatDelegate.setDefaultNightMode(
+            when (mode) {
+                1 -> AppCompatDelegate.MODE_NIGHT_NO
+                2 -> AppCompatDelegate.MODE_NIGHT_YES
+                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+        )
     }
 
     private fun createNotificationChannels() {

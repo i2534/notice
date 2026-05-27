@@ -23,7 +23,9 @@ data class MqttSettings(
     /** Notice 服务器 URL（用于语音/多媒体上传，与 OpenClaw serverUrl 一致；留空则不可上传） */
     val serverUrl: String = "",
     val pushNotification: Boolean = true,
-    val soundEnabled: Boolean = true
+    val soundEnabled: Boolean = true,
+    /** 主题模式: 0=跟随系统, 1=浅色, 2=深色 */
+    val themeMode: Int = 0
 ) {
     /**
      * 获取有效的 Client ID
@@ -57,6 +59,7 @@ class MqttConfigStore(private val context: Context) {
         private val KEY_SERVER_URL = stringPreferencesKey("server_url")
         private val KEY_PUSH_NOTIFICATION = booleanPreferencesKey("push_notification")
         private val KEY_SOUND_ENABLED = booleanPreferencesKey("sound_enabled")
+        private val KEY_THEME_MODE = intPreferencesKey("theme_mode")
     }
 
     val settings: Flow<MqttSettings> = context.dataStore.data.map { prefs ->
@@ -70,7 +73,8 @@ class MqttConfigStore(private val context: Context) {
             authToken = prefs[KEY_AUTH_TOKEN] ?: "",
             serverUrl = prefs[KEY_SERVER_URL] ?: "",
             pushNotification = prefs[KEY_PUSH_NOTIFICATION] ?: true,
-            soundEnabled = prefs[KEY_SOUND_ENABLED] ?: true
+            soundEnabled = prefs[KEY_SOUND_ENABLED] ?: true,
+            themeMode = prefs[KEY_THEME_MODE] ?: 0
         )
     }
 
@@ -86,6 +90,7 @@ class MqttConfigStore(private val context: Context) {
             prefs[KEY_SERVER_URL] = settings.serverUrl
             prefs[KEY_PUSH_NOTIFICATION] = settings.pushNotification
             prefs[KEY_SOUND_ENABLED] = settings.soundEnabled
+            prefs[KEY_THEME_MODE] = settings.themeMode
         }
     }
 }

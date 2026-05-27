@@ -38,6 +38,12 @@
     <string name="settings_auth_configured">已配置</string>
     <string name="settings_default_topic">默认主题</string>
     <string name="settings_section_notification">通知</string>
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_theme_mode">主题模式</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_applied">已应用</string>
     <string name="settings_push_notification">系统通知</string>
     <string name="settings_push_notification_desc">新消息时推送通知</string>
     <string name="settings_sound">提示音</string>
