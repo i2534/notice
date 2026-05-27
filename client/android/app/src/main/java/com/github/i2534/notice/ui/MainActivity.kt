@@ -529,12 +529,7 @@ class MainActivity : AppCompatActivity() {
     private fun showMessageDetailDialog(message: NoticeMessage) {
         val detailBinding = DialogMessageDetailBinding.inflate(layoutInflater)
 
-        if (message.isOutgoing) {
-            detailBinding.dialogTitle.visibility = View.GONE
-        } else {
-            detailBinding.dialogTitle.text = message.title
-            detailBinding.dialogTitle.visibility = if (message.title.isNotBlank()) View.VISIBLE else View.GONE
-        }
+        detailBinding.dialogTitle.text = if (message.title.isNotBlank()) message.title else getString(R.string.message_detail_untitled)
         detailBinding.dialogSentByMe.visibility = View.VISIBLE
         detailBinding.dialogSentByMe.text = if (message.isOutgoing) getString(R.string.message_direction_outgoing) else getString(R.string.message_direction_incoming)
         detailBinding.dialogHeader.setBackgroundResource(

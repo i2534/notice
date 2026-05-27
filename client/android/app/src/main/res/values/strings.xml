@@ -98,6 +98,7 @@
     <string name="reply_failed_not_connected">未连接</string>
     <string name="reply_topic_set">已设置回复主题</string>
     <string name="message_detail_copied">已复制</string>
+    <string name="message_detail_untitled">无标题</string>
     <string name="settings_broker_saved">Broker 地址已保存</string>
     <string name="settings_auth_saved">认证已保存</string>
     <string name="settings_topic_saved">默认主题已保存</string>
