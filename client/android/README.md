@@ -26,7 +26,7 @@ Android MQTT 客户端，用于接收 Notice Server 的推送通知。
 
 ## 系统要求
 
-- Android 12 (API 31) 或更高版本
+- Android 10 (API 29) 或更高版本
 
 ## 权限说明
 

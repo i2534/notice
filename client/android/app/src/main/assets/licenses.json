@@ -6,6 +6,12 @@
     "url": "https://github.com/eclipse/paho.mqtt.java"
   },
   {
+    "name": "Eclipse Paho MQTT Android Service",
+    "author": "Eclipse Foundation",
+    "license": "Eclipse Public License 2.0",
+    "url": "https://github.com/eclipse/paho.mqtt.android"
+  },
+  {
     "name": "Kotlin Coroutines",
     "author": "JetBrains",
     "license": "Apache License 2.0",
@@ -18,10 +24,40 @@
     "url": "https://github.com/material-components/material-components-android"
   },
   {
+    "name": "Markwon",
+    "author": "noties",
+    "license": "MIT License",
+    "url": "https://github.com/noties/Markwon"
+  },
+  {
+    "name": "Coil",
+    "author": "coil-kt",
+    "license": "Apache License 2.0",
+    "url": "https://github.com/coil-kt/coil"
+  },
+  {
     "name": "AndroidX Core",
     "author": "Google",
     "license": "Apache License 2.0",
     "url": "https://developer.android.com/jetpack/androidx"
+  },
+  {
+    "name": "AndroidX AppCompat",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx/releases/appcompat"
+  },
+  {
+    "name": "AndroidX Activity",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx/releases/activity"
+  },
+  {
+    "name": "AndroidX ConstraintLayout",
+    "author": "Google",
+    "license": "Apache License 2.0",
+    "url": "https://developer.android.com/jetpack/androidx/releases/constraintlayout"
   },
   {
     "name": "AndroidX Room",
