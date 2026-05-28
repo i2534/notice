@@ -84,7 +84,7 @@
     <string name="dialog_about_title">关于 Notice</string>
     <string name="about_description_title">Notice</string>
     <string name="about_description">MQTT 消息推送客户端</string>
-    <string name="about_project_url">https://github.com/i2534/notice</string>
+    <string name="about_project_url">项目地址</string>
     <string name="about_btn_github">GitHub</string>
     <string name="about_btn_issues">Issues</string>
     <string name="about_btn_licenses">开源许可</string>
@@ -137,7 +137,7 @@
     <string name="audio_load_failed">音频加载失败</string>
     <string name="btn_delete_selected">删除选中</string>
     <string name="about_version_format">版本 %s</string>
-    <string name="about_version_code_format">版本 %s (构建 %d)</string>
+    <string name="about_version_code_format">构建 %d</string>
     <string name="notification_title">Notice 消息</string>
     <string name="notification_text">你有新消息</string>
     <string name="notification_channel_name">消息通知</string>

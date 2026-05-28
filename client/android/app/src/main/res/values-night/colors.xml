@@ -50,6 +50,9 @@
     <color name="selected_background">#1F4A9EFF</color>
     <color name="message_outgoing_bg">#1F1B6EF7</color>
 
+    <!-- 提示文本 -->
+    <color name="text_hint">#5F6368</color>
+
     <!-- 基础色 -->
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
