@@ -15,6 +15,7 @@ import gzip
 import json
 import logging
 import random
+import re
 import signal
 import time
 from dataclasses import dataclass
@@ -90,13 +91,16 @@ class OpenCodeClient:
     ROLE_SYSTEM = "system"
     STABLE_THRESHOLD = 5  # 连续 5 次轮询无新内容判定完成（10 秒）
     HELP_TEXT = (
-        "可用指令:\n"
-        "  /dir <path>  - 切换工作目录\n"
-        "  /dir         - 查询当前目录\n"
-        "  /new         - 创建新 session\n"
-        "  /list        - 列出当前目录的 session\n"
-        "  /switch <id> - 切换 session（前缀匹配）\n"
-        "  /help        - 显示此帮助信息"
+        "## 可用指令\n"
+        "\n"
+        "| 指令 | 说明 |\n"
+        "|------|------|\n"
+        "| `/dir <path>` | 切换工作目录 |\n"
+        "| `/dir` | 查询当前目录 |\n"
+        "| `/new` | 创建新 session |\n"
+        "| `/list` | 列出当前目录的 session |\n"
+        "| `/switch <id>` | 切换 session（前缀匹配） |\n"
+        "| `/help` | 显示此帮助信息 |"
     )
 
     def __init__(self, config_path: str):
@@ -185,8 +189,8 @@ class OpenCodeClient:
         if not await self._connect_mqtt():
             return False
 
-        if not await self._create_session():
-            self.logger.error("Failed to create OpenCode session")
+        if not await self._ensure_session():
+            self.logger.error("Failed to ensure OpenCode session")
             return False
 
         return True
@@ -291,6 +295,7 @@ class OpenCodeClient:
     def _on_message(self, client, userdata, msg):
         try:
             payload_str = msg.payload.decode("utf-8")
+            self.logger.debug("<<< RX topic=%s payload=%s", msg.topic, payload_str[:500])
             try:
                 message_data = json.loads(payload_str)
             except json.JSONDecodeError:
@@ -305,6 +310,7 @@ class OpenCodeClient:
             content_encoding = message_data.get("content_encoding")
             content = decode_content(content, content_encoding)
             message_data["content"] = content
+            self.logger.info("<<< RX client=%s content=%s", message_data.get("client"), content[:200])
 
             if self._loop:
                 future = asyncio.run_coroutine_threadsafe(
@@ -321,22 +327,28 @@ class OpenCodeClient:
     # ── 消息处理 ──
 
     async def _handle_message(self, topic: str, payload: dict) -> None:
-        if payload.get("client") == self.CLIENT_NAME:
+        sender = payload.get("client")
+        if sender == self.CLIENT_NAME:
+            self.logger.debug("Ignoring own message from client=%s", sender)
             return
 
         content = payload.get("content", "").strip()
         if not content:
+            self.logger.debug("Empty message, skipping")
             return
 
-        self.logger.info("Received message: %s", content[:100])
+        self.logger.info("Processing message: content=%s", content[:200])
 
         async with self._processing_lock:
             if content.startswith("/"):
+                self.logger.info("Executing command: %s", content[:100])
                 await self._handle_command(content)
             else:
+                self.logger.info("Calling OpenCode with: %s", content[:200])
                 await self._publish_typing()
                 try:
-                    await self._call_opencode(content)
+                    result = await self._call_opencode(content)
+                    self.logger.info("OpenCode response: %s", (result or "<none>")[:200])
                 except Exception as e:
                     self.logger.error("OpenCode call failed: %s", e)
                     await self._publish_error(str(e))
@@ -370,7 +382,7 @@ class OpenCodeClient:
             await self._publish_error(f"指令执行失败: {e}")
 
     async def _cmd_dir_change(self, path: str) -> None:
-        path = path.strip()
+        path = str(Path(path.strip()).expanduser())
         sessions = await self._query_sessions(directory=path, limit=1)
         if not sessions:
             await self._publish_error(f"目录不存在: {path}")
@@ -393,9 +405,26 @@ class OpenCodeClient:
         else:
             await self._publish_error("创建 session 失败")
 
+    @staticmethod
+    def _is_subagent_session(s: dict) -> bool:
+        """判断是否为子代理会话（非用户直接创建的会话）"""
+        SUBAGENT_NAMES = frozenset({
+            "Sisyphus-Junior", "explore", "librarian", "oracle",
+            "metis", "momus", "plan", "multimodal-looker",
+        })
+        agent = (s.get("agent") or "").strip("\u200b")
+        if any(name in agent for name in SUBAGENT_NAMES):
+            return True
+        title = (s.get("title") or "").replace("\u200b", "")
+        if re.search(r'\(@\s*.*? subagent\)', title):
+            return True
+        if title.startswith("look_at:"):
+            return True
+        return False
+
     async def _cmd_list(self) -> None:
         sessions = await self._query_sessions(directory=self._active_dir)
-        sessions = [s for s in sessions if not s.get("parentID")]
+        sessions = [s for s in sessions if not OpenCodeClient._is_subagent_session(s)]
         if not sessions:
             await self._publish(f"目录 {self._active_dir} 下无 session")
             return
@@ -407,7 +436,7 @@ class OpenCodeClient:
 
     async def _cmd_switch(self, prefix: str) -> None:
         prefix = prefix.strip()
-        sessions = [s for s in await self._query_sessions(directory=self._active_dir) if not s.get("parentID")]
+        sessions = [s for s in await self._query_sessions(directory=self._active_dir) if not OpenCodeClient._is_subagent_session(s)]
         matches = [s for s in sessions if s["id"].startswith(prefix)]
         if len(matches) == 0:
             await self._publish_error(f"未找到匹配 '{prefix}' 的 session")
@@ -482,8 +511,11 @@ class OpenCodeClient:
         last_length = 0
         stable_count = 0
         messages = []
+        poll_count = 0
+        self.logger.info("Polling response, baseline_ids=%d", len(baseline_ids))
 
         while time.monotonic() - start < timeout:
+            poll_count += 1
             try:
                 url = f"{self.oc.server_url}/session/{session_id}/message"
                 resp = await self._http.get(
@@ -495,14 +527,16 @@ class OpenCodeClient:
                 messages = resp.json()
 
                 new_text = self._extract_new_text(messages, baseline_ids)
+                self.logger.debug("Poll #%d: %d messages, new_text=%d chars", poll_count, len(messages), len(new_text))
                 if len(new_text) > last_length:
                     last_length = len(new_text)
                     stable_count = 0
+                    self.logger.info("Poll #%d: content growing (%d chars)", poll_count, last_length)
                 else:
                     stable_count += 1
                     if stable_count >= self.STABLE_THRESHOLD and new_text.strip():
                         elapsed = time.monotonic() - start
-                        self.logger.warning("Response stabilized after %d polls (%.0fs), returning result", stable_count, elapsed)
+                        self.logger.info("Response stabilized after %d polls (%.0fs), publishing result", stable_count, elapsed)
                         await self._publish(new_text)
                         return new_text
 
@@ -512,6 +546,7 @@ class OpenCodeClient:
             await asyncio.sleep(poll_interval)
 
         final = self._extract_new_text(messages, baseline_ids) if messages else None
+        self.logger.info("Poll loop ended (timeout), final=%d chars", len(final) if final else 0)
         if final:
             await self._publish(final)
         return final
@@ -561,6 +596,8 @@ class OpenCodeClient:
             payload["content_encoding"] = content_encoding
 
         json_payload = json.dumps(payload)
+        status = (extra or {}).get("status", "message")
+        self.logger.info(">>> TX status=%s content=%s", status, content[:300])
         try:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(
@@ -570,7 +607,7 @@ class OpenCodeClient:
                 json_payload,
                 1,
             )
-            self.logger.info("Published %d chars to %s", len(content), self.mqtt.topic)
+            self.logger.info(">>> TX delivered (%d bytes)", len(json_payload))
         except Exception as e:
             self.logger.error("Publish failed: %s", e)
 
@@ -601,7 +638,9 @@ class OpenCodeClient:
 
     async def _query_sessions(self, directory: str, limit: int = 50) -> list:
         if not self._http:
-            return []
+            self._http = httpx.AsyncClient()
+            if self.oc.password:
+                self._http.auth = httpx.BasicAuth(self.oc.username, self.oc.password)
         try:
             url = f"{self.oc.server_url}/session"
             resp = await self._http.get(
@@ -641,9 +680,9 @@ class OpenCodeClient:
             self.logger.error("Create session failed: %s", e)
             return None
 
-    async def _validate_and_recreate_session(self) -> None:
+    async def _validate_and_recreate_session(self) -> bool:
         if not self._http or not self._session_id:
-            return
+            return False
         try:
             url = f"{self.oc.server_url}/session/{self._session_id}"
             resp = await self._http.get(
@@ -656,10 +695,25 @@ class OpenCodeClient:
                 session = await self._create_session_in_dir(self._active_dir)
                 if session:
                     self._session_id = session["id"]
-            else:
-                self.logger.info("Session %s still valid", self._session_id)
+                    return True
+                return False
+            self.logger.info("Session %s still valid", self._session_id)
+            return True
         except Exception as e:
             self.logger.error("Session validation failed: %s", e)
+            return False
+
+    async def _ensure_session(self) -> bool:
+        if self._session_id:
+            return await self._validate_and_recreate_session()
+        sessions = await self._query_sessions(directory=self._active_dir, limit=10)
+        sessions = [s for s in sessions if not OpenCodeClient._is_subagent_session(s)]
+        if sessions:
+            sid = str(sessions[0]["id"])
+            self._session_id = sid
+            self.logger.info("Reusing existing session %s", sid[:12])
+            return True
+        return await self._create_session()
 
     async def _create_session(self) -> bool:
         session = await self._create_session_in_dir(self._active_dir)
