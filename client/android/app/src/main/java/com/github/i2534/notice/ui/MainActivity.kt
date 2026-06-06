@@ -124,6 +124,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         mqttService?.refreshSettings()
+        (application as NoticeApp).invalidateMarkwon()
+        recreateBubbleAdapter()
     }
 
     override fun onStop() {
@@ -211,17 +213,7 @@ class MainActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(this@MainActivity)
         }
 
-        bubbleAdapter = BubbleMessageAdapter(
-            markwon = markwon,
-            onItemClick = { message -> showMessageDetailDialog(message) },
-            onLongClick = { message ->
-                bubbleAdapter.enterSelectMode(message)
-                true
-            },
-            onEnterSelectMode = { updateSelectModeUI() },
-            onSelectionChanged = { count -> updateSelectionCount(count) }
-        )
-      binding.messageList.adapter = bubbleAdapter
+        createBubbleAdapter()
 
         binding.replyInput.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -281,6 +273,30 @@ class MainActivity : AppCompatActivity() {
             val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
             view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, ime.bottom)
             insets
+        }
+    }
+
+    private fun createBubbleAdapter() {
+        bubbleAdapter = BubbleMessageAdapter(
+            markwon = markwon,
+            onItemClick = { message -> showMessageDetailDialog(message) },
+            onLongClick = { message ->
+                bubbleAdapter.enterSelectMode(message)
+                true
+            },
+            onEnterSelectMode = { updateSelectModeUI() },
+            onSelectionChanged = { count -> updateSelectionCount(count) }
+        )
+        binding.messageList.adapter = bubbleAdapter
+    }
+
+    /** 主题切换后重建 Adapter 以使用新的 markwon */
+    private fun recreateBubbleAdapter() {
+        createBubbleAdapter()
+        mqttService?.messagesAsc?.value?.let { messages ->
+            val newItems = BubbleListBuilder.buildMessages(messages)
+            bubbleAdapter.submitDiff(lastBuiltItems, newItems)
+            lastBuiltItems = newItems
         }
     }
 
