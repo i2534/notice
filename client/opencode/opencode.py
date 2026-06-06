@@ -395,6 +395,7 @@ class OpenCodeClient:
 
     async def _cmd_list(self) -> None:
         sessions = await self._query_sessions(directory=self._active_dir)
+        sessions = [s for s in sessions if not s.get("parentID")]
         if not sessions:
             await self._publish(f"目录 {self._active_dir} 下无 session")
             return
@@ -406,7 +407,7 @@ class OpenCodeClient:
 
     async def _cmd_switch(self, prefix: str) -> None:
         prefix = prefix.strip()
-        sessions = await self._query_sessions(directory=self._active_dir)
+        sessions = [s for s in await self._query_sessions(directory=self._active_dir) if not s.get("parentID")]
         matches = [s for s in sessions if s["id"].startswith(prefix)]
         if len(matches) == 0:
             await self._publish_error(f"未找到匹配 '{prefix}' 的 session")
