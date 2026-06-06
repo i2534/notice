@@ -144,7 +144,7 @@
     <string name="notification_channel_desc">新消息推送通知</string>
     <string name="notification_message_channel_name">消息</string>
     <string name="notification_message_channel_desc">消息通知</string>
-    <string name="reply_to_default">回复到默认主题</string>
+    <string name="reply_to_default">请选择回复主题</string>
     <string name="reply_to_topic">回复到 %s</string>
     <string name="voice_btn_label">语音</string>
     <string name="voice_mode_keyboard">键盘输入</string>

@@ -10,7 +10,6 @@ import com.github.i2534.notice.data.MediaCacheEntity
 import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.data.RecentTopicStore
-import com.github.i2534.notice.data.TopicResolver
 import com.github.i2534.notice.service.MqttService
 import com.github.i2534.notice.util.BannerType
 import com.github.i2534.notice.util.MediaCacheConstants
@@ -31,7 +30,6 @@ class ReplyViewModel(
     recentTopicStore: RecentTopicStore
 ) : AndroidViewModel(application) {
 
-    private val topicResolver = TopicResolver()
     private var currentSettings = MqttSettings()
 
     private val _state = MutableStateFlow(ReplyState())
@@ -47,9 +45,6 @@ class ReplyViewModel(
         viewModelScope.launch {
             configStore.settings.collect { settings ->
                 currentSettings = settings
-                _state.value = _state.value.copy(
-                    defaultTopicDisplay = topicResolver.getDefaultDisplayText(settings.sendTopic, settings.topic)
-                )
             }
         }
     }
@@ -60,7 +55,13 @@ class ReplyViewModel(
 
     fun showReplySection() {
         if (!_state.value.isReplySectionVisible) {
-            _state.value = _state.value.copy(isReplySectionVisible = true)
+            val topicToPreFill = _state.value.replyToTopic
+                ?: currentSettings.lastSelectedTopic.takeIf { it.isNotBlank() }
+            _state.value = _state.value.copy(
+                isReplySectionVisible = true,
+                replyToTopic = topicToPreFill,
+                replyTopicMode = if (topicToPreFill != null) ReplyTopicMode.Custom else _state.value.replyTopicMode
+            )
         }
     }
 
@@ -94,12 +95,6 @@ class ReplyViewModel(
         )
     }
 
-    fun selectDefaultTopic() {
-        _state.value = _state.value.copy(
-            replyToTopic = null, replyTopicMode = ReplyTopicMode.Default, isTopicPickerVisible = false
-        )
-    }
-
     fun selectTopic(topic: String) {
         _state.value = _state.value.copy(
             replyToTopic = topic, replyTopicMode = ReplyTopicMode.Custom, isTopicPickerVisible = false
@@ -115,11 +110,11 @@ class ReplyViewModel(
     }
 
     fun clearReplyTopic() {
-        _state.value = _state.value.copy(replyToTopic = null, replyTopicMode = ReplyTopicMode.Default)
+        _state.value = _state.value.copy(replyToTopic = null, replyTopicMode = ReplyTopicMode.Custom)
     }
 
     fun getCurrentDefaultTopic(): String? {
-        return topicResolver.getDefaultDisplayText(currentSettings.sendTopic, currentSettings.topic)
+        return currentSettings.lastSelectedTopic.takeIf { it.isNotBlank() }
     }
 
     fun toggleTopicPicker() {
@@ -142,9 +137,11 @@ class ReplyViewModel(
         if (topic.isNullOrBlank()) { MessageBanner.showRes(application, R.string.reply_failed_no_topic, BannerType.Error); return }
         val sent = mqttService.publishReply(content, topic)
         if (sent) {
-            _state.value = _state.value.copy(
-                content = "", replyToTopic = null, replyTopicMode = ReplyTopicMode.Default
-            )
+            currentSettings = currentSettings.copy(lastSelectedTopic = topic)
+            viewModelScope.launch {
+                configStore.save(currentSettings)
+            }
+            _state.value = _state.value.copy(content = "")
             MessageBanner.showRes(application, R.string.reply_sent, BannerType.Success)
         } else {
             MessageBanner.showRes(application, R.string.reply_failed_not_connected, BannerType.Error)
@@ -165,9 +162,10 @@ class ReplyViewModel(
             if (mediaUrl != null) {
                 cacheMediaLocally(mediaUrl, pendingVoice)
                 if (mqttService.publishReply(mediaUrl, topic)) {
+                    currentSettings = currentSettings.copy(lastSelectedTopic = topic)
+                    configStore.save(currentSettings)
                     _state.value = _state.value.copy(
-                        hasPendingVoice = false, pendingVoiceFile = null,
-                        replyToTopic = null, replyTopicMode = ReplyTopicMode.Default
+                        hasPendingVoice = false, pendingVoiceFile = null
                     )
                     MessageBanner.showRes(application, R.string.reply_sent, BannerType.Success)
                 } else {
@@ -235,9 +233,6 @@ class ReplyViewModel(
     }
 
    private fun resolveTopic(): String? {
-        return when (_state.value.replyTopicMode) {
-            ReplyTopicMode.Default -> topicResolver.resolve(null, currentSettings.sendTopic, currentSettings.topic)
-            else -> _state.value.replyToTopic
-        }
+        return _state.value.replyToTopic
     }
 }

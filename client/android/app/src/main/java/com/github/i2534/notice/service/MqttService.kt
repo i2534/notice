@@ -166,10 +166,9 @@ class MqttService : Service() {
     }
 
     fun publishReply(content: String, replyToTopic: String? = null): Boolean {
-        val topic = when {
-            !replyToTopic.isNullOrBlank() -> connectionManager.topicForPublish(replyToTopic)
-            else -> connectionManager.getPublishTopic(currentSettings)
-        } ?: return false
+        val topic = replyToTopic?.takeIf { it.isNotBlank() }
+            ?.let { connectionManager.topicForPublish(it) }
+            ?: return false
 
         val client = connectionManager.mqttClient ?: return false
         if (!client.isConnected) return false
@@ -209,8 +208,6 @@ class MqttService : Service() {
         }
         return true
     }
-
-    fun getPublishTopic(): String? = connectionManager.getPublishTopic(currentSettings)
 
     fun refreshSettings() {
         ioScope.launch {

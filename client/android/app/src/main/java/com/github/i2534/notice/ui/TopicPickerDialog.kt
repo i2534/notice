@@ -17,7 +17,14 @@ fun showTopicPicker(
     onCustomTopic: (String) -> Unit
 ): BottomSheetDialog {
     val binding = DialogTopicPickerBinding.inflate(LayoutInflater.from(context))
-    val adapter = TopicListAdapter(onTopicSelected)
+    val dialog = BottomSheetDialog(context, R.style.Theme_Notice_BottomSheet).apply {
+        setContentView(binding.root)
+    }
+
+    val adapter = TopicListAdapter { topic ->
+        onTopicSelected(topic)
+        dialog.dismiss()
+    }
 
     binding.topicList.apply {
         layoutManager = LinearLayoutManager(context)
@@ -31,18 +38,22 @@ fun showTopicPicker(
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         override fun afterTextChanged(s: android.text.Editable?) {
             val topic = s?.toString()?.trim()
-            if (!topic.isNullOrBlank()) onCustomTopic(topic)
+            if (!topic.isNullOrBlank()) {
+                onCustomTopic(topic)
+                dialog.dismiss()
+            }
         }
     })
 
     binding.btnUseCustom.setOnClickListener {
         val topic = binding.customTopicInput.text?.toString()?.trim()
-        if (!topic.isNullOrBlank()) onCustomTopic(topic)
+        if (!topic.isNullOrBlank()) {
+            onCustomTopic(topic)
+            dialog.dismiss()
+        }
     }
 
-    return BottomSheetDialog(context, R.style.Theme_Notice_BottomSheet).apply {
-        setContentView(binding.root)
-        show()
-        behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
-    }
+    dialog.show()
+    dialog.behavior.state = com.google.android.material.bottomsheet.BottomSheetBehavior.STATE_EXPANDED
+    return dialog
 }

@@ -338,10 +338,4 @@ class MqttConnectionManager(
         }
         return t
     }
-
-    fun getPublishTopic(settings: MqttSettings?): String? {
-        val s = settings ?: return null
-        val raw = s.sendTopic.trim().takeIf { it.isNotBlank() } ?: s.topic.trim()
-        return topicForPublish(raw)
-    }
 }

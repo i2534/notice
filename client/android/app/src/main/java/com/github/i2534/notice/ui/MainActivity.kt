@@ -354,10 +354,7 @@ class MainActivity : AppCompatActivity() {
             context = this,
             state = state,
             defaultTopic = replyViewModel?.getCurrentDefaultTopic(),
-            onDefaultSelected = {
-                replyViewModel?.selectDefaultTopic()
-                topicPickerDialog = null
-            },
+            onDefaultSelected = {},
             onTopicSelected = { topic ->
                 replyViewModel?.selectTopic(topic)
                 topicPickerDialog = null
