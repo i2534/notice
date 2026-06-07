@@ -43,14 +43,14 @@
         tools:targetApi="35">
 
         <!-- 主 Activity：软键盘由 IME insets 控制上移，不用 adjustResize 避免与 padding 双重上移导致间隙过大 -->
-        <!-- configChanges 声明后 Activity 自己处理 uiMode 变化，避免 NoticeApp.markwon 状态被系统重建打乱 -->
+        <!-- 不拦截 uiMode：让系统重建 Activity 以应用 night-mode 资源；markwon 在 NoticeApp 中按 uiMode 自动重建 -->
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/Theme.Notice"
             android:windowSoftInputMode="adjustNothing"
-            android:configChanges="uiMode|orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|locale|fontScale">
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|locale|fontScale">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

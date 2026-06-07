@@ -23,22 +23,20 @@ import java.util.concurrent.atomic.AtomicReference
 class NoticeApp : Application() {
 
     private val markwonRef = AtomicReference<Markwon?>()
+    @Volatile private var markwonUiMode: Int = -1
 
-    /** 仅用于渲染文本块（粗体、链接、表格等），图片由 MessageContentRenderer 单独用 ImageView 加载。主题变化后自动重建。 */
+    /** 渲染文本块（粗体、链接、表格等）；图片由 MessageContentRenderer 单独用 ImageView 加载。uiMode 变化后自动重建。 */
     val markwon: Markwon
         get() {
+            val currentUiMode = resources.configuration.uiMode
             var instance = markwonRef.get()
-            if (instance == null) {
+            if (instance == null || markwonUiMode != currentUiMode) {
                 instance = createMarkwon()
-                markwonRef.compareAndSet(null, instance)
+                markwonRef.set(instance)
+                markwonUiMode = currentUiMode
             }
             return instance
         }
-
-    /** 主题变化后调用，下次访问 markwon 时会重建 */
-    fun invalidateMarkwon() {
-        markwonRef.set(null)
-    }
 
     private fun createMarkwon(): Markwon {
         val density = resources.displayMetrics.density

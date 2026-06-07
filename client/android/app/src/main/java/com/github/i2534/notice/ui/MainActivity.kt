@@ -7,7 +7,6 @@ import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -47,7 +46,6 @@ import com.github.i2534.notice.service.MqttService
 import com.github.i2534.notice.util.MediaCacheLoader
 import com.github.i2534.notice.util.TopicColor
 import com.github.i2534.notice.util.MessageBanner
-import com.github.i2534.notice.util.AppLogger
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -126,20 +124,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         mqttService?.refreshSettings()
-        // 延迟到下一帧：setDefaultNightMode 后 Configuration.uiMode 异步更新，
-        // 立即调用 markwon 会拿到旧主题颜色。
-        binding.root.post {
-            (application as NoticeApp).invalidateMarkwon()
-            recreateBubbleAdapter()
-        }
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        val isNight = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        AppLogger.i("MainActivity", "onConfigurationChanged: isNight=$isNight, uiMode=${newConfig.uiMode}")
-        (application as NoticeApp).invalidateMarkwon()
-        recreateBubbleAdapter()
     }
 
     override fun onStop() {
@@ -302,17 +286,6 @@ class MainActivity : AppCompatActivity() {
             onSelectionChanged = { count -> updateSelectionCount(count) }
         )
         binding.messageList.adapter = bubbleAdapter
-    }
-
-    /** 主题切换后重建 Adapter 以使用新的 markwon */
-    private fun recreateBubbleAdapter() {
-        createBubbleAdapter()
-        bubbleAdapter.notifyDataSetChanged()
-        mqttService?.messagesAsc?.value?.let { messages ->
-            val newItems = BubbleListBuilder.buildMessages(messages)
-            bubbleAdapter.submitDiff(lastBuiltItems, newItems)
-            lastBuiltItems = newItems
-        }
     }
 
     private fun observeReplyState() {
