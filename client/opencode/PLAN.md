@@ -34,6 +34,9 @@ OpenCode serve (本地)
 | `/new` | 为当前目录创建新 session |
 | `/list` | 列出当前目录的所有 session |
 | `/switch <id>` | 切换到指定 session（前缀匹配，多匹配时要求更精确 ID） |
+| `/model` | 查看当前模型 |
+| `/model list` | 列出可用模型 |
+| `/model set <model>` | 切换模型（provider/model 格式） |
 | `/help` | 列出所有可用指令 |
 
 ## 目录结构
@@ -68,8 +71,7 @@ opencode:
   password: ""                      # Basic Auth 密码（对应 OPENCODE_SERVER_PASSWORD）
   project_dir: "."                  # 默认工作目录（相对于配置文件所在目录）
   system_prompt: ""                 # 可选的系统提示词
-  # 流式中间结果最小发布间隔（秒）
-  publish_interval: 5.0
+  model: ""                         # 模型 (provider/model 格式，如 deepseek/deepseek-chat)
 ```
 
 ## 消息格式
@@ -101,9 +103,8 @@ opencode:
    b. 立即发布"⏳ 处理中..."到同一 topic（typing 反馈，所有订阅者可见）
    c. POST /session/:id/prompt_async 到 OpenCode serve（异步）
 4. 轮询 GET /session/:id/message 获取响应（间隔 2s，超时 120s）
-5. 参考 Hermes debounce 模式，流式推送中间结果到 MQTT
-6. OpenCode 完成后发布最终回复到 notice/opencode
-7. 其他订阅了 notice/opencode 的客户端收到回复
+5. OpenCode 完成后发布最终回复到 notice/opencode
+6. 其他订阅了 notice/opencode 的客户端收到回复
 ```
 
 ### 指令消息
@@ -116,10 +117,10 @@ opencode:
    c. 发布执行结果到 notice/opencode（确认/列表等信息）
 ```
 
-**指令回复格式**：
-- 成功：`✓ 已切换到 /path/to/dir` 或 `✓ 已创建新 session: ses_xxx`
+**指令回复格式**（Markdown）：
+- 成功：`## ✓ 已切换\n\n- **目录**: \`/path\`\n- **Session**: \`ses_xxx\``
 - 失败：`❌ 目录不存在: /path` 或 `❌ 未知指令: /xxx`
-- 列表：格式化 session 列表（ID、创建时间、当前活跃标记）
+- 列表：Markdown 表格（ID、标题、状态标记）
 
 ### 轮询机制
 
@@ -140,7 +141,8 @@ opencode:
 | 切换 session | 直接设置活跃 session ID（前缀匹配，多匹配时要求更精确 ID） |
 
 **边界情况**：
-- 目录不存在：回复 "❌ 目录不存在: <path>"
+- 目录不存在：`/dir <path>` 先在本地验证 `Path.is_dir()`，失败回复 "❌ 目录不存在: <path>"（注意：此客户端设计为本地运行，`opencode-client` 与 `OpenCode serve` 共享同一文件系统，本地验证有效）
+- 目录无 session：目录存在但查询无结果，回复 "❌ 目录 `<path>` 下无 session"
 - Session 过期：查询到 404 时自动重建 session
 - 前缀匹配歧义：多个 session 匹配时回复 "多个 session 匹配 '<prefix>'，请使用更精确的 ID"
 - 指令即刻生效：指令执行后立即更新活跃 session，后续消息自动使用新 session

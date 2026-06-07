@@ -43,6 +43,9 @@ make logs      # 查看日志
 | `/new` | 创建新 session |
 | `/list` | 列出当前目录的 session |
 | `/switch <id>` | 切换 session（前缀匹配，多匹配时报错） |
+| `/model` | 查看当前模型 |
+| `/model list` | 列出可用模型 |
+| `/model set <model>` | 切换模型（provider/model 格式） |
 | `/help` | 列出所有可用指令 |
 
 普通消息会发送到当前活跃的 session 处理。

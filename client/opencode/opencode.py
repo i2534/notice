@@ -56,7 +56,7 @@ class OpenCodeConfig:
     password: str = ""
     project_dir: str = "."
     system_prompt: str = ""
-    publish_interval: float = 5.0
+    model: str = ""
 
 
 # ── 工具函数 ──
@@ -90,18 +90,6 @@ class OpenCodeClient:
     ROLE_ASSISTANT = "assistant"
     ROLE_SYSTEM = "system"
     STABLE_THRESHOLD = 5  # 连续 5 次轮询无新内容判定完成（10 秒）
-    HELP_TEXT = (
-        "## 可用指令\n"
-        "\n"
-        "| 指令 | 说明 |\n"
-        "|------|------|\n"
-        "| `/dir <path>` | 切换工作目录 |\n"
-        "| `/dir` | 查询当前目录 |\n"
-        "| `/new` | 创建新 session |\n"
-        "| `/list` | 列出当前目录的 session |\n"
-        "| `/switch <id>` | 切换 session（前缀匹配） |\n"
-        "| `/help` | 显示此帮助信息 |"
-    )
 
     def __init__(self, config_path: str):
         self.logger = logging.getLogger("opencode")
@@ -123,7 +111,7 @@ class OpenCodeClient:
             password=oc_cfg.get("password", ""),
             project_dir=oc_cfg.get("project_dir", "."),
             system_prompt=oc_cfg.get("system_prompt", ""),
-            publish_interval=oc_cfg.get("publish_interval", 5.0),
+            model=oc_cfg.get("model", ""),
         )
 
         # 解析 project_dir 为绝对路径（相对于配置文件所在目录）
@@ -148,6 +136,31 @@ class OpenCodeClient:
 
         # 运行状态
         self._running = False
+
+        # 命令注册表 (name, handler, help_text, subcommands)
+        self._commands: dict[str, tuple] = {
+            "/dir":      (self._cmd_dir,      "查询当前目录 / 切换工作目录", []),
+            "/help":     (self._cmd_help,     "显示此帮助信息", []),
+            "/list":     (self._cmd_list,     "列出当前目录的 session", []),
+            "/model":    (self._cmd_model,    "查看/切换模型", [
+                ("list", "列出可用模型"),
+                ("set <model>", "切换模型（provider/model 格式）"),
+            ]),
+            "/new":      (self._cmd_new,      "创建新 session", []),
+            "/switch":   (self._cmd_switch,   "切换 session（前缀匹配）", []),
+        }
+
+    def _build_help_text(self) -> str:
+        lines = ["## 可用指令\n"]
+        lines.append("| 指令 | 说明 |")
+        lines.append("|------|------|")
+        for name, (_, help_text, subcmds) in sorted(self._commands.items()):
+            if subcmds:
+                for sub, sub_help in subcmds:
+                    lines.append(f"| `{name} {sub}` | {sub_help} |")
+            else:
+                lines.append(f"| `{name}` | {help_text} |")
+        return "\n".join(lines)
 
     def _load_config(self, config_path: str) -> dict:
         # .local 文件覆盖 base 配置（与 XiaoAi 一致）
@@ -359,55 +372,50 @@ class OpenCodeClient:
         arg = parts[1] if len(parts) > 1 else None
 
         try:
-            if cmd == "/help":
-                await self._publish(self.HELP_TEXT)
-            elif cmd == "/dir":
-                if arg:
-                    await self._cmd_dir_change(arg)
-                else:
-                    await self._cmd_dir_query()
-            elif cmd == "/new":
-                await self._cmd_new()
-            elif cmd == "/list":
-                await self._cmd_list()
-            elif cmd == "/switch":
-                if arg:
-                    await self._cmd_switch(arg)
-                else:
-                    await self._publish_error("/switch 需要 session ID")
-            else:
+            handler, _, _ = self._commands.get(cmd, (None, None, None))
+            if handler is None:
                 await self._publish_error(f"未知指令: {cmd}，发送 /help 查看可用指令")
+                return
+            await handler(arg)
         except Exception as e:
             self.logger.error("Command failed: %s", e)
             await self._publish_error(f"指令执行失败: {e}")
 
-    async def _cmd_dir_change(self, path: str) -> None:
-        path = str(Path(path.strip()).expanduser())
-        sessions = await self._query_sessions(directory=path, limit=1)
-        if not sessions:
-            await self._publish_error(f"目录不存在: {path}")
-            return
-        session = sessions[0]
-        self._active_dir = path
-        sid = str(session["id"])
-        self._session_id = sid
-        await self._publish(f"✓ 已切换到 {path} (session: {sid[:12]}...)")
+    async def _cmd_help(self, _arg: Optional[str]) -> None:
+        await self._publish(self._build_help_text())
 
-    async def _cmd_dir_query(self) -> None:
-        await self._publish(f"当前目录: {self._active_dir}\nsession: {self._session_id[:12] if self._session_id else 'N/A'}...")
+    async def _cmd_dir(self, arg: Optional[str]) -> None:
+        if arg:
+            path = str(Path(arg.strip()).expanduser())
+            if not Path(path).is_dir():
+                await self._publish_error(f"目录不存在: {path}")
+                return
+            sessions = await self._query_sessions(directory=path, limit=1)
+            if not sessions:
+                await self._publish_error(f"目录 `{path}` 下无 session")
+                return
+            self._active_dir = path
+            sid = str(sessions[0]["id"])
+            self._session_id = sid
+            await self._publish(f"## ✓ 已切换\n\n- **目录**: `{path}`\n- **Session**: `{sid[:12]}...`")
+        else:
+            await self._publish(f"## 当前目录\n\n- **目录**: `{self._active_dir}`\n- **Session**: `{self._session_id[:12] if self._session_id else 'N/A'}...`")
 
-    async def _cmd_new(self) -> None:
+    async def _cmd_new(self, _arg: Optional[str]) -> None:
         session = await self._create_session_in_dir(self._active_dir)
         if session:
             sid = str(session["id"])
             self._session_id = sid
-            await self._publish(f"✓ 已创建新 session: {sid[:12]}...")
+            await self._publish(f"## ✓ 新 Session\n\n- **ID**: `{sid[:12]}...`")
         else:
             await self._publish_error("创建 session 失败")
 
     @staticmethod
     def _is_subagent_session(s: dict) -> bool:
-        """判断是否为子代理会话（非用户直接创建的会话）"""
+        """判断是否为子代理会话（非用户直接创建的会话）
+        
+        子代理名称来源于 OpenCode 内置 agent 列表，需随 OpenCode 更新维护。
+        """
         SUBAGENT_NAMES = frozenset({
             "Sisyphus-Junior", "explore", "librarian", "oracle",
             "metis", "momus", "plan", "multimodal-looker",
@@ -422,20 +430,25 @@ class OpenCodeClient:
             return True
         return False
 
-    async def _cmd_list(self) -> None:
+    async def _cmd_list(self, _arg: Optional[str]) -> None:
         sessions = await self._query_sessions(directory=self._active_dir)
         sessions = [s for s in sessions if not OpenCodeClient._is_subagent_session(s)]
         if not sessions:
-            await self._publish(f"目录 {self._active_dir} 下无 session")
+            await self._publish(f"## 无 Session\n\n目录 `{self._active_dir}` 下无 session")
             return
-        lines = [f"目录: {self._active_dir}\n"]
+        lines = [f"## Session 列表\n\n目录: `{self._active_dir}`\n"]
+        lines.append("| ID | 标题 | 状态 |")
+        lines.append("|------|------|------|")
         for s in sessions:
-            marker = " ← 当前" if s["id"] == self._session_id else ""
-            lines.append(f"  {s['id'][:12]}... {s.get('title', 'N/A')}{marker}")
+            marker = "← 当前" if s["id"] == self._session_id else ""
+            lines.append(f"| `{s['id'][:12]}...` | {s.get('title', 'N/A')} | {marker} |")
         await self._publish("\n".join(lines))
 
-    async def _cmd_switch(self, prefix: str) -> None:
-        prefix = prefix.strip()
+    async def _cmd_switch(self, arg: Optional[str]) -> None:
+        if not arg:
+            await self._publish_error("/switch 需要 session ID")
+            return
+        prefix = arg.strip()
         sessions = [s for s in await self._query_sessions(directory=self._active_dir) if not OpenCodeClient._is_subagent_session(s)]
         matches = [s for s in sessions if s["id"].startswith(prefix)]
         if len(matches) == 0:
@@ -445,7 +458,78 @@ class OpenCodeClient:
         else:
             sid = str(matches[0]["id"])
             self._session_id = sid
-            await self._publish(f"✓ 已切换到 {sid[:12]}...")
+            await self._publish(f"## ✓ 已切换\n\n- **Session**: `{sid[:12]}...`")
+
+    async def _cmd_model(self, arg: Optional[str]) -> None:
+        if arg == "list":
+            models = await self._list_models()
+            if not models:
+                await self._publish_error("无法获取模型列表")
+                return
+            lines = [f"## 可用模型 ({len(models)})\n"]
+            lines.append("| 模型 |")
+            lines.append("|------|")
+            for m in models:
+                lines.append(f"| `{m}` |")
+            await self._publish("\n".join(lines))
+        elif arg:
+            model_str = arg.strip()
+            if "/" not in model_str:
+                await self._publish_error(f"模型格式错误: {model_str}，请使用 provider/model 格式（如 deepseek/deepseek-chat）")
+                return
+            self.oc.model = model_str
+            await self._publish(f"## ✓ 模型已切换\n\n- **模型**: `{model_str}`\n- **生效**: 下次发送消息时")
+        else:
+            if not self._session_id:
+                await self._publish_error("没有活跃的 session")
+                return
+            model = await self._get_session_model(self._session_id)
+            if model:
+                await self._publish(f"## 当前模型\n\n- **模型**: `{model}`")
+            else:
+                await self._publish_error("无法获取模型信息")
+
+    async def _get_session_model(self, session_id: str) -> Optional[str]:
+        if not self._http:
+            return None
+        try:
+            url = f"{self.oc.server_url}/session/{session_id}"
+            resp = await self._get_http().get(url, params={"directory": self._active_dir}, timeout=10)
+            resp.raise_for_status()
+            session = resp.json()
+            model = session.get("model", {})
+            if model:
+                return f"{model.get('providerID', '?')}/{model.get('id', '?')}"
+            return None
+        except Exception as e:
+            self.logger.error("Get session model failed: %s", e)
+            return None
+
+    async def _list_models(self) -> list[str]:
+        try:
+            result = await asyncio.create_subprocess_exec(
+                "opencode", "models",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await result.communicate()
+            if result.returncode == 0:
+                lines = stdout.decode().strip().split("\n")
+                return [line.strip() for line in lines if line.strip()]
+            self.logger.error("List models failed (exit %d): %s", result.returncode, stderr.decode())
+            return []
+        except FileNotFoundError:
+            self.logger.error("'opencode' CLI not found in PATH")
+            return []
+        except Exception as e:
+            self.logger.error("List models failed: %s", e)
+            return []
+
+    def _parse_model(self, model_str: str) -> Optional[dict]:
+        if not model_str or "/" not in model_str:
+            return None
+        provider, model_id = model_str.split("/", 1)
+        return {"modelID": model_id, "providerID": provider}
 
     async def _call_opencode(self, content: str) -> str:
         if not self._http or not self._session_id:
@@ -455,6 +539,10 @@ class OpenCodeClient:
         body: dict[str, Any] = {"parts": parts}
         if self.oc.system_prompt:
             body["system"] = self.oc.system_prompt
+        if self.oc.model:
+            model_obj = self._parse_model(self.oc.model)
+            if model_obj:
+                body["model"] = model_obj
 
         url = f"{self.oc.server_url}/session/{self._session_id}/prompt_async"
         self.logger.debug("Sending to OpenCode: %s", url)
@@ -485,7 +573,7 @@ class OpenCodeClient:
             return set()
         try:
             url = f"{self.oc.server_url}/session/{session_id}/message"
-            resp = await self._http.get(
+            resp = await self._get_http().get(
                 url,
                 params={"limit": 30, "directory": self._active_dir},
                 timeout=10,
@@ -518,7 +606,7 @@ class OpenCodeClient:
             poll_count += 1
             try:
                 url = f"{self.oc.server_url}/session/{session_id}/message"
-                resp = await self._http.get(
+                resp = await self._get_http().get(
                     url,
                     params={"limit": 30, "directory": self._active_dir},
                     timeout=10,
@@ -565,16 +653,6 @@ class OpenCodeClient:
                     texts.append(part["text"])
         return "\n".join(texts)
 
-    def _extract_all_text(self, messages: list) -> str:
-        texts = []
-        for msg in messages:
-            role = msg.get("info", {}).get("role", "")
-            if role in (self.ROLE_ASSISTANT, self.ROLE_SYSTEM):
-                for part in msg.get("parts", []):
-                    if part.get("type") == "text" and part.get("text"):
-                        texts.append(part["text"])
-        return "\n".join(texts)
-
     # ── 发布 ──
 
     async def _publish(self, content: str, extra: Optional[dict] = None) -> None:
@@ -614,14 +692,18 @@ class OpenCodeClient:
     async def _publish_typing(self) -> None:
         await self._publish("⏳ 处理中...", {"status": "typing"})
 
-    async def _publish_intermediate(self, content: str) -> None:
-        if len(content) > 50:
-            await self._publish(content, {"status": "streaming"})
-
     async def _publish_error(self, message: str) -> None:
         await self._publish(f"❌ {message}", {"status": "error"})
 
     # ── OpenCode ──
+
+    def _get_http(self) -> httpx.AsyncClient:
+        """获取或创建 HTTP 客户端（单例）"""
+        if not self._http:
+            self._http = httpx.AsyncClient()
+            if self.oc.password:
+                self._http.auth = httpx.BasicAuth(self.oc.username, self.oc.password)
+        return self._http
 
     async def _check_opencode_health(self) -> bool:
         try:
@@ -637,13 +719,9 @@ class OpenCodeClient:
             return False
 
     async def _query_sessions(self, directory: str, limit: int = 50) -> list:
-        if not self._http:
-            self._http = httpx.AsyncClient()
-            if self.oc.password:
-                self._http.auth = httpx.BasicAuth(self.oc.username, self.oc.password)
         try:
             url = f"{self.oc.server_url}/session"
-            resp = await self._http.get(
+            resp = await self._get_http().get(
                 url,
                 params={"directory": directory, "limit": limit},
                 timeout=10,
@@ -661,15 +739,16 @@ class OpenCodeClient:
             return []
 
     async def _create_session_in_dir(self, directory: str) -> Optional[dict]:
-        if not self._http:
-            self._http = httpx.AsyncClient()
-            if self.oc.password:
-                self._http.auth = httpx.BasicAuth(self.oc.username, self.oc.password)
         try:
             url = f"{self.oc.server_url}/session"
-            resp = await self._http.post(
+            body: dict[str, Any] = {"directory": directory}
+            if self.oc.model:
+                model_obj = self._parse_model(self.oc.model)
+                if model_obj:
+                    body["model"] = model_obj
+            resp = await self._get_http().post(
                 url,
-                params={"directory": directory},
+                json=body,
                 timeout=10,
             )
             resp.raise_for_status()

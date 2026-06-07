@@ -9,5 +9,4 @@ opencode:
   password: ""
   project_dir: "."
   system_prompt: ""
-  # 流式中间结果最小发布间隔（秒）
-  publish_interval: 5.0
+  model: ""
