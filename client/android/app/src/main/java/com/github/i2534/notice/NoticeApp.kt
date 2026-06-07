@@ -11,7 +11,9 @@ import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.util.AppLogger
 import com.github.i2534.notice.util.MessageBanner
 import io.noties.markwon.Markwon
+import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import io.noties.markwon.ext.tables.TablePlugin
+import com.github.i2534.notice.ui.CopyLinkPlugin
 import com.github.i2534.notice.ui.SoftBreakPlugin
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +47,8 @@ class NoticeApp : Application() {
         val cellPadding = (8 * density).toInt()
         return Markwon.builder(this)
             .usePlugin(SoftBreakPlugin)
+            .usePlugin(StrikethroughPlugin.create())
+            .usePlugin(CopyLinkPlugin)
             .usePlugin(TablePlugin.create { builder ->
                 builder
                     .tableBorderColor(surfaceVariant)
