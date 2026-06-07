@@ -3,10 +3,12 @@
 # OpenCode
 .opencode/
 # Reasonix
-REASONIX.md
-/.reasonix
+/REASONIX.md
+.reasonix/
 # AGENTS
 AGENTS.md
+# CodeGraph
+.codegraph/
 
 # Server
 server/logs/
