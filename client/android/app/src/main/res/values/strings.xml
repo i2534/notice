@@ -56,6 +56,7 @@
     <string name="settings_version">版本</string>
     <string name="voice_hold_to_talk">按住说话</string>
     <string name="toast_copy_success">已复制到剪贴板</string>
+    <string name="clipboard_label_link">link</string>
     <string name="toast_copy_failed">复制失败</string>
     <string name="toast_topic_empty">主题不能为空</string>
     <string name="toast_reply_empty">消息不能为空</string>

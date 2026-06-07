@@ -7,6 +7,7 @@ import android.text.TextPaint
 import android.text.style.URLSpan
 import android.view.View
 import android.widget.Toast
+import com.github.i2534.notice.R
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.MarkwonConfiguration
 import io.noties.markwon.MarkwonSpansFactory
@@ -38,8 +39,10 @@ private class CopyLinkSpan(
     override fun onClick(widget: View) {
         val appContext = widget.context.applicationContext
         val clipboard = appContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("link", url))
-        Toast.makeText(appContext, "已复制链接", Toast.LENGTH_SHORT).show()
+        clipboard.setPrimaryClip(
+            ClipData.newPlainText(appContext.getString(R.string.clipboard_label_link), url)
+        )
+        Toast.makeText(appContext, R.string.toast_copy_success, Toast.LENGTH_SHORT).show()
     }
 
     override fun updateDrawState(ds: TextPaint) {
