@@ -11,16 +11,20 @@
     if (!token.trim()) return
     loading = true
     error = ''
-    const res = await authCheck(token.trim())
-    if (res.ok) {
-      settings.update(s => ({ ...s, token: token.trim() }))
-      authenticated.set(true)
-      const s2 = { ...$settings, token: token.trim() }
-      if (s2.broker) connect(s2.broker, s2.topic, s2.token)
-    } else if (res.status === 429) {
-      error = '请求过于频繁，请稍后再试'
-    } else {
-      error = 'Token 验证失败'
+    try {
+      const res = await authCheck(token.trim())
+      if (res.ok) {
+        settings.update(s => ({ ...s, token: token.trim() }))
+        authenticated.set(true)
+        const s2 = { ...$settings, token: token.trim() }
+        if (s2.broker) connect(s2.broker, s2.topic, s2.token)
+      } else if (res.status === 429) {
+        error = '请求过于频繁，请稍后再试'
+      } else {
+        error = 'Token 验证失败'
+      }
+    } catch {
+      error = '网络连接失败，请检查服务器地址'
     }
     loading = false
   }

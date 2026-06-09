@@ -15,29 +15,40 @@
 
   let showAbout = false
 
+  let refreshing = false
+
   async function handleRefresh() {
+    if (refreshing) return
     const s = $settings
-    if (s.token) {
+    if (!s.token) return
+    refreshing = true
+    try {
       const res = await fetchMessages(s.token)
-      if (res.ok && res.data?.data?.messages) {
+      if (res.ok && Array.isArray(res.data?.data?.messages)) {
         messages.update(list => {
-          const seen = new Set(list.map(m => m.content))
+          const seen = new Set(list.map(m => m.id))
           const added = res.data.data.messages
-            .filter(m => !seen.has(m.content))
+            .filter(m => !seen.has(m.id))
             .map(m => ({
-              id: Date.now() + Math.random(),
+              id: m.id,
               topic: m.topic || 'notice',
               title: m.title || '通知',
               content: m.content || '',
-              timestamp: m.timestamp,
+              timestamp: m.timestamp || new Date().toISOString(),
               client: m.client || '',
               unread: false,
-              cat: 'system',
+              cat: (m.topic || '').includes('alert') ? 'alert' : (m.topic || '').includes('voice') ? 'voice' : 'system',
             }))
           return [...list, ...added]
         })
         showToast('已刷新', 'success')
+      } else {
+        showToast('刷新失败', 'error')
       }
+    } catch {
+      showToast('网络错误', 'error')
+    } finally {
+      refreshing = false
     }
   }
 </script>
@@ -82,7 +93,7 @@
       <p>轻量级消息推送系统</p>
       <p class="about-desc">内置 Web 管理界面，支持 HTTP Webhook 接收消息、内置 MQTT Broker、多平台客户端推送。</p>
       <div class="about-links">
-        <a href="https://github.com/i2534/notice" target="_blank" rel="noopener" class="about-link" onclick={(e) => { e.preventDefault(); showToast('https://github.com/i2534/notice','success'); }}>
+        <a href="https://github.com/i2534/notice" target="_blank" rel="noopener" class="about-link" onclick={(e) => { e.stopPropagation(); }}>
           <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12 24 5.37 18.63 0 12 0"/></svg>
           GitHub
         </a>
