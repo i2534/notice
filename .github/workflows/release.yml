@@ -60,6 +60,19 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: server/go.sum
 
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: server/web/package-lock.json
+
+      - name: Build Web UI
+        working-directory: server/web
+        run: |
+          npm ci
+          npm run build
+
       - name: Build Server
         working-directory: server
         env:
