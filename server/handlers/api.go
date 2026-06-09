@@ -99,6 +99,54 @@ func ExtractToken(r *http.Request) string {
 	return TruncateToken(token, MaxTokenLength)
 }
 
+// ClientsHandler 客户端列表
+func ClientsHandler(b *broker.Broker, cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		token := ExtractToken(r)
+		if token == "" || token != cfg.Auth.Token {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]any{
+				"success": false,
+				"message": "认证失败",
+			})
+			return
+		}
+
+		type clientInfo struct {
+			ID            string   `json:"id"`
+			Remote        string   `json:"remote"`
+			Subscriptions []string `json:"subscriptions"`
+		}
+
+		var clients []clientInfo
+		for _, cl := range b.Clients() {
+			if cl.ID == "inline" || len(cl.ID) == 0 || cl.ID[0] == '$' {
+				continue
+			}
+			info := clientInfo{
+				ID:     cl.ID,
+				Remote: cl.Net.Remote,
+			}
+			for filter := range cl.State.Subscriptions.GetAll() {
+				info.Subscriptions = append(info.Subscriptions, filter)
+			}
+			clients = append(clients, info)
+		}
+
+		if clients == nil {
+			clients = []clientInfo{}
+		}
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"data":    clients,
+		})
+	}
+}
+
 // ValidateToken 校验 Token
 func ValidateToken(r *http.Request, token string) bool {
 	return ExtractToken(r) == token

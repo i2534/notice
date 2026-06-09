@@ -180,6 +180,17 @@ func (b *Broker) PublishToDefault(msg Message) error {
 	return b.Publish(b.topic, msg)
 }
 
+// Clients 获取所有已连接的客户端（排除内置客户端）
+func (b *Broker) Clients() []*mqtt.Client {
+	var result []*mqtt.Client
+	for _, cl := range b.server.Clients.GetAll() {
+		if cl.ID != "inline" && len(cl.ID) > 0 && cl.ID[0] != '$' {
+			result = append(result, cl)
+		}
+	}
+	return result
+}
+
 // ClientCount 获取当前连接的客户端数量（排除内置客户端）
 func (b *Broker) ClientCount() int {
 	count := 0
