@@ -7,11 +7,12 @@
   import SendPanel from '../components/send/SendPanel.svelte'
 
   export let showToast = () => {}
+  export let showConfirm = () => {}
 </script>
 
 <div class="messages-view">
   <FilterBar />
-  <BatchBar />
+  <BatchBar {showToast} {showConfirm} />
   <MessageList />
   {#if $sendPanelOpen}
     <SendPanel {showToast} />

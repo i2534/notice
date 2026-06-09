@@ -15,9 +15,11 @@
   function toggleSelectAll() {
     const ids = $filteredMessages.map(m => m.id)
     const allSelected = ids.every(id => $selectedIds.has(id))
-    if (allSelected) ids.forEach(id => $selectedIds.delete(id))
-    else ids.forEach(id => $selectedIds.add(id))
-    selectedIds.set($selectedIds)
+    selectedIds.update(ids => {
+      if (allSelected) ids.forEach(id => ids.delete(id))
+      else ids.forEach(id => ids.add(id))
+      return ids
+    })
   }
 </script>
 

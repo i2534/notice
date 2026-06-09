@@ -83,7 +83,8 @@
   </div>
   <div class="field">
     <label for="sendContent">内容</label>
-    <textarea id="sendContent" bind:value={content} placeholder="消息内容… Markdown 格式支持"></textarea>
+    <textarea id="sendContent" bind:value={content} placeholder="消息内容… Markdown 格式支持"
+      onkeydown={(e) => { if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); handleSend(); } }}></textarea>
   </div>
   <div class="send-toolbar">
     <button class="btn-secondary-sm" onclick={handleUpload}>📷 图片</button>
