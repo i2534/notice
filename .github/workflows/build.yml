@@ -31,6 +31,19 @@ jobs:
         working-directory: server
         run: go mod download
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: server/web/package-lock.json
+
+      - name: Build Web UI
+        working-directory: server/web
+        run: |
+          npm ci
+          npm run build
+
       - name: Build
         working-directory: server
         run: |
@@ -136,6 +149,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: server/web/package-lock.json
+
+      - name: Build Web UI
+        working-directory: server/web
+        run: |
+          npm ci
+          npm run build
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
