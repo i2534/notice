@@ -1,6 +1,30 @@
-import { writable, derived } from 'svelte/store'
+import { get, writable, derived } from 'svelte/store'
 
 const STORAGE_KEY = 'noticeMessages'
+
+const defaultSettings = {
+  broker: 'ws://localhost:9092',
+  topic: 'notice/#',
+  token: '',
+  theme: 'dark',
+  maxMessages: 200,
+}
+
+function loadSettings() {
+  try {
+    const saved = localStorage.getItem('noticeSettings')
+    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings
+  } catch { return defaultSettings }
+}
+
+// settings must be defined before saveMessages / messages (subscribe fires immediately)
+export const settings = writable(loadSettings())
+
+settings.subscribe(val => {
+  try { localStorage.setItem('noticeSettings', JSON.stringify(val)) } catch (e) {
+    console.warn('[store] Failed to save settings:', e)
+  }
+})
 
 function loadCachedMessages() {
   try {
@@ -10,7 +34,12 @@ function loadCachedMessages() {
 }
 
 function saveMessages(list) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(-200))) } catch {}
+  try {
+    const max = get(settings).maxMessages || 200
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(-max)))
+  } catch (e) {
+    console.warn('[store] Failed to persist messages:', e)
+  }
 }
 
 export const messages = writable(loadCachedMessages())
@@ -28,27 +57,6 @@ export const mqttClient = writable(null)
 export const detailMessageId = writable(null)
 export const sendPanelOpen = writable(false)
 export const settingsPanelOpen = writable(false)
-
-const defaultSettings = {
-  broker: 'ws://localhost:9092',
-  topic: 'notice/#',
-  token: '',
-  theme: 'dark',
-  maxMessages: 200,
-}
-
-function loadSettings() {
-  try {
-    const saved = localStorage.getItem('noticeSettings')
-    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings
-  } catch { return defaultSettings }
-}
-
-export const settings = writable(loadSettings())
-
-settings.subscribe(val => {
-  try { localStorage.setItem('noticeSettings', JSON.stringify(val)) } catch {}
-})
 
 export const filteredMessages = derived(
   [messages, searchQuery, currentFilter],

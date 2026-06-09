@@ -1,5 +1,6 @@
 import mqtt from 'mqtt'
-import { messages, connectionStatus, mqttClient } from './store.js'
+import { get } from 'svelte/store'
+import { messages, connectionStatus, mqttClient, settings } from './store.js'
 import { normalizeMessagePayload, decodeNoticeMqttPayloadIfEncoded, topicForPublish } from './utils.js'
 
 let client = null
@@ -67,16 +68,23 @@ export function connect(brokerUrl, topic, token) {
       }
       // Desktop notification
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(newMsg.title, { body: newMsg.content })
+        try { new Notification(newMsg.title, { body: newMsg.content }) } catch (e) { /* ignore */ }
       }
-      return [...list, newMsg].slice(-200)
+      const max = get(settings).maxMessages || 200
+      return [...list, newMsg].slice(-max)
     })
+  })
+
+  client.on('reconnect', () => {
+    connectionStatus.set('connecting')
   })
 
   client.on('error', (err) => {
     const m = (err.message || '').toLowerCase()
     if (m.includes('not authorized') || m.includes('bad user') || m.includes('auth')) {
       connectionStatus.set('disconnected')
+    } else {
+      console.warn('[mqtt] error:', err.message)
     }
   })
 

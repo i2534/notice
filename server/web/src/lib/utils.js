@@ -87,14 +87,14 @@ export function isAudioUrl(url) {
   const decoded = url.replace(/&amp;/gi, '&')
   const pathPart = decoded.split('#')[0].split('?')[0]
   if (/\/api\/media(\/|\?|$)/i.test(pathPart)) return true
-  if (/\.(mp3|ogg|wav|m4a|aac|opus|weba)$/i.test(pathPart)) return true
+  if (/\.(mp3|ogg|wav|m4a|aac|opus|webm)$/i.test(pathPart)) return true
   const qs = decoded.split('?')[1] || ''
   if (qs) {
     for (const part of qs.split('&')) {
       const eq = part.indexOf('=')
       if (eq > 0 && part.slice(0, eq).toLowerCase() === 'n') {
         const val = decodeURIComponent(part.slice(eq + 1))
-        if (/\.(mp3|ogg|wav|m4a|aac|opus|weba)$/i.test(val)) return true
+        if (/\.(mp3|ogg|wav|m4a|aac|opus|webm)$/i.test(val)) return true
         break
       }
     }
@@ -126,6 +126,7 @@ export function renderMarkdown(text) {
 export function formatTime(isoString) {
   if (!isoString) return ''
   const d = new Date(isoString)
+  if (isNaN(d.getTime())) return ''
   const now = new Date()
   const sameDay = d.toDateString() === now.toDateString()
   return sameDay
