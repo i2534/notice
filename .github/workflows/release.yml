@@ -316,25 +316,25 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download Server Artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
           pattern: server-*
 
       - name: Download Client Artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
           pattern: client-*
 
       - name: Download Android Artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
           pattern: android-*
 
       - name: Download Openclaw Artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
           pattern: openclaw-*
