@@ -1,0 +1,49 @@
+:root {
+  --bg-deep: #08080a;
+  --bg-surface: #101014;
+  --bg-elevated: #181820;
+  --bg-card: #22222c;
+  --bg-hover: #2c2c38;
+  --border: #30303e;
+  --border-light: #3c3c4a;
+  --accent: #00d4aa;
+  --accent-glow: rgba(0,212,170,.2);
+  --accent-dim: rgba(0,212,170,.08);
+  --accent-dim2: rgba(0,212,170,.15);
+  --text-primary: #eeeeef;
+  --text-secondary: #a8a8b8;
+  --text-hint: #68687a;
+  --danger: #f75c5c;
+  --danger-dim: rgba(247,92,92,.12);
+  --warning: #f5a623;
+  --info: #4dabf7;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --shadow: 0 2px 16px rgba(0,0,0,.4);
+  --sidebar-width: 220px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { height:100%; overflow:hidden; }
+body {
+  font-family:'Noto Sans SC','Plus Jakarta Sans',system-ui,sans-serif;
+  background:var(--bg-deep); color:var(--text-primary);
+}
+#app { height:100vh; display:flex; }
+::-webkit-scrollbar { width:4px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+/* Responsive: 640px */
+@media (max-width: 640px) {
+  .sidebar { display:none !important; }
+  .search-box { max-width:100% !important; }
+  .filter-bar { flex-wrap:wrap; }
+  .filter-pill { font-size:11px; padding:3px 8px; }
+  .topbar { padding:10px 12px; }
+  .message-list { padding:8px 10px; }
+  .send-panel { padding:12px 14px; }
+  .settings-panel { width:100% !important; }
+  .detail-modal { width:calc(100% - 20px) !important; }
+}

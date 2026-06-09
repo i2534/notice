@@ -30,7 +30,7 @@ var (
 	ProjectURL = "https://github.com/i2534/notice"
 )
 
-//go:embed web/*
+//go:embed web/dist/*
 var webFS embed.FS
 
 func main() {
@@ -115,6 +115,7 @@ func main() {
 	http.HandleFunc("/health", handlers.HealthHandler)
 	http.HandleFunc("/status", handlers.StatusHandler(mqttBroker, storeManager))
 	http.HandleFunc("/messages", handlers.MessagesHandler(storeManager, cfg))
+	http.HandleFunc("/api/clients", handlers.ClientsHandler(mqttBroker, cfg))
 	http.HandleFunc("/api/image", handlers.ImageHandler(cfg, cfg.Storage.Path))
 	http.HandleFunc("/api/upload", handlers.UploadHandler(cfg, cfg.Storage.Path, authLimiter))
 	http.HandleFunc("/api/media/upload", handlers.MediaUploadHandler(cfg, cfg.Storage.Path, authLimiter))
@@ -126,18 +127,30 @@ func main() {
 	go handlers.RunImageCleanupLoop(cfg, cfg.Storage.Path, imageCleanupStop)
 	go handlers.RunMediaCleanupLoop(cfg, cfg.Storage.Path, mediaCleanupStop)
 
-	// 注册 Web 页面路由（拒绝路径穿越）
-	webContent, _ := fs.Sub(webFS, "web")
+	// 注册 SPA 静态文件服务（构建产物在 web/dist/）
+	webContent, _ := fs.Sub(webFS, "web/dist")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "..") || strings.Contains(r.URL.Path, "\\") {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
-		if r.URL.Path == "/" {
-			http.ServeFileFS(w, r, webContent, "index.html")
+		// API 路径穿透，让后续注册的 handler 处理
+		if strings.HasPrefix(r.URL.Path, "/api/") ||
+			strings.HasPrefix(r.URL.Path, "/webhook") ||
+			strings.HasPrefix(r.URL.Path, "/messages") ||
+			strings.HasPrefix(r.URL.Path, "/status") ||
+			strings.HasPrefix(r.URL.Path, "/health") {
+			http.NotFound(w, r)
 			return
 		}
-		http.FileServerFS(webContent).ServeHTTP(w, r)
+		// SPA: 所有路径都尝试返回 index.html（让前端处理路由），除非文件存在
+		f, err := webContent.Open(strings.TrimPrefix(r.URL.Path, "/"))
+		if err == nil {
+			f.Close()
+			http.FileServerFS(webContent).ServeHTTP(w, r)
+			return
+		}
+		http.ServeFileFS(w, r, webContent, "index.html")
 	})
 
 	// 优雅关闭
