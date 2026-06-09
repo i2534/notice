@@ -49,3 +49,7 @@ make logs      # 查看日志
 | `/help` | 列出所有可用指令 |
 
 普通消息会发送到当前活跃的 session 处理。
+
+## License
+
+MIT
