@@ -1,14 +1,20 @@
 <script>
   import { selectedIds, messages } from '../../lib/store.js'
 
+  export let showToast = () => {}
+  export let showConfirm = () => {}
+
   $: count = $selectedIds.size
 
   function clearSelection() { selectedIds.set(new Set()) }
   function deleteSelected() {
     if (count === 0) return
-    const ids = new Set($selectedIds)
-    messages.update(list => list.filter(m => !ids.has(m.id)))
-    selectedIds.set(new Set())
+    showConfirm(`确定要删除选中的 ${count} 条消息吗？`, () => {
+      const ids = new Set($selectedIds)
+      messages.update(list => list.filter(m => !ids.has(m.id)))
+      selectedIds.set(new Set())
+      showToast(`已删除 ${count} 条消息`, 'success')
+    })
   }
 </script>
 

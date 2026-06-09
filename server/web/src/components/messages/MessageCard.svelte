@@ -15,9 +15,11 @@
 
   function toggleSelect(e) {
     e.stopPropagation()
-    if ($selectedIds.has(msg.id)) $selectedIds.delete(msg.id)
-    else $selectedIds.add(msg.id)
-    selectedIds.set($selectedIds)
+    selectedIds.update(ids => {
+      if (ids.has(msg.id)) ids.delete(msg.id)
+      else ids.add(msg.id)
+      return ids
+    })
   }
 
   $: pillStyle = msg.cat === 'alert'
@@ -46,7 +48,7 @@
     <div class="msg-content-preview">{renderPreview(msg.content)}</div>
   </div>
   <div class="hover-actions">
-    <button class="ha-btn" title="复制" onclick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.content); }}>📋</button>
+    <button class="ha-btn" title="复制" onclick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(msg.content).catch(() => {}); }}>📋</button>
   </div>
 </div>
 

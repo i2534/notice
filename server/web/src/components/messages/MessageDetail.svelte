@@ -10,8 +10,9 @@
   function close() { detailMessageId.set(null) }
 
   function handleDelete() {
+    const target = msg
     showConfirm('确定要删除这条消息吗？', () => {
-      if (msg) { messages.update(list => list.filter(m => m.id !== msg.id)); showToast('已删除','success') }
+      if (target) { messages.update(list => list.filter(m => m.id !== target.id)); showToast('已删除','success') }
       close()
     })
   }

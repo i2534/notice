@@ -1,14 +1,18 @@
 <script>
   import { afterUpdate } from 'svelte'
-  import { filteredMessages, detailMessageId } from '../../lib/store.js'
+  import { filteredMessages, detailMessageId, messages } from '../../lib/store.js'
   import MessageCard from './MessageCard.svelte'
   import EmptyState from '../shared/EmptyState.svelte'
 
   let listEl
 
-  // Auto scroll to bottom when new messages arrive
+  // Auto scroll to bottom only when already near bottom
   afterUpdate(() => {
-    if (listEl) listEl.scrollTop = listEl.scrollHeight
+    if (!listEl) return
+    const { scrollTop, scrollHeight, clientHeight } = listEl
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      listEl.scrollTop = scrollHeight
+    }
   })
 </script>
 
@@ -17,7 +21,10 @@
     <EmptyState message="暂无消息" />
   {:else}
     {#each $filteredMessages as msg (msg.id)}
-      <MessageCard {msg} onclick={() => detailMessageId.set(msg.id)} />
+      <MessageCard {msg} onclick={() => {
+        detailMessageId.set(msg.id)
+        if (msg.unread) messages.update(list => list.map(m => m.id === msg.id ? { ...m, unread: false } : m))
+      }} />
     {/each}
   {/if}
 </div>
