@@ -195,7 +195,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
 
       - name: Grant Execute Permission
         working-directory: client/android
@@ -305,8 +305,8 @@ jobs:
   release:
     name: Create Release
     needs: [build-server, build-cli-client, build-android, build-openclaw, build-docker]
-    # 允许 build-docker 被跳过时继续执行
-    if: ${{ !cancelled() && !failure() }}
+    # Android 构建失败不阻塞 Release（依赖网络下载时可能偶发超时）
+    if: ${{ always() && !cancelled() && (github.event_name == 'push' || inputs.create_release == true) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
