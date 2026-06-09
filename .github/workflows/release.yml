@@ -257,6 +257,7 @@ jobs:
           VERSION="${{ env.VERSION }}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "version_short=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "build_time=$(date -u '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
 
       - name: Build and Push
         uses: docker/build-push-action@v6
@@ -266,7 +267,7 @@ jobs:
           push: true
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
-            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+            BUILD_TIME=${{ steps.version.outputs.build_time }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/notice-server:${{ steps.version.outputs.version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/notice-server:${{ steps.version.outputs.version_short }}
