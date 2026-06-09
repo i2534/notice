@@ -4,7 +4,9 @@
 
 ## AIGC
 
-除了本行是人工添加以外, 其余所有的内容均为 Cursor Agent Auto 模式生成, 并且是通过简单的 chat 交互而得
+除了本行是人工添加以外, 其余所有的内容均为 AI 辅助生成，使用的工具包括：
+- **Cursor** (Agent Auto 模式) — 项目主体代码
+- **OpenCode** (Sisyphus / Claude) — 后续迭代与维护
 
 ## 架构
 
@@ -34,7 +36,7 @@ notice/
 │   ├── badgeropts/      # Badger 内存参数（消息库与 MQTT 共用）
 │   ├── ratelimit/       # IP 限流
 │   ├── logger/          # 日志系统（支持轮转）
-│   ├── web/             # Web 管理界面
+│   ├── web/             # Web 管理界面（Vite + Svelte 5）
 │   └── config/          # 配置管理
 │
 ├── client/
@@ -42,7 +44,9 @@ notice/
 │   ├── gui/             # 跨平台桌面客户端 (Tauri) - Linux/Windows/macOS
 │   ├── android/         # Android 客户端 (Kotlin)，支持主题、Markdown、语音消息与媒体缓存
 │   ├── hermes/          # Hermes Agent 插件，通过 MQTT 接入 Notice 平台
-│   └── openclaw/        # Openclaw 插件，收发可指定 topic，支持语音转写（需主配置 tools.media.audio）
+│   ├── openclaw/        # Openclaw 插件，收发可指定 topic，支持语音转写（需主配置 tools.media.audio）
+│   ├── xiaoai/          # 小爱音箱 Pro 客户端，双向消息（TTS 播报 + 语音发布）
+│   └── opencode/        # OpenCode 客户端，接入 Notice 消息系统
 │
 └── README.md
 ```
@@ -62,7 +66,16 @@ make run
 - `9091` - MQTT TCP
 - `9092` - MQTT WebSocket
 
-### 2. 启动客户端
+### 2. Web 管理界面（开发模式）
+
+```bash
+cd server/web
+npm install            # 首次
+npm run dev            # 开发模式（需服务端已启动，API 自动代理到 :9090）
+npm run build          # 生产构建（产物在 web/dist/，嵌入 Go 二进制）
+```
+
+### 3. 启动客户端
 
 **CLI (Linux/Windows/macOS):**
 ```bash
@@ -79,7 +92,7 @@ cd client/android
 make docker  # 使用 Docker 构建 APK
 ```
 
-### 3. 发送消息
+### 4. 发送消息
 
 ```bash
 # 发送到默认主题
@@ -147,27 +160,28 @@ curl -X POST http://localhost:9090/webhook \
 
 ## 功能特性
 
-| 功能 | Server | CLI | GUI | Android | Hermes |
-|------|--------|-----|-----|---------|--------|
-| MQTT Broker | ✅ 内置 | - | - | - | - |
-| Webhook 接收 | ✅ | - | - | - | - |
-| Token 认证 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| IP 限流 | ✅ | - | - | - | - |
-| Web 界面 | ✅ | - | - | - | - |
-| 日志轮转 | ✅ | - | - | - | - |
-| 桌面通知 | - | ✅ | ✅ | ✅ | - |
-| 消息历史 | ✅ | - | ✅ | ✅ | - |
-| 系统托盘 | - | - | ✅ | - | - |
-| 后台运行 | - | - | ✅ | ✅ | - |
-| 开机自启 | - | - | - | ✅ | - |
-| 执行命令 | - | ✅ | - | - | - |
-| 发送可指定 topic | ✅ Webhook | ✅ send -topic | - | ✅ 设置+回复指定 | ✅ |
-| 消息 Markdown 渲染 | ✅ Web | - | - | ✅ | ✅ |
-| 长消息自动压缩 | - | - | - | - | ✅ |
-| Linux | ✅ | ✅ | ✅ | - | ✅ |
-| Windows | ✅ | ✅ | ✅ | - | ✅ |
-| macOS | ✅ | ✅ | ✅ | - | ✅ |
-| Android | - | - | - | ✅ | - |
+| 功能 | Server | CLI | GUI | Android | Hermes | XiaoAi |
+|------|--------|-----|-----|---------|--------|--------|
+| MQTT Broker | ✅ 内置 | - | - | - | - | - |
+| Webhook 接收 | ✅ | - | - | - | - | - |
+| Token 认证 | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| IP 限流 | ✅ | - | - | - | - | - |
+| Web 界面 | ✅ | - | - | - | - | - |
+| 日志轮转 | ✅ | - | - | - | - | - |
+| 桌面通知 | - | ✅ | ✅ | ✅ | - | ✅ TTS 播报 |
+| 消息历史 | ✅ | - | ✅ | ✅ | - | - |
+| 系统托盘 | - | - | ✅ | - | - | - |
+| 后台运行 | - | - | ✅ | ✅ | - | ✅ |
+| 开机自启 | - | - | - | ✅ | - | - |
+| 执行命令 | - | ✅ | - | - | - | - |
+| 发送可指定 topic | ✅ Webhook | ✅ send -topic | - | ✅ 设置+回复指定 | ✅ | ✅ 语音发布 |
+| 消息 Markdown 渲染 | ✅ Web | - | - | ✅ | ✅ | - |
+| 长消息自动压缩 | - | - | - | - | ✅ | - |
+| 语音消息 | - | - | - | ✅ 录制 | ✅ ASR 转写 | ✅ 语音输入 |
+| Linux | ✅ | ✅ | ✅ | - | ✅ | ✅ |
+| Windows | ✅ | ✅ | ✅ | - | ✅ | - |
+| macOS | ✅ | ✅ | ✅ | - | ✅ | - |
+| Android | - | - | - | ✅ | - | - |
 
 ## 文档
 
@@ -177,6 +191,8 @@ curl -X POST http://localhost:9090/webhook \
 - [Android Client 文档](client/android/README.md) - Android 客户端（默认发送主题、回复指定 topic、Markdown）
 - [Hermes 插件文档](client/hermes/README.md) - Hermes Agent 插件（MQTT 接入），支持 Markdown、图片上传与长消息压缩
 - [Openclaw 插件文档](client/openclaw/README.md) - Openclaw Channel 插件（MQTT 收发），收发可指定 topic
+- [小爱音箱客户端文档](client/xiaoai/README.md) - 小爱音箱 Pro 客户端，TTS 播报 + 语音发布双向通信
+- [OpenCode 客户端文档](client/opencode/README.md) - OpenCode 客户端，通过 MQTT 接入 Notice 消息系统
 
 ## License
 
