@@ -15,10 +15,11 @@
 
   function toggleSelect(e) {
     e.stopPropagation()
-    selectedIds.update(ids => {
-      if (ids.has(msg.id)) ids.delete(msg.id)
-      else ids.add(msg.id)
-      return ids
+    selectedIds.update(current => {
+      const next = new Set(current)
+      if (next.has(msg.id)) next.delete(msg.id)
+      else next.add(msg.id)
+      return next
     })
   }
 

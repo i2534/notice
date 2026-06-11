@@ -13,12 +13,13 @@
   $: count = $filteredMessages.length
 
   function toggleSelectAll() {
-    const ids = $filteredMessages.map(m => m.id)
-    const allSelected = ids.every(id => $selectedIds.has(id))
-    selectedIds.update(ids => {
-      if (allSelected) ids.forEach(id => ids.delete(id))
-      else ids.forEach(id => ids.add(id))
-      return ids
+    const msgIds = $filteredMessages.map(m => m.id)
+    selectedIds.update(current => {
+      const next = new Set(current)
+      const allSelected = msgIds.every(id => next.has(id))
+      if (allSelected) msgIds.forEach(id => next.delete(id))
+      else msgIds.forEach(id => next.add(id))
+      return next
     })
   }
 </script>
