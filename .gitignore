@@ -2,6 +2,8 @@
 .vscode/
 # OpenCode
 .opencode/
+.sisyphus/
+.omo/
 # Reasonix
 /REASONIX.md
 .reasonix/
@@ -14,6 +16,7 @@ AGENTS.md
 server/logs/
 server/data/
 server/notice-server
+data/
 
 # Android Client
 client/android/.gradle/
