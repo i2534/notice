@@ -27,8 +27,11 @@
       if (res.ok && Array.isArray(res.data?.data?.messages)) {
         messages.update(list => {
           const seen = new Set(list.map(m => m.id))
+          // 内容+时间窗口去重（与挂载时保持一致）
+          const contentSeen = new Set(list.map(m => `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`))
           const added = res.data.data.messages
             .filter(m => !seen.has(m.id))
+            .filter(m => !contentSeen.has(`${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`))
             .map(m => ({
               id: m.id,
               topic: m.topic || 'notice',
@@ -80,6 +83,8 @@
     </button>
   </div>
 </header>
+
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && showAbout) showAbout = false; }} />
 
 {#if showAbout}
   <div class="about-overlay" onclick={() => showAbout = false}></div>

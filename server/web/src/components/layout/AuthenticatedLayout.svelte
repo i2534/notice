@@ -39,11 +39,19 @@
       }))
       messages.update(list => {
         const existing = new Map(list.map(m => [m.id, m]))
+        // 内容+时间窗口去重：已通过 MQTT 收到的消息不再从 API 重复添加（MQTT 用随机 ID，API 用整数 ID）
+        const contentSeen = new Set(list.map(m => `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`))
         for (const m of history) {
-          if (!existing.has(m.id)) existing.set(m.id, m)
+          if (existing.has(m.id)) continue
+          const key = `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`
+          if (contentSeen.has(key)) continue
+          contentSeen.add(key)
+          existing.set(m.id, m)
         }
         const max = $settings.maxMessages || 200
-        return [...existing.values()].slice(-max)
+        const merged = [...existing.values()]
+        merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        return merged.slice(0, max)
       })
     }
 
@@ -52,6 +60,14 @@
     }
   })
 </script>
+
+<svelte:window onkeydown={(e) => {
+  if (e.key === 'Escape') {
+    settingsPanelOpen.set(false)
+    detailMessageId.set(null)
+    // 关于弹窗在 Topbar 内部自行处理
+  }
+}} />
 
 <div class="app-layout">
   <Sidebar {showToast} />
