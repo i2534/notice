@@ -6,12 +6,12 @@
 
   let listEl
 
-  // Auto scroll to bottom only when already near bottom
+  // Auto scroll to top when already near top（最新在前，新消息出现在顶部）
   afterUpdate(() => {
     if (!listEl) return
-    const { scrollTop, scrollHeight, clientHeight } = listEl
-    if (scrollHeight - scrollTop - clientHeight < 100) {
-      listEl.scrollTop = scrollHeight
+    const { scrollTop } = listEl
+    if (scrollTop < 100) {
+      listEl.scrollTop = 0
     }
   })
 </script>

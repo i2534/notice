@@ -26,17 +26,32 @@ settings.subscribe(val => {
   }
 })
 
+function dedupByContent(list) {
+  if (!list || !list.length) return list || []
+  const seen = new Set()
+  return list.filter(m => {
+    const key = `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function loadCachedMessages() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+    if (!raw) return []
+    const msgs = JSON.parse(raw)
+    if (!Array.isArray(msgs)) return []
+    return dedupByContent(msgs)
   } catch { return [] }
 }
 
 function saveMessages(list) {
   try {
     const max = get(settings).maxMessages || 200
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(-max)))
+    const deduped = dedupByContent(list)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(deduped.slice(-max)))
   } catch (e) {
     console.warn('[store] Failed to persist messages:', e)
   }
@@ -74,6 +89,8 @@ export const filteredMessages = derived(
     if ($currentFilter === 'unread') result = result.filter(m => m.unread)
     else if ($currentFilter === 'today') result = result.filter(m => m.timestamp && new Date(m.timestamp).toDateString() === new Date().toDateString())
     else if ($currentFilter !== 'all') result = result.filter(m => m.cat === $currentFilter)
+    // 按时间降序排列（最新在前）
+    result = [...result].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
     return result
   }
 )

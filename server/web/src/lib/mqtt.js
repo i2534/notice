@@ -61,11 +61,13 @@ export function connect(brokerUrl, topic, token) {
     }
 
     messages.update(list => {
-      // Dedup: check if same content already in last 5 seconds
-      const last = list[list.length - 1]
-      if (last && last.title === newMsg.title && last.content === newMsg.content && Math.abs(new Date(last.timestamp) - new Date(newMsg.timestamp)) < 5000) {
-        return list
-      }
+      // Dedup: check if same content already in last 5 seconds (滑动窗口，不依赖位置)
+      const recent = list.slice(-20).filter(m =>
+        m.title === newMsg.title &&
+        m.content === newMsg.content &&
+        Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp)) < 5000
+      )
+      if (recent.length > 0) return list
       // Desktop notification
       if ('Notification' in window && Notification.permission === 'granted') {
         try { new Notification(newMsg.title, { body: newMsg.content }) } catch (e) { /* ignore */ }
