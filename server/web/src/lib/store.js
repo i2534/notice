@@ -26,7 +26,7 @@ settings.subscribe(val => {
   }
 })
 
-function dedupByContent(list) {
+export function dedupByContent(list) {
   if (!list || !list.length) return list || []
   const seen = new Set()
   return list.filter(m => {
@@ -37,7 +37,7 @@ function dedupByContent(list) {
   })
 }
 
-function loadCachedMessages() {
+export function loadCachedMessages() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
@@ -47,7 +47,7 @@ function loadCachedMessages() {
   } catch { return [] }
 }
 
-function saveMessages(list) {
+export function saveMessages(list) {
   try {
     const max = get(settings).maxMessages || 200
     const deduped = dedupByContent(list)
