@@ -23,7 +23,9 @@
     {#each $filteredMessages as msg (msg.id)}
       <MessageCard {msg} onclick={() => {
         detailMessageId.set(msg.id)
-        if (msg.unread) messages.update(list => list.map(m => m.id === msg.id ? { ...m, unread: false } : m))
+        if (msg.unread) setTimeout(() => {
+          messages.update(list => list.map(m => m.id === msg.id ? { ...m, unread: false } : m))
+        }, 0)
       }} />
     {/each}
   {/if}

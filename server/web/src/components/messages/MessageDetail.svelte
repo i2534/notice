@@ -1,11 +1,11 @@
 <script>
-  import { detailMessageId, filteredMessages, messages } from '../../lib/store.js'
+  import { detailMessageId, messages } from '../../lib/store.js'
   import { renderMarkdown } from '../../lib/utils.js'
 
   export let showToast = () => {}
   export let showConfirm = () => {}
 
-  $: msg = $filteredMessages.find(m => m.id === $detailMessageId)
+  $: msg = $messages.find(m => m.id === $detailMessageId)
 
   function close() { detailMessageId.set(null) }
 

@@ -1,9 +1,10 @@
 <script>
   import { onMount } from 'svelte'
   import { currentView, settings, settingsPanelOpen, detailMessageId, messages } from '../../lib/store.js'
-  import { connect } from '../../lib/mqtt.js'
-  import { applyTheme } from '../../lib/theme.js'
-  import { fetchMessages } from '../../lib/api.js'
+import { connect } from '../../lib/mqtt.js'
+import { applyTheme } from '../../lib/theme.js'
+import { fetchMessages } from '../../lib/api.js'
+import { normalizeMessagePayload } from '../../lib/utils.js'
   import Sidebar from './Sidebar.svelte'
   import Topbar from './Topbar.svelte'
   import MessagesView from '../../views/MessagesView.svelte'
@@ -27,16 +28,21 @@
     // Fetch historical messages from server before connecting MQTT
     const res = await fetchMessages(s.token, 50)
     if (res.ok && Array.isArray(res.data?.data?.messages)) {
-      const history = res.data.data.messages.map(m => ({
-        id: m.id,
-        topic: m.topic || 'notice',
-        title: m.title || '通知',
-        content: m.content || '',
-        timestamp: m.timestamp || new Date().toISOString(),
-        client: m.client || '',
-        unread: false,
-        cat: (m.topic || '').includes('alert') ? 'alert' : (m.topic || '').includes('voice') ? 'voice' : 'system',
-      }))
+      const history = res.data.data.messages.map(m => {
+        const normalized = normalizeMessagePayload({
+          id: m.id,
+          topic: m.topic || 'notice',
+          title: m.title || '通知',
+          content: m.content || '',
+          timestamp: m.timestamp || new Date().toISOString(),
+          client: m.client || '',
+          unread: false,
+        })
+        return {
+          ...normalized,
+          cat: (normalized.topic || '').includes('alert') ? 'alert' : (normalized.topic || '').includes('voice') ? 'voice' : 'system',
+        }
+      })
       messages.update(list => {
         const existing = new Map(list.map(m => [m.id, m]))
         // 内容+时间窗口去重：已通过 MQTT 收到的消息不再从 API 重复添加（MQTT 用随机 ID，API 用整数 ID）
