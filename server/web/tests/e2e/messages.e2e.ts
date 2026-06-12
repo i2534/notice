@@ -53,7 +53,8 @@ test.describe('Messages View', () => {
 
     await expect(page.locator('text=消息已发送')).toBeVisible({ timeout: 10000 })
 
-    await expect(page.locator('.msg-card').first()).toContainText('E2E 测试标题', { timeout: 10000 })
+    // 等待 MQTT 回环消息出现在列表顶部（服务端时间戳）
+    await expect(page.locator('.msg-card').first()).toContainText('E2E 测试标题', { timeout: 20000 })
   })
 
   test('can close send panel', async ({ page }) => {

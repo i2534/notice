@@ -4,13 +4,6 @@ import { messages, connectionStatus, mqttClient, settings } from './store.js'
 import { normalizeMessagePayload, decodeNoticeMqttPayloadIfEncoded, topicForPublish } from './utils.js'
 
 let client = null
-let lastSentContent = ''
-let lastSentTime = 0
-
-export function setLastSent(content) {
-  lastSentContent = content
-  lastSentTime = Date.now()
-}
 
 export function connect(brokerUrl, topic, token) {
   if (client) { client.end(true); client = null }
@@ -43,11 +36,6 @@ export function connect(brokerUrl, topic, token) {
     msg = await decodeNoticeMqttPayloadIfEncoded(msg)
     msg = normalizeMessagePayload(msg)
     const content = (msg.content ?? '').toString().trim()
-
-    if (lastSentContent && content === lastSentContent && (Date.now() - lastSentTime) < 5000) {
-      lastSentContent = ''
-      return
-    }
 
     const newMsg = {
       id: Date.now() + Math.random(),

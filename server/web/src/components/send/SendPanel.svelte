@@ -1,7 +1,6 @@
 <script>
   import { sendWebhook, uploadImages } from '../../lib/api.js'
   import { settings, messages, sendPanelOpen } from '../../lib/store.js'
-  import { setLastSent } from '../../lib/mqtt.js'
   import { topicForPublish } from '../../lib/utils.js'
 
   export let showToast = () => {}
@@ -14,7 +13,6 @@
   async function handleSend() {
     if (!content.trim() || sending) return
     sending = true
-    setLastSent(content.trim())
     const res = await sendWebhook(
       title.trim() || '通知',
       content.trim(),
@@ -22,17 +20,8 @@
       $settings.token,
     )
     if (res.ok) {
-      const pubTopic = topic.trim() ? topicForPublish(topic.trim()) : topicForPublish($settings.topic)
-      messages.update(list => [...list, {
-        id: Date.now(),
-        topic: pubTopic,
-        title: title.trim() || '通知',
-        content: content.trim(),
-        timestamp: new Date().toISOString(),
-        client: 'web',
-        unread: false,
-        cat: 'system',
-      }])
+      // 移除乐观更新，等待 MQTT 回环消息（携带服务端时间戳）到达
+      // MQTT 回环通常 <100ms，用户感知无延迟
       title = ''; content = ''; topic = ''
       showToast('消息已发送', 'success')
     } else if (res.status === 401) { showToast('认证失败，请重新登录', 'error') }
