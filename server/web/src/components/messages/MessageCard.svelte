@@ -10,7 +10,7 @@
   function renderPreview(text) {
     if (!text) return ''
     const plain = text.replace(/[#*`\[\]()>|_-]/g, ' ').replace(/\s+/g, ' ').trim()
-    return plain.length > 180 ? plain.slice(0, 180) + '…' : plain
+    return plain.length > 180 ? plain.slice(0, 180) + '...' : plain
   }
 
   function toggleSelect(e) {
@@ -71,7 +71,6 @@
   .msg-time { font-size:11px; font-family:'Plus Jakarta Sans',monospace; color:var(--text-hint); }
   .msg-content-preview { font-size:13px; color:var(--text-secondary); line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
   .hover-actions { display:none; position:absolute; right:8px; top:8px; gap:4px; z-index:2; }
-  .msg-card:hover .hover-actions { display:flex; }
   .ha-btn { width:28px; height:28px; border-radius:6px; border:1px solid var(--border); background:var(--bg-elevated); color:var(--text-hint); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; transition:all .12s; }
   .ha-btn:hover { background:var(--bg-hover); color:var(--text-primary); border-color:var(--border-light); }
 </style>

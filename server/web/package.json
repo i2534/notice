@@ -10,9 +10,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test -c playwright.config.ts --project=e2e:chromium",
+    "test:e2e:all": "playwright test -c playwright.config.ts --project=e2e:chromium --project=e2e:firefox --project=e2e:webkit --project=e2e:mobile-chrome --project=e2e:mobile-safari",
+    "test:all": "npm run test && npm run test:e2e:all"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
