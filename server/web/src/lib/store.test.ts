@@ -8,7 +8,7 @@ const localStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 }
-Object.defineProperty(global, 'localStorage', { value: localStorageMock })
+Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock })
 
 import { dedupByContent, saveMessages, loadCachedMessages } from './store.js'
 

@@ -25,8 +25,8 @@ describe('MessageCard', () => {
     timestamp: new Date().toISOString(),
     client: 'web',
     unread: true,
-    cat: 'system',
-  })
+    cat: 'system'
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()

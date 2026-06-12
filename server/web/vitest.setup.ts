@@ -8,7 +8,7 @@ const localStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 }
-Object.defineProperty(global, 'localStorage', { value: localStorageMock })
+Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock })
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -34,9 +34,10 @@ Object.defineProperty(window, 'Notification', {
   },
 })
 
-// Mock clipboard
-Object.assign(navigator, {
-  clipboard: {
+// Mock clipboard (read-only in real browser, use defineProperty)
+Object.defineProperty(navigator, 'clipboard', {
+  value: {
     writeText: vi.fn().mockResolvedValue(undefined),
   },
+  writable: true,
 })

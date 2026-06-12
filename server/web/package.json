@@ -17,11 +17,15 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
     "@testing-library/user-event": "^14.6.1",
+    "@vitest/browser": "^4.1.8",
+    "@vitest/browser-playwright": "^4.1.8",
     "@vitest/coverage-v8": "^4.1.8",
     "jsdom": "^29.1.1",
+    "playwright": "^1.60.0",
     "svelte": "^5.55.5",
     "vite": "^8.0.12",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "vitest-browser-svelte": "^2.1.1"
   },
   "dependencies": {
     "dompurify": "^3.4.8",
