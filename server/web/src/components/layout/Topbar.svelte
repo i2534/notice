@@ -1,7 +1,9 @@
 <script>
+  import { onMount } from 'svelte'
   import { currentView, searchQuery, messages, settings } from '../../lib/store.js'
-  import { fetchMessages } from '../../lib/api.js'
+  import { fetchMessages, fetchStatus } from '../../lib/api.js'
   import { applyTheme } from '../../lib/theme.js'
+  import { normalizeMessagePayload } from '../../lib/utils.js'
 
   export let showToast = () => {}
 
@@ -14,6 +16,17 @@
   }
 
   let showAbout = false
+  let serverVersion = 'dev'
+  let serverBuildTime = 'unknown'
+
+  // 获取服务端版本
+  onMount(async () => {
+    const res = await fetchStatus()
+    if (res.ok && res.data) {
+      serverVersion = res.data.version || 'dev'
+      serverBuildTime = res.data.build_time || 'unknown'
+    }
+  })
 
   let refreshing = false
 
@@ -32,16 +45,21 @@
           const added = res.data.data.messages
             .filter(m => !seen.has(m.id))
             .filter(m => !contentSeen.has(`${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`))
-            .map(m => ({
-              id: m.id,
-              topic: m.topic || 'notice',
-              title: m.title || '通知',
-              content: m.content || '',
-              timestamp: m.timestamp || new Date().toISOString(),
-              client: m.client || '',
-              unread: false,
-              cat: (m.topic || '').includes('alert') ? 'alert' : (m.topic || '').includes('voice') ? 'voice' : 'system',
-            }))
+            .map(m => {
+              const normalized = normalizeMessagePayload({
+                id: m.id,
+                topic: m.topic || 'notice',
+                title: m.title || '通知',
+                content: m.content || '',
+                timestamp: m.timestamp || new Date().toISOString(),
+                client: m.client || '',
+              })
+              return {
+                ...normalized,
+                unread: false,
+                cat: (normalized.topic || '').includes('alert') ? 'alert' : (normalized.topic || '').includes('voice') ? 'voice' : 'system',
+              }
+            })
           return [...list, ...added]
         })
         showToast('已刷新', 'success')
@@ -92,7 +110,7 @@
     <div class="about-header">
       <div class="about-icon">N</div>
       <h3>Notice</h3>
-      <p class="about-ver">v0.1 · Web 控制台</p>
+      <p class="about-ver">{serverVersion} · Web 控制台</p>
     </div>
     <div class="about-body">
       <p>轻量级消息推送系统</p>

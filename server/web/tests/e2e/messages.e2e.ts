@@ -87,7 +87,8 @@ test.describe('Messages View', () => {
   test('can open about dialog', async ({ page }) => {
     await page.click('button[title="关于"]')
     await expect(page.locator('.about-dialog h3')).toContainText('Notice')
-    await expect(page.locator('text=v0.1')).toBeVisible()
+    // 版本号从服务端动态获取，可能是 v0.12.4 或 dev
+    await expect(page.locator('.about-ver')).toBeVisible()
     await expect(page.locator('a:has-text("GitHub")')).toBeVisible()
     await page.click('button:has-text("关闭")')
   })

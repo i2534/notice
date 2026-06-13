@@ -113,7 +113,7 @@ func main() {
 	// 注册 API 路由（Webhook 与 MQTT 共用同一限流器）
 	http.Handle("/webhook", handlers.NewWebhookHandler(mqttBroker, cfg, authLimiter))
 	http.HandleFunc("/health", handlers.HealthHandler)
-	http.HandleFunc("/status", handlers.StatusHandler(mqttBroker, storeManager))
+	http.HandleFunc("/status", handlers.StatusHandler(mqttBroker, storeManager, Version, BuildTime))
 	http.HandleFunc("/messages", handlers.MessagesHandler(storeManager, cfg))
 	http.HandleFunc("/api/clients", handlers.ClientsHandler(mqttBroker, cfg))
 	http.HandleFunc("/api/image", handlers.ImageHandler(cfg, cfg.Storage.Path))

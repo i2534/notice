@@ -19,14 +19,14 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // StatusHandler 状态检查
-func StatusHandler(b *broker.Broker, m *store.Manager) http.HandlerFunc {
+func StatusHandler(b *broker.Broker, m *store.Manager, version, buildTime string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
 		clientCount := b.ClientCount()
 		// 状态页不返回消息数（因为需要 token）
-		fmt.Fprintf(w, `{"status":"ok","clients":%d}`, clientCount)
+		fmt.Fprintf(w, `{"status":"ok","clients":%d,"version":"%s","build_time":"%s"}`, clientCount, version, buildTime)
 	}
 }
 
