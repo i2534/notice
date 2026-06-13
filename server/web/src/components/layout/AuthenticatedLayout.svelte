@@ -1,10 +1,11 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
+  import { get } from 'svelte/store'
   import { currentView, settings, settingsPanelOpen, detailMessageId, messages } from '../../lib/store.js'
-import { connect } from '../../lib/mqtt.js'
-import { applyTheme } from '../../lib/theme.js'
-import { fetchMessages } from '../../lib/api.js'
-import { normalizeMessagePayload } from '../../lib/utils.js'
+  import { connect } from '../../lib/mqtt.js'
+  import { applyTheme } from '../../lib/theme.js'
+  import { fetchMessages } from '../../lib/api.js'
+  import { normalizeMessagePayload } from '../../lib/utils.js'
   import Sidebar from './Sidebar.svelte'
   import Topbar from './Topbar.svelte'
   import MessagesView from '../../views/MessagesView.svelte'
@@ -20,6 +21,93 @@ import { normalizeMessagePayload } from '../../lib/utils.js'
 
   function showToast(msg, type) { toastRef?.show(msg, type) }
   function showConfirm(msg, cb) { confirmRef?.confirm(msg, cb) }
+
+  // Polling state
+  let pollInterval = null
+  const POLL_INTERVAL_MS = 30000 // 30 seconds
+  let isPolling = false
+  let isPageVisible = true
+
+  // Get the oldest message ID from current list for cursor-based pagination
+  function getOldestMessageId() {
+    const list = get(messages)
+    if (!list.length) return 0
+    // Messages are sorted newest first, so the last one is oldest
+    return list[list.length - 1].id
+  }
+
+  // Poll for new messages (incremental fetch using before_id cursor)
+  async function pollMessages() {
+    if (isPolling || !isPageVisible) return
+    const s = $settings
+    if (!s.token) return
+
+    isPolling = true
+    try {
+      const beforeId = getOldestMessageId()
+      // Fetch older messages (before the oldest we have)
+      const res = await fetchMessages(s.token, 50, beforeId)
+      if (res.ok && Array.isArray(res.data?.data?.messages) && res.data.data.messages.length > 0) {
+        const history = res.data.data.messages.map(m => {
+          const normalized = normalizeMessagePayload({
+            id: m.id,
+            topic: m.topic || 'notice',
+            title: m.title || '通知',
+            content: m.content || '',
+            timestamp: m.timestamp || new Date().toISOString(),
+            client: m.client || '',
+            unread: false,
+          })
+          return {
+            ...normalized,
+            cat: (normalized.topic || '').includes('alert') ? 'alert' : (normalized.topic || '').includes('voice') ? 'voice' : 'system',
+          }
+        })
+        messages.update(list => {
+          const existing = new Map(list.map(m => [m.id, m]))
+          // 内容+时间窗口去重
+          const contentSeen = new Set(list.map(m => `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`))
+          for (const m of history) {
+            if (existing.has(m.id)) continue
+            const key = `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`
+            if (contentSeen.has(key)) continue
+            contentSeen.add(key)
+            existing.set(m.id, m)
+          }
+          const max = $settings.maxMessages || 200
+          const merged = [...existing.values()]
+          merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+          return merged.slice(0, max)
+        })
+      }
+    } catch (e) {
+      console.warn('[poll] Failed to fetch messages:', e)
+    } finally {
+      isPolling = false
+    }
+  }
+
+  // Start/stop polling
+  function startPolling() {
+    if (pollInterval) return
+    pollInterval = setInterval(pollMessages, POLL_INTERVAL_MS)
+  }
+
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval)
+      pollInterval = null
+    }
+  }
+
+  // Visibility change handler
+  function handleVisibilityChange() {
+    isPageVisible = !document.hidden
+    if (isPageVisible) {
+      // Page became visible, do an immediate poll
+      pollMessages()
+    }
+  }
 
   onMount(async () => {
     const s = $settings
@@ -64,6 +152,15 @@ import { normalizeMessagePayload } from '../../lib/utils.js'
     if (s.broker && s.token) {
       connect(s.broker, s.topic, s.token)
     }
+
+    // Start polling for message sync (MQTT fallback)
+    startPolling()
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  })
+
+  onDestroy(() => {
+    stopPolling()
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
   })
 </script>
 
