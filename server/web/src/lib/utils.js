@@ -158,6 +158,7 @@ export function normalizeAndCategorize(msg) {
     client: msg.client || '',
   })
   return {
+    id: msg.id,
     ...normalized,
     unread: msg.unread ?? true,
     cat: (normalized.topic || '').includes('alert') ? 'alert'
