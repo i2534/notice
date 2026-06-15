@@ -4,6 +4,8 @@ import {
   formatTime,
   decodeNoticeMqttPayloadIfEncoded,
   topicForPublish,
+  normalizeAndCategorize,
+  isAudioUrl,
 } from './utils.js'
 import { dedupByContent } from './store.js'
 
@@ -131,5 +133,75 @@ describe('utils', () => {
       const result = await decodeNoticeMqttPayloadIfEncoded(msg)
       expect(result).toBe(msg)
     })
+  })
+})
+
+describe('normalizeAndCategorize', () => {
+  it('preserves id from original msg', () => {
+    const r = normalizeAndCategorize({ id: 'abc-123', content: 'hello' })
+    expect(r.id).toBe('abc-123')
+  })
+
+  it('preserves id even when normalizeMessagePayload drops it (nested JSON content)', () => {
+    const r = normalizeAndCategorize({ id: 42, content: { title: 'inner', content: 'nested' } })
+    expect(r.id).toBe(42)
+    expect(r.title).toBe('inner')
+    expect(r.content).toBe('nested')
+  })
+
+  it('categorizes as alert when topic contains alert', () => {
+    expect(normalizeAndCategorize({ id: 1, content: 'x', topic: 'alert' }).cat).toBe('alert')
+  })
+
+  it('categorizes as voice when topic contains voice', () => {
+    expect(normalizeAndCategorize({ id: 1, content: 'x', topic: 'notice/voice' }).cat).toBe('voice')
+  })
+
+  it('categorizes as system for other topics', () => {
+    expect(normalizeAndCategorize({ id: 1, content: 'x', topic: 'notice/info' }).cat).toBe('system')
+  })
+
+  it('defaults unread to true', () => {
+    expect(normalizeAndCategorize({ id: 1, content: 'x' }).unread).toBe(true)
+  })
+
+  it('respects unread=false', () => {
+    expect(normalizeAndCategorize({ id: 1, content: 'x', unread: false }).unread).toBe(false)
+  })
+
+  it('applies defaults for missing fields', () => {
+    const r = normalizeAndCategorize({ id: 1 })
+    expect(r.title).toBe('通知')
+    expect(r.topic).toBe('notice')
+    expect(r.client).toBe('')
+  })
+})
+
+describe('isAudioUrl', () => {
+  it('matches /api/media/ paths', () => {
+    expect(isAudioUrl('/api/media?n=test.m4a')).toBe(true)
+    expect(isAudioUrl('https://example.com/api/media/file.m4a')).toBe(true)
+  })
+
+  it('matches audio file extensions', () => {
+    expect(isAudioUrl('file.mp3')).toBe(true)
+    expect(isAudioUrl('file.ogg')).toBe(true)
+    expect(isAudioUrl('file.wav')).toBe(true)
+    expect(isAudioUrl('file.m4a')).toBe(true)
+  })
+
+  it('matches via query param n=', () => {
+    expect(isAudioUrl('/api/media?n=voice.m4a&e=123')).toBe(true)
+  })
+
+  it('rejects non-audio URLs', () => {
+    expect(isAudioUrl('/image.png')).toBe(false)
+    expect(isAudioUrl('')).toBe(false)
+  })
+
+  it('rejects null/undefined/number', () => {
+    expect(isAudioUrl(null)).toBe(false)
+    expect(isAudioUrl(undefined)).toBe(false)
+    expect(isAudioUrl(123)).toBe(false)
   })
 })

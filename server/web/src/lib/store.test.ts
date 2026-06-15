@@ -10,7 +10,7 @@ const localStorageMock = {
 }
 Object.defineProperty(globalThis, 'localStorage', { value: localStorageMock })
 
-import { dedupByContent, saveMessages, loadCachedMessages } from './store.js'
+import { dedupByContent, saveMessages, loadCachedMessages, mergeMessages } from './store.js'
 
 describe('store', () => {
   beforeEach(() => {
@@ -26,15 +26,9 @@ describe('store', () => {
         { id: 2, title: 'A', content: '内容', timestamp: now.toISOString() },
         { id: 3, title: 'B', content: '不同', timestamp: now.toISOString() },
       ]
-      // 直接测试内部函数需要导出或重写，这里验证逻辑
-      const seen = new Set()
-      const result = list.filter(m => {
-        const key = `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
+      const result = dedupByContent(list)
       expect(result).toHaveLength(2)
+      expect(result.map(r => r.id)).toEqual([1, 3])
     })
   })
 
@@ -91,7 +85,31 @@ describe('store', () => {
     it('handles non-array data', () => {
       localStorageMock.getItem.mockReturnValue('{"not": "array"}')
       const result = loadCachedMessages()
-      expect(result).toEqual([])
-    })
+    expect(result).toEqual([])
   })
+})
+
+describe('mergeMessages', () => {
+  it('merges by id, existing wins on conflict', () => {
+    const existing = [{ id: 1, title: 'old', timestamp: '2024-01-01T00:00:00Z' }]
+    const incoming = [{ id: 1, title: 'new', timestamp: '2024-01-01T00:00:00Z' }, { id: 2, title: 'B', timestamp: '2024-01-02T00:00:00Z' }]
+    const result = mergeMessages(existing, incoming)
+    expect(result).toHaveLength(2)
+    expect(result.find(m => m.id === 1)!.title).toBe('old')
+  })
+
+  it('sorts by timestamp descending', () => {
+    const existing = [{ id: 1, title: 'A', timestamp: '2024-01-01T00:00:00Z' }]
+    const incoming = [{ id: 2, title: 'B', timestamp: '2024-06-15T00:00:00Z' }]
+    const result = mergeMessages(existing, incoming)
+    expect(result[0].id).toBe(2)
+    expect(result[1].id).toBe(1)
+  })
+
+  it('handles empty arrays', () => {
+    expect(mergeMessages([], [])).toEqual([])
+    expect(mergeMessages([{ id: 1, content: 'A', timestamp: '2024-01-01T00:00:00Z' }], [])).toHaveLength(1)
+    expect(mergeMessages([], [{ id: 1, content: 'A', timestamp: '2024-01-01T00:00:00Z' }])).toHaveLength(1)
+  })
+})
 })
