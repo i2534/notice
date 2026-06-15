@@ -1,10 +1,16 @@
 import mqtt from 'mqtt'
 import { get } from 'svelte/store'
 import { messages, connectionStatus, mqttClient, settings } from './store.js'
-import { normalizeMessagePayload, decodeNoticeMqttPayloadIfEncoded, topicForPublish } from './utils.js'
+import { normalizeMessagePayload, decodeNoticeMqttPayloadIfEncoded, topicForPublish, normalizeAndCategorize } from './utils.js'
 
+/** @type {import('mqtt').MqttClient | null} */
 let client = null
 
+/**
+ * @param {string} brokerUrl
+ * @param {string} topic
+ * @param {string} token
+ */
 export function connect(brokerUrl, topic, token) {
   if (client) { client.end(true); client = null }
 
@@ -22,7 +28,10 @@ export function connect(brokerUrl, topic, token) {
   client.on('connect', () => {
     connectionStatus.set('connected')
     client.subscribe(topic, (err) => {
-      if (err) console.warn('[mqtt] subscribe error', err)
+      if (err) {
+        console.error('[mqtt] 订阅失败，请检查主题配置:', err.message)
+        connectionStatus.set('error')
+      }
     })
   })
 
@@ -35,25 +44,23 @@ export function connect(brokerUrl, topic, token) {
     if (msg.content === '__auth_check__') return
     msg = await decodeNoticeMqttPayloadIfEncoded(msg)
     msg = normalizeMessagePayload(msg)
-    const content = (msg.content ?? '').toString().trim()
 
-    const newMsg = {
-      id: Date.now() + Math.random(),
+    const newMsg = normalizeAndCategorize({
+      id: crypto.randomUUID(),
       topic: normTopic,
-      title: msg.title || '通知',
-      content,
-      timestamp: msg.timestamp || new Date().toISOString(),
-      client: msg.client || '',
+      title: msg.title,
+      content: (msg.content ?? '').toString().trim(),
+      timestamp: msg.timestamp,
+      client: msg.client,
       unread: true,
-      cat: normTopic.includes('alert') ? 'alert' : normTopic.includes('voice') ? 'voice' : 'system',
-    }
+    })
 
     messages.update(list => {
       // Dedup: check if same content already in last 5 seconds (滑动窗口，不依赖位置)
       const recent = list.slice(-20).filter(m =>
         m.title === newMsg.title &&
         m.content === newMsg.content &&
-        Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp)) < 5000
+        Math.abs(new Date(m.timestamp).getTime() - new Date(newMsg.timestamp).getTime()) < 5000
       )
       if (recent.length > 0) return list
       // Desktop notification

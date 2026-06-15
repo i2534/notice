@@ -60,7 +60,7 @@
     font-family: inherit;
   }
   .filter-pill:hover { border-color: var(--border-light); color: var(--text-secondary); }
-  .filter-pill.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .filter-pill.active { background: var(--accent-alpha-8); border-color: var(--accent); color: var(--accent); }
   .spacer { flex: 1; }
   .meta-text { font-size: 11px; color: var(--text-hint); font-weight: 500; }
   .btn-icon-sm {

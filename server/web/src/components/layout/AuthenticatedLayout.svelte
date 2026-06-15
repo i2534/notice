@@ -1,11 +1,11 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { get } from 'svelte/store'
-  import { currentView, settings, settingsPanelOpen, detailMessageId, messages } from '../../lib/store.js'
+  import { currentRoute, settings, settingsPanelOpen, detailMessageId, messages, mergeMessages } from '../../lib/store.js'
   import { connect } from '../../lib/mqtt.js'
   import { applyTheme } from '../../lib/theme.js'
   import { fetchMessages } from '../../lib/api.js'
-  import { normalizeMessagePayload } from '../../lib/utils.js'
+  import { normalizeAndCategorize } from '../../lib/utils.js'
   import Sidebar from './Sidebar.svelte'
   import Topbar from './Topbar.svelte'
   import MessagesView from '../../views/MessagesView.svelte'
@@ -16,11 +16,17 @@
   import Toast from '../shared/Toast.svelte'
   import ConfirmDialog from '../shared/ConfirmDialog.svelte'
 
+  export let navigate = () => {}
+
   let toastRef
   let confirmRef
+  let mobileMenuOpen = false
+
+  $: view = $currentRoute === '/topics' ? 'topics' : $currentRoute === '/clients' ? 'clients' : 'messages'
 
   function showToast(msg, type) { toastRef?.show(msg, type) }
   function showConfirm(msg, cb) { confirmRef?.confirm(msg, cb) }
+  function toggleMobileMenu() { mobileMenuOpen = !mobileMenuOpen }
 
   // Polling state
   let pollInterval = null
@@ -48,36 +54,20 @@
       // Fetch older messages (before the oldest we have)
       const res = await fetchMessages(s.token, 50, beforeId)
       if (res.ok && Array.isArray(res.data?.data?.messages) && res.data.data.messages.length > 0) {
-        const history = res.data.data.messages.map(m => {
-          const normalized = normalizeMessagePayload({
+        const history = res.data.data.messages.map(m =>
+          normalizeAndCategorize({
             id: m.id,
-            topic: m.topic || 'notice',
-            title: m.title || '通知',
-            content: m.content || '',
-            timestamp: m.timestamp || new Date().toISOString(),
-            client: m.client || '',
+            topic: m.topic,
+            title: m.title,
+            content: m.content,
+            timestamp: m.timestamp,
+            client: m.client,
             unread: false,
           })
-          return {
-            ...normalized,
-            cat: (normalized.topic || '').includes('alert') ? 'alert' : (normalized.topic || '').includes('voice') ? 'voice' : 'system',
-          }
-        })
+        )
         messages.update(list => {
-          const existing = new Map(list.map(m => [m.id, m]))
-          // 内容+时间窗口去重
-          const contentSeen = new Set(list.map(m => `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`))
-          for (const m of history) {
-            if (existing.has(m.id)) continue
-            const key = `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`
-            if (contentSeen.has(key)) continue
-            contentSeen.add(key)
-            existing.set(m.id, m)
-          }
           const max = $settings.maxMessages || 200
-          const merged = [...existing.values()]
-          merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-          return merged.slice(0, max)
+          return mergeMessages(list, history).slice(0, max)
         })
       }
     } catch (e) {
@@ -116,36 +106,20 @@
     // Fetch historical messages from server before connecting MQTT
     const res = await fetchMessages(s.token, 50)
     if (res.ok && Array.isArray(res.data?.data?.messages)) {
-      const history = res.data.data.messages.map(m => {
-        const normalized = normalizeMessagePayload({
+      const history = res.data.data.messages.map(m =>
+        normalizeAndCategorize({
           id: m.id,
-          topic: m.topic || 'notice',
-          title: m.title || '通知',
-          content: m.content || '',
-          timestamp: m.timestamp || new Date().toISOString(),
-          client: m.client || '',
+          topic: m.topic,
+          title: m.title,
+          content: m.content,
+          timestamp: m.timestamp,
+          client: m.client,
           unread: false,
         })
-        return {
-          ...normalized,
-          cat: (normalized.topic || '').includes('alert') ? 'alert' : (normalized.topic || '').includes('voice') ? 'voice' : 'system',
-        }
-      })
+      )
       messages.update(list => {
-        const existing = new Map(list.map(m => [m.id, m]))
-        // 内容+时间窗口去重：已通过 MQTT 收到的消息不再从 API 重复添加（MQTT 用随机 ID，API 用整数 ID）
-        const contentSeen = new Set(list.map(m => `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`))
-        for (const m of history) {
-          if (existing.has(m.id)) continue
-          const key = `${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`
-          if (contentSeen.has(key)) continue
-          contentSeen.add(key)
-          existing.set(m.id, m)
-        }
         const max = $settings.maxMessages || 200
-        const merged = [...existing.values()]
-        merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-        return merged.slice(0, max)
+        return mergeMessages(list, history).slice(0, max)
       })
     }
 
@@ -173,15 +147,15 @@
 }} />
 
 <div class="app-layout">
-  <Sidebar {showToast} />
+  <Sidebar {showToast} {navigate} mobileOpen={mobileMenuOpen} onClose={() => mobileMenuOpen = false} />
   <div class="main-area">
-    <Topbar {showToast} />
+    <Topbar {showToast} onMenuToggle={toggleMobileMenu} />
     <div class="view-container">
-      {#if $currentView === 'messages'}
+      {#if view === 'messages'}
         <MessagesView {showToast} {showConfirm} />
-      {:else if $currentView === 'topics'}
+      {:else if view === 'topics'}
         <TopicsView />
-      {:else if $currentView === 'clients'}
+      {:else if view === 'clients'}
         <ClientsView />
       {/if}
     </div>

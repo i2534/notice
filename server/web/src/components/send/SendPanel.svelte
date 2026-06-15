@@ -1,7 +1,7 @@
 <script>
   import { sendWebhook, uploadImages } from '../../lib/api.js'
   import { settings, messages, sendPanelOpen } from '../../lib/store.js'
-  import { topicForPublish } from '../../lib/utils.js'
+  import { gzipBase64Encode } from '../../lib/utils.js'
 
   export let showToast = () => {}
 
@@ -13,11 +13,28 @@
   async function handleSend() {
     if (!content.trim() || sending) return
     sending = true
+    const body = {
+      title: title.trim() || '通知',
+      content: content.trim(),
+      topic: topic.trim() || undefined,
+    }
+
+    // 内容较长时自动压缩
+    if (body.content.length >= 255) {
+      const encoded = await gzipBase64Encode(body.content)
+      if (encoded && encoded.length < body.content.length) {
+        body.content = encoded
+        body.content_encoding = 'gzip+base64'
+      }
+    }
+
     const res = await sendWebhook(
-      title.trim() || '通知',
-      content.trim(),
-      topic.trim() || undefined,
+      body.title,
+      body.content,
+      body.topic,
       $settings.token,
+      'web',
+      body.content_encoding,
     )
     if (res.ok) {
       // 移除乐观更新，等待 MQTT 回环消息（携带服务端时间戳）到达
@@ -96,7 +113,7 @@
   .field input:focus, .field textarea:focus { border-color:var(--accent); }
   .field textarea { height:66px; resize:vertical; line-height:1.5; }
   .send-toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .btn-primary { padding:7px 18px; border-radius:var(--radius-sm); font-size:13px; font-weight:600; font-family:inherit; border:none; background:var(--accent); color:#0d0d16; cursor:pointer; }
+  .btn-primary { padding:7px 18px; border-radius:var(--radius-sm); font-size:13px; font-weight:600; font-family:inherit; border:none; background:var(--accent); color:var(--text-on-accent); cursor:pointer; }
   .btn-primary:hover { filter:brightness(1.1); }
   .btn-primary:disabled { opacity:.4; cursor:not-allowed; transform:none; }
   .btn-secondary-sm { padding:5px 12px; border-radius:var(--radius-sm); font-size:12px; font-weight:500; background:transparent; color:var(--text-secondary); border:1px solid var(--border); cursor:pointer; font-family:inherit; }

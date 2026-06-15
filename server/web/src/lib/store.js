@@ -37,6 +37,19 @@ export function dedupByContent(list) {
   })
 }
 
+/**
+ * 按 ID 合并消息列表（历史 + 实时），按时间降序排列
+ */
+export function mergeMessages(existing = [], incoming = []) {
+  const map = new Map(existing.map(m => [m.id, m]))
+  for (const m of incoming) {
+    if (!map.has(m.id)) map.set(m.id, m)
+  }
+  const merged = [...map.values()]
+  merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  return merged
+}
+
 export function loadCachedMessages() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -59,12 +72,46 @@ export function saveMessages(list) {
 
 export const messages = writable(loadCachedMessages())
 
-// Persist messages to localStorage on every change
-messages.subscribe(val => saveMessages(val))
+
+let saveTimer = null
+messages.subscribe(val => {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => saveMessages(val), 1000)
+})
+
+function getRouteFromHash() {
+  if (typeof window === 'undefined') return '/messages'
+
+  const hash = window.location.hash || '#/messages'
+  const path = hash.startsWith('#') ? hash.slice(1) : hash
+  return path === '/topics' || path === '/clients' || path === '/messages' ? path : '/messages'
+}
 
 export const selectedIds = writable(new Set())
 export const currentView = writable('messages')
-export const searchQuery = writable('')
+export const currentRoute = writable(getRouteFromHash())
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', () => currentRoute.set(getRouteFromHash()))
+}
+
+function createDebouncedWritable(initial = '', delay = 200) {
+  const store = writable(initial)
+  let timer = null
+  return {
+    subscribe: store.subscribe,
+    set(val) {
+      clearTimeout(timer)
+      timer = setTimeout(() => store.set(val), delay)
+    },
+    update(fn) {
+      clearTimeout(timer)
+      timer = setTimeout(() => store.update(fn), delay)
+    },
+    flush(val) { clearTimeout(timer); store.set(val) },
+  }
+}
+export const searchQuery = createDebouncedWritable('', 200)
 export const currentFilter = writable('all')
 export const connectionStatus = writable('disconnected')
 export const authenticated = writable(false)

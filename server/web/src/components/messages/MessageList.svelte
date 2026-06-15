@@ -1,5 +1,4 @@
 <script>
-  import { afterUpdate } from 'svelte'
   import { filteredMessages, detailMessageId, messages } from '../../lib/store.js'
   import MessageCard from './MessageCard.svelte'
   import EmptyState from '../shared/EmptyState.svelte'
@@ -7,16 +6,16 @@
   let listEl
 
   // Auto scroll to top when already near top（最新在前，新消息出现在顶部）
-  afterUpdate(() => {
+  $effect(() => {
+    $filteredMessages  // track dependency
     if (!listEl) return
-    const { scrollTop } = listEl
-    if (scrollTop < 100) {
+    if (listEl.scrollTop < 100) {
       listEl.scrollTop = 0
     }
   })
 </script>
 
-<div class="message-list" bind:this={listEl}>
+<div class="message-list" bind:this={listEl} tabindex="0">
   {#if $filteredMessages.length === 0}
     <EmptyState message="暂无消息" />
   {:else}

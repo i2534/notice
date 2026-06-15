@@ -2,6 +2,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
 /** 订阅主题转可发布主题：notice/# -> notice */
+/** @param {string} topic */
 export function topicForPublish(topic) {
   topic = topic.trim()
   let i = topic.indexOf('#')
@@ -12,6 +13,7 @@ export function topicForPublish(topic) {
   return topic
 }
 
+/** @param {unknown} text */
 export function escapeHtml(text) {
   const div = document.createElement('div')
   div.textContent = text
@@ -21,6 +23,7 @@ export function escapeHtml(text) {
 const NOTICE_CONTENT_ENCODING_GZIP_B64 = 'gzip+base64'
 
 /** 若 MQTT JSON 带 gzip+base64 编码的 content，解压为明文 */
+/** @param {any} msg */
 export async function decodeNoticeMqttPayloadIfEncoded(msg) {
   if (!msg || msg.content_encoding !== NOTICE_CONTENT_ENCODING_GZIP_B64 || msg.content == null) return msg
   if (typeof DecompressionStream === 'undefined') return msg
@@ -41,6 +44,7 @@ export async function decodeNoticeMqttPayloadIfEncoded(msg) {
 }
 
 /** gzip+base64 压缩（发送时用） */
+/** @param {string} plain */
 export async function gzipBase64Encode(plain) {
   if (typeof CompressionStream === 'undefined') return null
   try {
@@ -93,8 +97,10 @@ export function isAudioUrl(url) {
     for (const part of qs.split('&')) {
       const eq = part.indexOf('=')
       if (eq > 0 && part.slice(0, eq).toLowerCase() === 'n') {
-        const val = decodeURIComponent(part.slice(eq + 1))
-        if (/\.(mp3|ogg|wav|m4a|aac|opus|webm)$/i.test(val)) return true
+        try {
+          const val = decodeURIComponent(part.slice(eq + 1))
+          if (/\.(mp3|ogg|wav|m4a|aac|opus|webm)$/i.test(val)) return true
+        } catch {}
         break
       }
     }
@@ -102,23 +108,61 @@ export function isAudioUrl(url) {
   return false
 }
 
+/** @param {unknown} text */
+function escapeAttr(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+marked.use({
+  renderer: {
+    link({ href }) {
+      if (isAudioUrl(href)) {
+        return `<audio controls preload="metadata" src="${escapeAttr(href)}"></audio>`
+      }
+      return false
+    }
+  }
+})
+
 /** Markdown 渲染 + XSS 过滤 */
 export function renderMarkdown(text) {
   if (text == null || text === '') return ''
   try {
     const raw = marked.parse(String(text), { gfm: true, breaks: true })
-    const withAudio = raw.replace(/<a\s+href="([^"]+)"[^>]*>[\s\S]*?<\/a>/gi, (match, href) => {
-      if (isAudioUrl(href)) {
-        return `<audio controls preload="metadata" src="${escapeHtml(href)}"></audio>`
-      }
-      return match
-    })
-    return DOMPurify.sanitize(withAudio, {
+    const html = typeof raw === 'string' ? raw : ''
+    return DOMPurify.sanitize(html, {
       ALLOWED_TAGS: ['p','br','strong','em','s','code','pre','ul','ol','li','a','img','audio','blockquote','h1','h2','h3','hr','table','thead','tbody','tr','th','td'],
       ALLOWED_ATTR: ['href','title','src','alt','controls','preload'],
     })
   } catch {
     return escapeHtml(text)
+  }
+}
+
+/**
+ * 统一的消息规范化 + 分类入口
+ * 所有消息路径（MQTT 实时 / API 历史 / 手动刷新）都通过此函数
+ */
+export function normalizeAndCategorize(msg) {
+  const normalized = normalizeMessagePayload({
+    id: msg.id,
+    topic: msg.topic || 'notice',
+    title: msg.title || '通知',
+    content: msg.content || '',
+    timestamp: msg.timestamp || new Date().toISOString(),
+    client: msg.client || '',
+  })
+  return {
+    ...normalized,
+    unread: msg.unread ?? true,
+    cat: (normalized.topic || '').includes('alert') ? 'alert'
+       : (normalized.topic || '').includes('voice') ? 'voice'
+       : 'system',
   }
 }
 

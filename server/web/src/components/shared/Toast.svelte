@@ -1,17 +1,26 @@
 <script>
+  import { onDestroy } from 'svelte'
+
   let toasts = []
   let id = 0
+  let timers = []
 
   export function show(message, type = 'info') {
     const tid = ++id
     toasts = [...toasts, { id: tid, message, type }]
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       toasts = toasts.filter(t => t.id !== tid)
+      timers = timers.filter(t => t !== timer)
     }, 2500)
+    timers.push(timer)
   }
+
+  onDestroy(() => {
+    timers.forEach(clearTimeout)
+  })
 </script>
 
-<div class="toast-container">
+<div class="toast-container" role="status" aria-live="polite">
   {#each toasts as toast (toast.id)}
     <div class="toast" class:success={toast.type === 'success'} class:error={toast.type === 'error'}>
       {toast.message}
@@ -23,7 +32,7 @@
   .toast-container {
     position: fixed;
     bottom: 20px; right: 20px;
-    z-index: 1000;
+    z-index: var(--z-toast);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -37,7 +46,7 @@
     color: var(--text-primary);
     font-size: 13px;
     font-weight: 500;
-    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+    box-shadow: var(--shadow);
     pointer-events: auto;
   }
   .toast.success { border-color: var(--accent); }

@@ -1,12 +1,20 @@
 <script>
   import { onMount } from 'svelte'
-  import { authenticated, settings } from './lib/store.js'
+  import { authenticated, currentRoute, settings } from './lib/store.js'
   import { authCheck } from './lib/api.js'
-  import { applyTheme } from './lib/theme.js'
+  import { applyTheme, getSystemTheme } from './lib/theme.js'
   import AuthView from './views/AuthView.svelte'
   import AuthenticatedLayout from './components/layout/AuthenticatedLayout.svelte'
 
+  function navigate(path) {
+    window.location.hash = '#' + path
+    currentRoute.set(path)
+  }
+
   onMount(async () => {
+    if (!localStorage.getItem('noticeSettings')) {
+      settings.update(s => ({ ...s, theme: getSystemTheme() }))
+    }
     const s = $settings
     applyTheme(s.theme)
 
@@ -24,5 +32,5 @@
 {#if !$authenticated}
   <AuthView />
 {:else}
-  <AuthenticatedLayout />
+  <AuthenticatedLayout {navigate} />
 {/if}

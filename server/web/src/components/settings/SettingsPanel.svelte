@@ -59,8 +59,8 @@
 </aside>
 
 <style>
-  .overlay { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); z-index:50; backdrop-filter:blur(4px); }
-  .panel { position:absolute; top:0; right:0; width:380px; height:100%; background:var(--bg-elevated); border-left:1px solid var(--border); z-index:51; display:flex; flex-direction:column; box-shadow:-8px 0 32px rgba(0,0,0,.4); }
+  .overlay { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); z-index:var(--z-overlay-panel); backdrop-filter:blur(4px); }
+  .panel { position:absolute; top:0; right:0; width:380px; height:100%; background:var(--bg-elevated); border-left:1px solid var(--border); z-index:var(--z-panel); display:flex; flex-direction:column; box-shadow:var(--shadow-lg); }
   .header { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; border-bottom:1px solid var(--border); }
   .header h3 { font-size:15px; font-weight:700; }
   .close-btn { width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text-hint); cursor:pointer; font-size:22px; display:flex; align-items:center; justify-content:center; }
@@ -73,6 +73,7 @@
   .field input, .field select { width:100%; padding:9px 12px; background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text-primary); font-size:13px; font-family:inherit; outline:none; }
   .field input:focus { border-color:var(--accent); }
   .hint { font-size:11px; color:var(--text-hint); margin-top:4px; display:block; }
-  .save-btn { width:100%; padding:10px; background:var(--accent); color:#0d0d16; border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:600; cursor:pointer; }
+  .save-btn { width:100%; padding:10px; background:var(--accent); color:var(--text-on-accent); border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:600; cursor:pointer; }
   .save-btn:hover { filter:brightness(1.1); }
+  @media (max-width: 640px) { .panel { width: 100%; } }
 </style>

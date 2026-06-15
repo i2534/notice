@@ -4,7 +4,7 @@ import MessageCard from './MessageCard.svelte'
 
 const { mockSelectedIds } = vi.hoisted(() => ({
   mockSelectedIds: { 
-    subscribe: vi.fn((cb) => cb(new Set())), 
+    subscribe: vi.fn((cb) => { cb(new Set()); return () => {}; }), 
     update: vi.fn(), 
     set: vi.fn(),
   },

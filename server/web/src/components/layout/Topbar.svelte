@@ -1,13 +1,15 @@
 <script>
   import { onMount } from 'svelte'
-  import { currentView, searchQuery, messages, settings } from '../../lib/store.js'
+  import { currentRoute, searchQuery, messages, settings } from '../../lib/store.js'
   import { fetchMessages, fetchStatus } from '../../lib/api.js'
   import { applyTheme } from '../../lib/theme.js'
-  import { normalizeMessagePayload } from '../../lib/utils.js'
+  import { normalizeAndCategorize } from '../../lib/utils.js'
 
   export let showToast = () => {}
+  export let onMenuToggle = () => {}
 
-  $: pageTitle = $currentView === 'messages' ? '消息' : $currentView === 'topics' ? '主题' : '客户端'
+  $: view = $currentRoute === '/topics' ? 'topics' : $currentRoute === '/clients' ? 'clients' : 'messages'
+  $: pageTitle = view === 'messages' ? '消息' : view === 'topics' ? '主题' : '客户端'
 
   function toggleTheme() {
     const next = $settings.theme === 'dark' ? 'light' : 'dark'
@@ -45,21 +47,15 @@
           const added = res.data.data.messages
             .filter(m => !seen.has(m.id))
             .filter(m => !contentSeen.has(`${m.title}|${m.content}|${new Date(m.timestamp).toISOString().slice(0, 16)}`))
-            .map(m => {
-              const normalized = normalizeMessagePayload({
-                id: m.id,
-                topic: m.topic || 'notice',
-                title: m.title || '通知',
-                content: m.content || '',
-                timestamp: m.timestamp || new Date().toISOString(),
-                client: m.client || '',
-              })
-              return {
-                ...normalized,
-                unread: false,
-                cat: (normalized.topic || '').includes('alert') ? 'alert' : (normalized.topic || '').includes('voice') ? 'voice' : 'system',
-              }
-            })
+            .map(m => normalizeAndCategorize({
+              id: m.id,
+              topic: m.topic,
+              title: m.title,
+              content: m.content,
+              timestamp: m.timestamp,
+              client: m.client,
+              unread: false,
+            }))
           return [...list, ...added]
         })
         showToast('已刷新', 'success')
@@ -75,8 +71,11 @@
 </script>
 
 <header class="topbar">
+  <button class="hamburger" onclick={onMenuToggle} aria-label="打开菜单">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
   <span class="page-title">{pageTitle}</span>
-  {#if $currentView === 'messages'}
+  {#if view === 'messages'}
     <div class="search-box">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       <input type="text" placeholder="搜索消息内容、标题…" bind:value={$searchQuery} />
@@ -91,7 +90,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       {/if}
     </button>
-    {#if $currentView === 'messages'}
+    {#if view === 'messages'}
       <button class="icon-btn" title="刷新" onclick={handleRefresh}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M21 21v-5h-5"/></svg>
       </button>
@@ -131,6 +130,7 @@
 
 <style>
   .topbar { display:flex; align-items:center; padding:14px 20px; border-bottom:1px solid var(--border); gap:16px; flex-shrink:0; background:var(--bg-surface); }
+  .hamburger { display:none; }
   .page-title { font-size:15px; font-weight:600; white-space:nowrap; }
   .spacer { flex:1; }
   .search-box { flex:1; max-width:360px; position:relative; }
@@ -144,10 +144,10 @@
   .icon-btn svg { width:16px; height:16px; }
 
   /* About dialog */
-  .about-overlay { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); z-index:100; backdrop-filter:blur(4px); }
-  .about-dialog { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:360px; max-width:calc(100% - 48px); background:var(--bg-elevated); border:1px solid var(--border-light); border-radius:var(--radius-lg); z-index:101; box-shadow:0 24px 64px rgba(0,0,0,.5); overflow:hidden; }
+  .about-overlay { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); z-index:var(--z-overlay-about); backdrop-filter:blur(4px); }
+  .about-dialog { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:360px; max-width:calc(100% - 48px); background:var(--bg-elevated); border:1px solid var(--border-light); border-radius:var(--radius-lg); z-index:var(--z-about); box-shadow:var(--shadow-lg); overflow:hidden; }
   .about-header { text-align:center; padding:28px 24px 16px; }
-  .about-icon { width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg,var(--accent),#6366f1); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fff; margin:0 auto 12px; }
+  .about-icon { width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg,var(--accent),var(--accent-secondary)); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:var(--text-on-accent-light); margin:0 auto 12px; }
   .about-header h3 { font-size:18px; font-weight:700; margin-bottom:4px; }
   .about-ver { font-size:12px; color:var(--text-hint); }
   .about-body { padding:0 24px 20px; text-align:center; }
@@ -159,4 +159,10 @@
   .about-footer { display:flex; align-items:center; justify-content:space-between; padding:12px 24px; border-top:1px solid var(--border); font-size:11px; color:var(--text-hint); }
   .about-close { background:none; border:none; color:var(--accent); font-size:13px; cursor:pointer; font-family:inherit; padding:4px 12px; }
   .about-close:hover { text-decoration:underline; }
+
+  @media (max-width: 640px) {
+    .hamburger { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border:none; background:none; color:var(--text-secondary); cursor:pointer; border-radius:8px; }
+    .hamburger:hover { background:var(--bg-hover); }
+    .hamburger svg { width:20px; height:20px; }
+  }
 </style>

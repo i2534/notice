@@ -1,9 +1,24 @@
 <script>
-  import { currentView, connectionStatus, settingsPanelOpen } from '../../lib/store.js'
+  import { currentRoute, connectionStatus, settingsPanelOpen } from '../../lib/store.js'
 
+  export let mobileOpen = false
+  export let onClose = () => {}
+  export let navigate = () => {}
+
+  $: view = $currentRoute === '/topics' ? 'topics' : $currentRoute === '/clients' ? 'clients' : 'messages'
+
+  function handleNavigate(event, path) {
+    event.preventDefault()
+    navigate(path)
+    onClose()
+  }
 </script>
 
-<aside class="sidebar">
+{#if mobileOpen}
+  <div class="sidebar-overlay" onclick={onClose}></div>
+{/if}
+<aside class="sidebar" class:mobile-open={mobileOpen}>
+  <button class="mobile-close" onclick={onClose} aria-label="关闭菜单">&times;</button>
   <div class="brand">
     <div class="logo-icon">
       <svg viewBox="0 0 28 28" fill="none" width="20" height="20">
@@ -20,18 +35,18 @@
     <span class="logo-text">Notice</span>
   </div>
   <nav class="nav">
-    <button class="nav-item" class:active={$currentView === 'messages'} onclick={() => currentView.set('messages')}>
+    <a class="nav-item" class:active={view === 'messages'} href="#/messages" onclick={(event) => handleNavigate(event, '/messages')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="m22 6-10 7L2 6"/></svg>
       <span>消息</span>
-    </button>
-    <button class="nav-item" class:active={$currentView === 'topics'} onclick={() => currentView.set('topics')}>
+    </a>
+    <a class="nav-item" class:active={view === 'topics'} href="#/topics" onclick={(event) => handleNavigate(event, '/topics')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 7h-4a2 2 0 0 1-2-2V1"/><path d="M4 7V4a2 2 0 0 1 2-2h8l6 6v10a2 2 0 0 1-2 2H4"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>
       <span>主题</span>
-    </button>
-    <button class="nav-item" class:active={$currentView === 'clients'} onclick={() => currentView.set('clients')}>
+    </a>
+    <a class="nav-item" class:active={view === 'clients'} href="#/clients" onclick={(event) => handleNavigate(event, '/clients')}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
       <span>客户端</span>
-    </button>
+    </a>
     <div class="nav-spacer"></div>
     <div class="nav-section-label">管理</div>
     <button class="nav-item" onclick={() => settingsPanelOpen.set(true)}>
@@ -49,15 +64,16 @@
 
 <style>
   .sidebar { width:220px; flex-shrink:0; background:var(--bg-elevated); border-right:1px solid var(--border); display:flex; flex-direction:column; }
+  .mobile-close { display:none; }
   .brand { padding:20px 20px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
-  .logo-icon { width:32px; height:32px; background:linear-gradient(135deg,var(--accent),#6366f1); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; color:#fff; }
+  .logo-icon { width:32px; height:32px; background:linear-gradient(135deg,var(--accent),var(--accent-secondary)); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; color:var(--text-on-accent-light); }
   .logo-text { font-weight:700; font-size:15px; background:linear-gradient(135deg,var(--text-primary),var(--text-secondary)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
   .nav { flex:1; padding:12px 10px; display:flex; flex-direction:column; gap:2px; }
   .nav-spacer { flex:1; }
   .nav-section-label { padding:16px 14px 6px; font-size:10px; font-weight:700; color:var(--text-hint); text-transform:uppercase; letter-spacing:.8px; }
   .nav-item { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:var(--radius-sm); color:var(--text-secondary); font-size:13px; font-weight:500; cursor:pointer; border:none; background:none; width:100%; text-align:left; font-family:inherit; transition:all .15s; }
   .nav-item:hover { color:var(--text-primary); background:var(--bg-hover); }
-  .nav-item.active { color:var(--accent); background:var(--accent-dim); }
+  .nav-item.active { color:var(--accent); background:var(--accent-alpha-8); }
   .nav-item svg { width:18px; height:18px; flex-shrink:0; opacity:.7; }
   .nav-item.active svg { opacity:1; }
   .footer { padding:12px 16px; border-top:1px solid var(--border); display:flex; align-items:center; }
@@ -69,4 +85,38 @@
   .dot.connected { background:var(--accent); box-shadow:0 0 10px var(--accent); }
   .dot.connecting { background:var(--warning); animation:pulse 1s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  @media (max-width: 640px) {
+    .sidebar {
+      position: fixed;
+      left: -260px;
+      top: 0;
+      bottom: 0;
+      z-index: var(--z-sidebar-mobile);
+      transition: left 0.25s ease;
+    }
+    .sidebar.mobile-open { left: 0; }
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: var(--z-overlay-mobile);
+    }
+    .mobile-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-hint);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 20px;
+    }
+  }
 </style>

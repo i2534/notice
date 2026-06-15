@@ -34,7 +34,7 @@
           <div class="remote">{client.remote}</div>
         </div>
         <div class="subs">
-          {#each client.subscriptions as sub}
+          {#each client.subscriptions || [] as sub}
             <span class="sub-pill">{sub}</span>
           {/each}
         </div>
@@ -51,10 +51,10 @@
   .hint { font-size:13px; color:var(--text-hint); }
   .client-card { display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-md); margin-bottom:8px; }
   .client-card:hover { border-color:var(--border-light); }
-  .avatar { width:36px; height:36px; border-radius:50%; background:var(--accent-dim); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; }
+  .avatar { width:36px; height:36px; border-radius:50%; background:var(--accent-alpha-8); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; }
   .info { flex:1; min-width:0; }
   .name { font-size:13px; font-weight:600; }
   .remote { font-size:11px; color:var(--text-hint); font-family:'Plus Jakarta Sans',monospace; margin-top:2px; }
   .subs { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; }
-  .sub-pill { font-size:10px; color:var(--accent); background:var(--accent-dim); padding:1px 7px; border-radius:10px; }
+  .sub-pill { font-size:10px; color:var(--accent); background:var(--accent-alpha-8); padding:1px 7px; border-radius:10px; }
 </style>

@@ -4,20 +4,20 @@ import FilterBar from './FilterBar.svelte'
 
 const { mockCurrentFilter, mockFilteredMessages, mockSelectedIds } = vi.hoisted(() => ({
   mockCurrentFilter: { 
-    subscribe: vi.fn((cb) => cb('all')), 
+    subscribe: vi.fn((cb) => { cb('all'); return () => {}; }), 
     set: vi.fn(),
     update: vi.fn(),
   },
   mockFilteredMessages: { 
-    subscribe: vi.fn((cb) => cb([
+    subscribe: vi.fn((cb) => { cb([
       { id: 1, title: 'A', content: '内容', timestamp: new Date().toISOString() },
       { id: 2, title: 'B', content: '内容', timestamp: new Date().toISOString() },
       { id: 3, title: 'C', content: '内容', timestamp: new Date().toISOString() },
-    ])), 
+    ]); return () => {}; }), 
     set: vi.fn(),
   },
   mockSelectedIds: { 
-    subscribe: vi.fn((cb) => cb(new Set())), 
+    subscribe: vi.fn((cb) => { cb(new Set()); return () => {}; }), 
     set: vi.fn(),
     update: vi.fn(),
   },

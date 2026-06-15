@@ -56,7 +56,7 @@
 <style>
   .msg-card { display:flex; gap:12px; padding:14px 16px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius-md); transition:all .15s; cursor:pointer; position:relative; }
   .msg-card:hover { border-color:var(--border-light); background:var(--bg-hover); }
-  .msg-card.selected { border-color:var(--accent); background:var(--accent-dim); }
+  .msg-card.selected { border-color:var(--accent); background:var(--accent-alpha-8); }
   .msg-card.unread { border-left:2px solid var(--accent); }
   .unread-dot { position:absolute; left:-5px; top:50%; transform:translateY(-50%); width:6px; height:6px; border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent); }
   .msg-checkbox { flex-shrink:0; width:16px; height:16px; margin-top:2px; border:2px solid var(--border); border-radius:4px; cursor:pointer; transition:all .15s; }
@@ -64,7 +64,7 @@
   .msg-card.selected .msg-checkbox { background:var(--accent); border-color:var(--accent); }
   .msg-body { flex:1; min-width:0; }
   .msg-head { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
-  .msg-topic-pill { font-size:10px; font-weight:600; color:var(--accent); background:var(--accent-dim); padding:1px 8px; border-radius:10px; flex-shrink:0; }
+  .msg-topic-pill { font-size:10px; font-weight:600; color:var(--accent); background:var(--accent-alpha-8); padding:1px 8px; border-radius:10px; flex-shrink:0; }
   .msg-title { font-size:14px; font-weight:600; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .msg-meta { margin-left:auto; display:flex; align-items:center; gap:8px; flex-shrink:0; }
   .msg-client { font-size:10px; color:var(--text-hint); background:var(--bg-card); padding:1px 7px; border-radius:4px; }

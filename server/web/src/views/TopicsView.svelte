@@ -2,7 +2,32 @@
   import { messages } from '../lib/store.js'
   import TopicNode from '../components/shared/TopicNode.svelte'
 
-  $: tree = buildTree($messages)
+  let tree = {}
+  let prevMessageCount = 0
+
+  $: {
+    if ($messages.length !== prevMessageCount || prevMessageCount === 0) {
+      tree = buildTree($messages)
+      const validPaths = new Set()
+      collectPaths(tree, '', validPaths)
+      const next = new Set()
+      for (const p of expanded) {
+        if (validPaths.has(p)) next.add(p)
+      }
+      expanded = next
+      prevMessageCount = $messages.length
+    }
+  }
+
+  function collectPaths(node, prefix, result) {
+    for (const [name, data] of Object.entries(node)) {
+      const path = prefix ? prefix + '/' + name : name
+      if (data._children && Object.keys(data._children).length > 0) {
+        result.add(path)
+        collectPaths(data._children, path, result)
+      }
+    }
+  }
 
   function buildTree(msgs) {
     const root = {}
