@@ -42,11 +42,12 @@ export function connect(brokerUrl, topic, token) {
     catch { msg = { content: payload.toString() } }
 
     if (msg.content === '__auth_check__') return
+    const serverId = msg.id
     msg = await decodeNoticeMqttPayloadIfEncoded(msg)
     msg = normalizeMessagePayload(msg)
 
     const newMsg = normalizeAndCategorize({
-      id: crypto.randomUUID(),
+      id: serverId != null && serverId !== '' ? serverId : (msg.id != null && msg.id !== '' ? msg.id : crypto.randomUUID()),
       topic: normTopic,
       title: msg.title,
       content: (msg.content ?? '').toString().trim(),
@@ -56,7 +57,9 @@ export function connect(brokerUrl, topic, token) {
     })
 
     messages.update(list => {
-      // Dedup: check if same content already in last 5 seconds (滑动窗口，不依赖位置)
+      // 优先按服务端 id 去重（与 HTTP 历史同源）
+      if (list.some(m => String(m.id) === String(newMsg.id))) return list
+      // 兼容旧消息：滑动窗口内容去重
       const recent = list.slice(-20).filter(m =>
         m.title === newMsg.title &&
         m.content === newMsg.content &&

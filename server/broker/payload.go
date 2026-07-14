@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -39,6 +40,21 @@ func DecodeMessageContent(msg *Message) error {
 	msg.Content = buf.String()
 	msg.ContentEncoding = ""
 	return nil
+}
+
+// InjectStoreIDIntoPayload 在 JSON 载荷中写入服务端消息 id（覆盖客户端自带的 id）。
+// 非 JSON 载荷原样返回，ok=false。尽量保留原字段（含 content_encoding），仅增补 id。
+func InjectStoreIDIntoPayload(payload []byte, id uint64) (out []byte, ok bool) {
+	var obj map[string]any
+	if err := json.Unmarshal(payload, &obj); err != nil {
+		return payload, false
+	}
+	obj["id"] = id
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return payload, false
+	}
+	return b, true
 }
 
 // GzipBase64Encode 将 UTF-8 明文 gzip 压缩后做 standard base64（与 DecodeMessageContent 对偶）。

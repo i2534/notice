@@ -27,6 +27,7 @@ const (
 
 // Message 推送消息结构
 type Message struct {
+	ID               uint64    `json:"id,omitempty"` // 服务端消息库 id（由 MessageStoreHook 在分发前注入）
 	Title            string    `json:"title"`
 	Content          string    `json:"content"`
 	ContentEncoding  string    `json:"content_encoding,omitempty"` // 如 gzip+base64，见 DecodeMessageContent
@@ -383,33 +384,45 @@ func (h *MessageStoreHook) ID() string {
 }
 
 func (h *MessageStoreHook) Provides(b byte) bool {
-	return b == mqtt.OnPublished
+	return b == mqtt.OnPublish
 }
 
-// OnPublished 消息发布时保存到存储
-func (h *MessageStoreHook) OnPublished(cl *mqtt.Client, pk packets.Packet) {
+// OnPublish 在分发给订阅者之前入库，并把稳定的服务端 id 注入 JSON 载荷。
+// 这样 MQTT 实时消息与 GET /messages 历史使用同一身份，客户端可按 id 去重。
+func (h *MessageStoreHook) OnPublish(cl *mqtt.Client, pk packets.Packet) (packets.Packet, error) {
 	// 跳过系统消息（以 $ 开头的主题）
 	if len(pk.TopicName) > 0 && pk.TopicName[0] == '$' {
-		return
+		return pk, nil
+	}
+	if h.manager == nil || !h.manager.IsEnabled() {
+		return pk, nil
 	}
 
-	// 尝试解析消息内容
+	var saved *store.Message
+	var err error
+
 	var msg Message
-	if err := json.Unmarshal(pk.Payload, &msg); err != nil {
-		// 非 JSON 格式，直接存储原始内容
-		if _, err := h.manager.Save(h.token, pk.TopicName, "", string(pk.Payload), nil); err != nil {
-			logger.Warn("消息保存失败", "error", err)
+	if uerr := json.Unmarshal(pk.Payload, &msg); uerr != nil {
+		// 非 JSON：仍入库，但无法在原载荷上注入 id
+		saved, err = h.manager.Save(h.token, pk.TopicName, "", string(pk.Payload), nil)
+	} else {
+		// JSON：入库前解压已知编码，便于 HTTP 历史为明文；线上载荷尽量保留原字段仅加 id
+		if msg.ContentEncoding != "" {
+			if derr := DecodeMessageContent(&msg); derr != nil {
+				logger.Warn("消息 content 解压失败，按原始字段入库", "error", derr)
+			}
 		}
-		return
+		saved, err = h.manager.Save(h.token, pk.TopicName, msg.Title, msg.Content, msg.Extra)
 	}
-
-	// JSON 格式：入库前解压已知编码，便于 HTTP 历史为明文
-	if msg.ContentEncoding != "" {
-		if err := DecodeMessageContent(&msg); err != nil {
-			logger.Warn("消息 content 解压失败，按原始字段入库", "error", err)
-		}
-	}
-	if _, err := h.manager.Save(h.token, pk.TopicName, msg.Title, msg.Content, msg.Extra); err != nil {
+	if err != nil {
 		logger.Warn("消息保存失败", "error", err)
+		return pk, nil
 	}
+	if saved == nil {
+		return pk, nil
+	}
+	if out, ok := InjectStoreIDIntoPayload(pk.Payload, saved.ID); ok {
+		pk.Payload = out
+	}
+	return pk, nil
 }

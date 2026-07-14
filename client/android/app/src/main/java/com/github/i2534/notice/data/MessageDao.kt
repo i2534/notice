@@ -32,6 +32,9 @@ interface MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(messages: List<NoticeMessage>)
 
+    @Query("SELECT EXISTS(SELECT 1 FROM messages WHERE id = :messageId LIMIT 1)")
+    suspend fun existsById(messageId: String): Boolean
+
     /**
      * 按 id 列表查询消息（用于删除前提取 content 做语音缓存清理）
      */

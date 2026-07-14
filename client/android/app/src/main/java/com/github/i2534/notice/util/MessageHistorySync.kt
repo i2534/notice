@@ -69,6 +69,22 @@ object MessageHistorySync {
         return "${topic.trim()}|${content.trim()}"
     }
 
+    /** 与入库内容对齐：先 unwrap 嵌套信封再算指纹，避免 HTTP 原始 JSON 与本地明文对不上。 */
+    fun normalizedFingerprint(topic: String, content: String): String {
+        val normalized = unwrapNestedNoticeContent(content)?.content ?: content
+        return fingerprint(topic, normalized)
+    }
+
+    /** HTTP / MQTT 统一用的服务端消息 id 字符串；兼容旧版 hist-{id}。 */
+    fun serverIdKeys(serverId: Long): Set<String> {
+        if (serverId <= 0) return emptySet()
+        return setOf(serverId.toString(), "hist-$serverId")
+    }
+
+    fun localHasServerId(localIds: Set<String>, serverId: Long): Boolean {
+        return serverIdKeys(serverId).any { it in localIds }
+    }
+
     /**
      * 与 Web [normalizeMessagePayload] 对齐：若 content 本身是嵌套的 Notice 信封 JSON
      *（含 title / content），展开为可读字段，避免双重包装时气泡显示整段 JSON。
@@ -164,17 +180,19 @@ object MessageHistorySync {
     }
 
     /**
-     * Keep messages strictly newer than [afterTimestampMs], excluding ones already present locally
-     * (matched by topic+content fingerprint).
+     * 过滤漏消息：优先按服务端 id 去重（含旧 hist-{id}），其次用规范化 topic+content 指纹
+     *（兼容升级前无 id 的 MQTT 本地消息）。
      */
     fun filterMissed(
         remote: List<RemoteHistoryMessage>,
         afterTimestampMs: Long,
+        localIds: Set<String>,
         localFingerprints: Set<String>
     ): List<RemoteHistoryMessage> {
         return remote.filter { msg ->
             msg.timestampMs > afterTimestampMs &&
-                fingerprint(msg.topic, msg.content) !in localFingerprints
+                !localHasServerId(localIds, msg.id) &&
+                normalizedFingerprint(msg.topic, msg.content) !in localFingerprints
         }
     }
 }

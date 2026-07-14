@@ -14,6 +14,7 @@ describe('utils', () => {
   describe('normalizeMessagePayload', () => {
     it('parses nested JSON string with title and content', () => {
       const msg = {
+        id: 42,
         content: '{"title":"中文标题","content":"中文内容\\u4e2d\\u6587"}',
         topic: 'notice/test',
       }
@@ -21,10 +22,12 @@ describe('utils', () => {
       expect(result.title).toBe('中文标题')
       expect(result.content).toBe('中文内容中文')
       expect(result.topic).toBe('notice/test')
+      expect(result.id).toBe(42)
     })
 
     it('handles already parsed object', () => {
       const msg = {
+        id: 7,
         content: { title: '标题', content: '内容', client: 'web' },
         topic: 'notice/alert',
       }
@@ -33,6 +36,7 @@ describe('utils', () => {
       expect(result.content).toBe('内容')
       expect(result.client).toBe('web')
       expect(result.topic).toBe('notice/alert')
+      expect(result.id).toBe(7)
     })
 
     it('returns original for non-JSON content', () => {

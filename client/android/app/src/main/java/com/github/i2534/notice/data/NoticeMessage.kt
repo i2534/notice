@@ -68,7 +68,7 @@ data class NoticeMessage(
          * 支持 JSON 格式: {"title": "xxx", "content": "xxx"}
          * 也支持纯文本
          */
-        fun parse(topic: String, payload: ByteArray): NoticeMessage {
+                fun parse(topic: String, payload: ByteArray): NoticeMessage {
             val text = String(payload, Charsets.UTF_8)
             return try {
                 val json = JSONObject(text)
@@ -85,7 +85,14 @@ data class NoticeMessage(
                 }
                 val timestamp = MessageHistorySync.parseTimestamp(json.opt("timestamp"))
                     ?: System.currentTimeMillis()
+                // 优先使用服务端注入的稳定 id（与 HTTP /messages 同源）
+                val serverId = when (val raw = json.opt("id")) {
+                    is Number -> raw.toLong().takeIf { it > 0 }?.toString()
+                    is String -> raw.trim().takeIf { it.isNotEmpty() && it != "null" }
+                    else -> null
+                }
                 NoticeMessage(
+                    id = serverId ?: UUID.randomUUID().toString(),
                     topic = topic,
                     title = title,
                     content = content,

@@ -65,6 +65,7 @@ export function normalizeMessagePayload(msg) {
   if (c && typeof c === 'object' && (c.title !== undefined || c.content !== undefined)) {
     const out = { title: c.title, content: c.content, client: c.client, timestamp: c.timestamp }
     if (msg.topic) out.topic = msg.topic
+    if (msg.id != null && msg.id !== '') out.id = msg.id
     return out
   }
   const raw = (c != null) ? String(c).trim().replace(/^\uFEFF/, '') : ''
@@ -79,6 +80,7 @@ export function normalizeMessagePayload(msg) {
     const parsed = JSON.parse(substr)
     if (parsed && (parsed.title !== undefined || parsed.content !== undefined)) {
       if (msg.topic) parsed.topic = msg.topic
+      if (msg.id != null && msg.id !== '') parsed.id = msg.id
       return parsed
     }
   } catch {}

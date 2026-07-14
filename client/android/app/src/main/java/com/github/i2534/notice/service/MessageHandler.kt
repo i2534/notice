@@ -60,6 +60,24 @@ class MessageHandler(
         AppLogger.d(TAG, "Message received: ${message.title}")
 
         scope.launch {
+            val existed = messageDao.existsById(message.id)
+            // 兼容旧 hist-{id}：MQTT 新 id 与历史条目撞车时也视为已存在
+            val histTwinExisted = !existed &&
+                message.id.all { it.isDigit() } &&
+                messageDao.existsById("hist-${message.id}")
+            if (existed || histTwinExisted) {
+                AppLogger.d(TAG, "Ignoring duplicate message id=${message.id}")
+                // 若 MQTT 带来规范 id，可把旧 hist-* 替换为同一内容（可选 REPLACE）
+                if (histTwinExisted) {
+                    messageDao.delete("hist-${message.id}")
+                    messageDao.insert(message)
+                    _messagesAsc.update { list ->
+                        list.map { if (it.id == "hist-${message.id}") message else it }
+                    }
+                }
+                return@launch
+            }
+
             messageDao.insert(message)
             _messagesAsc.update { list ->
                 val updated = list + message
@@ -68,15 +86,11 @@ class MessageHandler(
             if (messageInsertCount.incrementAndCheck()) {
                 messageDao.trimToSize(500)
             }
-        }
 
-        _unreadCount.update { it + 1 }
-
-        scope.launch {
+            _unreadCount.update { it + 1 }
             _latestMessage.emit(message)
+            showMessageNotification(message)
         }
-
-        showMessageNotification(message)
     }
 
     fun showMessageNotification(message: NoticeMessage) {
@@ -107,8 +121,10 @@ class MessageHandler(
 
         try {
             applyMiuiBadge(notification, unreadNum)
+            // 固定 notification id，避免补历史/重复到达时通知栏无限叠加
+            val notifyId = message.id.hashCode() and 0x7fffffff
             NotificationManagerCompat.from(context)
-                .notify(messageIdCounter.incrementAndGet(), notification)
+                .notify(if (notifyId == 0) 2000 else notifyId, notification)
         } catch (e: SecurityException) {
             AppLogger.w(TAG, "No notification permission")
         }

@@ -86,22 +86,44 @@ class MessageHistorySyncTest {
     }
 
     @Test
-    fun filterMissed_keepsOnlyNewerAndNotDuplicate() {
+    fun filterMissed_keepsOnlyNewerAndNotDuplicateById() {
         val remote = listOf(
             RemoteHistoryMessage(3, "notice/a", "t3", "c3", 3000),
             RemoteHistoryMessage(2, "notice/a", "t2", "c2", 2000),
             RemoteHistoryMessage(1, "notice/a", "t1", "c1", 1000)
         )
-        val localFingerprints = setOf(
-            MessageHistorySync.fingerprint("notice/a", "c2")
-        )
         val missed = MessageHistorySync.filterMissed(
             remote = remote,
             afterTimestampMs = 1500,
-            localFingerprints = localFingerprints
+            localIds = setOf("2", "hist-2"),
+            localFingerprints = emptySet()
         )
         assertEquals(1, missed.size)
         assertEquals(3L, missed[0].id)
+    }
+
+    @Test
+    fun filterMissed_dedupsByNormalizedFingerprintWhenIdMissingLocally() {
+        val nested = """{"title":"t","content":"hello"}"""
+        val remote = listOf(
+            RemoteHistoryMessage(9, "notice/a", "t", nested, 3000)
+        )
+        val missed = MessageHistorySync.filterMissed(
+            remote = remote,
+            afterTimestampMs = 0,
+            localIds = emptySet(),
+            localFingerprints = setOf(
+                MessageHistorySync.normalizedFingerprint("notice/a", "hello")
+            )
+        )
+        assertTrue(missed.isEmpty())
+    }
+
+    @Test
+    fun serverIdKeys_includesHistCompat() {
+        assertEquals(setOf("12", "hist-12"), MessageHistorySync.serverIdKeys(12))
+        assertTrue(MessageHistorySync.localHasServerId(setOf("hist-12"), 12))
+        assertTrue(MessageHistorySync.localHasServerId(setOf("12"), 12))
     }
 
     @Test

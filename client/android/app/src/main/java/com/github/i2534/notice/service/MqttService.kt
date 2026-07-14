@@ -113,8 +113,7 @@ class MqttService : Service() {
 
     /**
      * 重连后从 HTTP 历史补齐 MQTT 离线/会话过期期间漏掉的消息。
-     * 使用近 24h 回看窗口 + topic/content 指纹去重，避免「本地最新时间」挡掉中间缺口
-     *（例如凌晨会话过期后、上午推送、午后才重连的情况）。
+     * 使用近 24h 回看窗口 + 服务端 id 去重（兼容旧 hist-{id} / 规范化指纹）。
      */
     private suspend fun syncMissedMessages() {
         val settings = currentSettings ?: configStore.settings.first()
@@ -130,10 +129,11 @@ class MqttService : Service() {
 
         val lookbackMs = 24 * 60 * 60 * 1000L
         val afterTs = System.currentTimeMillis() - lookbackMs
-        val fingerprints = messageDao.getRecentMessagesAsc(500)
-            .asSequence()
+        val recent = messageDao.getRecentMessagesAsc(500)
             .filter { it.timestamp >= afterTs }
-            .map { MessageHistorySync.fingerprint(it.topic, it.content) }
+        val localIds = recent.map { it.id }.toSet()
+        val fingerprints = recent
+            .map { MessageHistorySync.normalizedFingerprint(it.topic, it.content) }
             .toSet()
 
         val missed = withContext(Dispatchers.IO) {
@@ -141,6 +141,7 @@ class MqttService : Service() {
                 baseUrl = baseUrl,
                 token = settings.authToken,
                 afterTimestampMs = afterTs,
+                localIds = localIds,
                 localFingerprints = fingerprints
             )
         }
@@ -149,18 +150,27 @@ class MqttService : Service() {
             return
         }
 
-        AppLogger.i(TAG, "History sync: inserting ${missed.size} missed message(s)")
-        messageDao.insertAll(missed)
+        // 仅插入本地尚不存在的 id（含 hist-* 兼容）
+        val trulyNew = missed.filter { msg ->
+            !messageDao.existsById(msg.id) && !messageDao.existsById("hist-${msg.id}")
+        }
+        if (trulyNew.isEmpty()) {
+            AppLogger.d(TAG, "History sync: ${missed.size} candidate(s) already local, skip notify")
+            return
+        }
+
+        AppLogger.i(TAG, "History sync: inserting ${trulyNew.size} missed message(s)")
+        messageDao.insertAll(trulyNew)
         messageDao.trimToSize(500)
         _messagesAsc.update { list ->
             val existingIds = list.map { it.id }.toSet()
-            val toAdd = missed.filter { it.id !in existingIds }
+            val toAdd = trulyNew.filter { it.id !in existingIds }
             val updated = (list + toAdd).sortedBy { it.timestamp }
             if (updated.size > 500) updated.takeLast(500) else updated
         }
-        _unreadCount.update { it + missed.size }
+        _unreadCount.update { it + trulyNew.size }
         // 仅对最新一条弹通知，避免补历史时刷屏
-        missed.lastOrNull()?.let { messageHandler.showMessageNotification(it) }
+        trulyNew.lastOrNull()?.let { messageHandler.showMessageNotification(it) }
         connectionRef.lastMessageTime = System.currentTimeMillis()
     }
 

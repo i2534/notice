@@ -13,17 +13,19 @@ object MessageHistoryFetcher {
     private const val PAGE_SIZE = 50
 
     /**
-     * @return 需要写入本地的漏消息（已过滤，id 为 hist-{serverId}）
+     * @return 需要写入本地的漏消息（id 为服务端数字字符串，与 MQTT 注入的 id 一致）
      */
     fun fetchMissed(
         baseUrl: String,
         token: String,
         afterTimestampMs: Long,
+        localIds: Set<String>,
         localFingerprints: Set<String>
     ): List<NoticeMessage> {
         val collected = mutableListOf<RemoteHistoryMessage>()
         var beforeId = 0L
         var pages = 0
+        val ids = localIds.toMutableSet()
         val fingerprints = localFingerprints.toMutableSet()
 
         while (pages < MAX_PAGES) {
@@ -34,10 +36,14 @@ object MessageHistoryFetcher {
             val missed = MessageHistorySync.filterMissed(
                 remote = page.messages,
                 afterTimestampMs = afterTimestampMs,
+                localIds = ids,
                 localFingerprints = fingerprints
             )
             collected.addAll(missed)
-            missed.forEach { fingerprints.add(MessageHistorySync.fingerprint(it.topic, it.content)) }
+            missed.forEach {
+                ids.addAll(MessageHistorySync.serverIdKeys(it.id))
+                fingerprints.add(MessageHistorySync.normalizedFingerprint(it.topic, it.content))
+            }
 
             // 本页最旧一条已不新于本地水位，无需再往前翻
             val oldest = page.messages.minOfOrNull { it.timestampMs } ?: break
@@ -97,7 +103,7 @@ object MessageHistoryFetcher {
             nested.title?.let { outTitle = it }
         }
         return NoticeMessage(
-            id = "hist-$id",
+            id = id.toString(),
             topic = topic,
             title = outTitle,
             content = outContent,
