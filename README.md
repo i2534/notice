@@ -86,10 +86,10 @@ notice/
 │   │   ├── app/                     # 源码（Room + Paging 3 + DataStore）
 │   │   ├── Makefile                 # Docker 构建（推荐）
 │   │   └── gradle-wrapper.properties
-│   ├── hermes/                      # Hermes Agent 插件
-│   │   ├── adapter.py               # MQTT 适配器
-│   │   ├── asr.py                   # 语音转写（Qwen/CLI/自定义）
-│   │   └── plugin.yaml
+│   ├── hermes/                      # Hermes 平台插件（勿改 Agent 核心）
+│   │   ├── adapter.py / config.py / payload.py / ...
+│   │   ├── plugin.yaml
+│   │   └── README.md
 │   ├── openclaw/                    # Openclaw Channel 插件
 │   │   ├── index.ts                 # 入口
 │   │   └── package.json
@@ -145,7 +145,7 @@ npm run build          # 生产构建（产物在 web/dist/，嵌入 Go 二进�
 | **CLI** | `cd client/cli && make run TOKEN=<token>` | Linux/Windows/macOS，支持 `send` 子命令 |
 | **GUI** | `cd client/gui && npm run tauri dev` | Tauri 桌面端，需 Rust + Node.js |
 | **Android** | `cd client/android && make docker` | Docker 构建 APK（推荐） |
-| **Hermes** | `cd client/hermes && ln -sf $(pwd) ~/.hermes/plugins/notice` | 需 Hermes Agent 环境 |
+| **Hermes** | `cd client/hermes && ln -sfn $(pwd) ~/.hermes/plugins/notice` | Hermes ≥0.18；整目录软链，勿改 Agent 核心 |
 | **Openclaw** | `cd client/openclaw && npm install && openclaw plugins install -l .` | 需 Openclaw ≥ 1.0 |
 | **XiaoAi** | `cd client/xiaoai && make prepare && make start` | 小爱音箱双向通信 |
 | **OpenCode** | `cd client/opencode && make prepare && make start` | 接入 Notice 消息系统 |
@@ -260,7 +260,7 @@ curl -X POST http://localhost:9090/webhook \
 | **CLI** | [client/cli/README.md](client/cli/README.md) | 跨平台订阅 + `send` 子命令 + 执行外部命令 |
 | **GUI** | [client/gui/README.md](client/gui/README.md) | Tauri 桌面端，系统托盘、消息历史、自动重连 |
 | **Android** | [client/android/README.md](client/android/README.md) | Room 持久化、Markdown+图片+语音块、回复指定 topic |
-| **Hermes** | [client/hermes/README.md](client/hermes/README.md) | Agent 接入、Markdown、图片上传、ASR 语音转写 |
+| **Hermes** | [client/hermes/README.md](client/hermes/README.md) | MQTT 平台插件、standalone/cron、ASR→全局 STT；不修改 Hermes 源码 |
 | **Openclaw** | [client/openclaw/README.md](client/openclaw/README.md) | MQTT Channel、收发指定 topic、STT 语音转写、图片上传 |
 | **XiaoAi** | [client/xiaoai/README.md](client/xiaoai/README.md) | 小爱音箱双向：TTS 播报 + 语音发送 |
 | **OpenCode** | [client/opencode/README.md](client/opencode/README.md) | 本地 OpenCode serve 接入、MQTT 指令控制 |

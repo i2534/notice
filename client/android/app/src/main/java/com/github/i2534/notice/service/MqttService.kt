@@ -10,6 +10,8 @@ import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.data.NoticeMessage
 import com.github.i2534.notice.ui.ContentBlockParser
 import com.github.i2534.notice.util.AppLogger
+import com.github.i2534.notice.util.MessageHistoryFetcher
+import com.github.i2534.notice.util.MessageHistorySync
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.json.JSONObject
@@ -104,7 +106,62 @@ class MqttService : Service() {
     }
 
     private fun onConnected() {
-        // callback from MqttConnectionManager after successful connect
+        ioScope.launch {
+            syncMissedMessages()
+        }
+    }
+
+    /**
+     * 重连后从 HTTP 历史补齐 MQTT 离线/会话过期期间漏掉的消息。
+     * 使用近 24h 回看窗口 + topic/content 指纹去重，避免「本地最新时间」挡掉中间缺口
+     *（例如凌晨会话过期后、上午推送、午后才重连的情况）。
+     */
+    private suspend fun syncMissedMessages() {
+        val settings = currentSettings ?: configStore.settings.first()
+        val baseUrl = MessageHistorySync.resolveHttpBaseUrl(settings.serverUrl, settings.brokerUrl)
+        if (baseUrl.isNullOrBlank()) {
+            AppLogger.d(TAG, "Skip history sync: no HTTP base URL (set serverUrl or use ws/wss broker)")
+            return
+        }
+        if (settings.authToken.isBlank()) {
+            AppLogger.d(TAG, "Skip history sync: no auth token")
+            return
+        }
+
+        val lookbackMs = 24 * 60 * 60 * 1000L
+        val afterTs = System.currentTimeMillis() - lookbackMs
+        val fingerprints = messageDao.getRecentMessagesAsc(500)
+            .asSequence()
+            .filter { it.timestamp >= afterTs }
+            .map { MessageHistorySync.fingerprint(it.topic, it.content) }
+            .toSet()
+
+        val missed = withContext(Dispatchers.IO) {
+            MessageHistoryFetcher.fetchMissed(
+                baseUrl = baseUrl,
+                token = settings.authToken,
+                afterTimestampMs = afterTs,
+                localFingerprints = fingerprints
+            )
+        }
+        if (missed.isEmpty()) {
+            AppLogger.d(TAG, "History sync: no missed messages")
+            return
+        }
+
+        AppLogger.i(TAG, "History sync: inserting ${missed.size} missed message(s)")
+        messageDao.insertAll(missed)
+        messageDao.trimToSize(500)
+        _messagesAsc.update { list ->
+            val existingIds = list.map { it.id }.toSet()
+            val toAdd = missed.filter { it.id !in existingIds }
+            val updated = (list + toAdd).sortedBy { it.timestamp }
+            if (updated.size > 500) updated.takeLast(500) else updated
+        }
+        _unreadCount.update { it + missed.size }
+        // 仅对最新一条弹通知，避免补历史时刷屏
+        missed.lastOrNull()?.let { messageHandler.showMessageNotification(it) }
+        connectionRef.lastMessageTime = System.currentTimeMillis()
     }
 
     private fun loadMessagesAsc() {

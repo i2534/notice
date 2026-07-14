@@ -6,6 +6,7 @@ import {
   topicForPublish,
   normalizeAndCategorize,
   isAudioUrl,
+  renderMarkdown,
 } from './utils.js'
 import { dedupByContent } from './store.js'
 
@@ -203,5 +204,18 @@ describe('isAudioUrl', () => {
     expect(isAudioUrl(null)).toBe(false)
     expect(isAudioUrl(undefined)).toBe(false)
     expect(isAudioUrl(123)).toBe(false)
+  })
+})
+describe('renderMarkdown', () => {
+  it('collapses excessive blank lines before parse', () => {
+    const html = renderMarkdown('a\n\n\n\n\nb')
+    expect(html.match(/<p>/g)?.length ?? 0).toBeLessThanOrEqual(2)
+    expect(html).toContain('a')
+    expect(html).toContain('b')
+  })
+
+  it('renders simple markdown', () => {
+    const html = renderMarkdown('**bold**')
+    expect(html).toContain('<strong>bold</strong>')
   })
 })

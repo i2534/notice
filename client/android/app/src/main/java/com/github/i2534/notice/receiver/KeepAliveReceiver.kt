@@ -3,6 +3,7 @@ package com.github.i2534.notice.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import com.github.i2534.notice.service.MqttService
 import com.github.i2534.notice.util.AppLogger
 
@@ -20,12 +21,20 @@ class KeepAliveReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         if (intent?.action == MqttService.ACTION_KEEP_ALIVE) {
             AppLogger.d(TAG, "Keep-alive alarm triggered, checking MQTT connection...")
-            
-            // 发送 Intent 让 MqttService 检查连接状态
+
             val serviceIntent = Intent(context, MqttService::class.java).apply {
                 action = MqttService.ACTION_KEEP_ALIVE
             }
-            context.startService(serviceIntent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.startService(serviceIntent)
+                }
+            } catch (e: Exception) {
+                AppLogger.e(TAG, "Failed to start MqttService from keep-alive: ${e.message}")
+            }
         }
     }
 }

@@ -1,4 +1,40 @@
 name: notice
+label: Notice
 kind: platform
-version: 0.1.0
-description: Notice messaging adapter via MQTT
+version: 1.1.0
+description: >
+  Notice messaging adapter for Hermes Agent via MQTT.
+  Subscribes to Notice topics, forwards messages to the agent, and publishes
+  replies (Markdown / images with optional gzip+base64 compression).
+  Optional mediaAudio providers or Hermes global STT for voice transcription.
+author: notice
+requires_env:
+  - name: NOTICE_BROKER_URL
+    description: "MQTT broker URL (wss://host/ws or tcp://host:9091)"
+    prompt: "Notice broker URL"
+    password: false
+  - name: NOTICE_TOKEN
+    description: "Notice Server auth.token"
+    prompt: "Notice auth token"
+    password: true
+optional_env:
+  - name: NOTICE_TOPIC
+    description: "Subscribe topic pattern (default notice/#)"
+    prompt: "Notice subscribe topic"
+    password: false
+  - name: NOTICE_SERVER_URL
+    description: "HTTP base URL for image upload (optional)"
+    prompt: "Notice HTTP server URL"
+    password: false
+  - name: NOTICE_HOME_CHANNEL
+    description: "Default topic for cron / notification delivery"
+    prompt: "Notice home channel topic"
+    password: false
+  - name: NOTICE_ALLOWED_USERS
+    description: "Comma-separated allowed client names (allowlist)"
+    prompt: "Allowed Notice clients"
+    password: false
+  - name: NOTICE_ALLOW_ALL_USERS
+    description: "Allow any client (dev only)"
+    prompt: "Allow all Notice clients? (true/false)"
+    password: false

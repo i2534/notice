@@ -12,9 +12,12 @@ import com.github.i2534.notice.data.MqttConfigStore
 import com.github.i2534.notice.data.MqttSettings
 import com.github.i2534.notice.receiver.KeepAliveReceiver
 import com.github.i2534.notice.util.AppLogger
+import com.github.i2534.notice.util.KeepAliveAction
+import com.github.i2534.notice.util.KeepAliveDecision
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
 import org.eclipse.paho.client.mqttv3.*
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -39,7 +42,10 @@ private suspend fun MqttAsyncClient.connectSuspend(options: MqttConnectOptions):
             }
         })
         cont.invokeOnCancellation {
-            if (isConnected) disconnect()
+            try {
+                if (isConnected) disconnect()
+            } catch (_: Exception) {
+            }
         }
     }
 }
@@ -58,12 +64,11 @@ class MqttConnectionManager(
     var mqttClient: MqttAsyncClient? = null
         private set
 
+    private val connectMutex = Mutex()
     private var reconnectJob: Job? = null
     private var reconnectAttempt = 0
     private val maxReconnectDelay = 60_000L
     private val baseReconnectDelay = 3_000L
-    private val minConnectStableTime = 30 * 60 * 1000L
-    private val maxNoMessageTime = 30 * 60 * 1000L
 
     private var heartbeatJob: Job? = null
     private val heartbeatInterval = 10_000L
@@ -100,14 +105,19 @@ class MqttConnectionManager(
     }
 
     suspend fun connectMqtt(settings: MqttSettings) {
-        _connectionState.value = MqttService.ConnectionState.CONNECTING
-        AppLogger.d(TAG, "Connecting to ${settings.brokerUrl}")
-
+        if (userDisconnected) {
+            AppLogger.d(TAG, "User disconnected, skip connect")
+            return
+        }
+        if (!connectMutex.tryLock()) {
+            AppLogger.d(TAG, "Connect already in progress, skip")
+            return
+        }
         try {
-            mqttClient?.let {
-                if (it.isConnected) it.disconnect()
-                it.close()
-            }
+            _connectionState.value = MqttService.ConnectionState.CONNECTING
+            AppLogger.d(TAG, "Connecting to ${settings.brokerUrl}")
+
+            closeClientQuietly()
 
             var clientId = settings.getEffectiveClientId(generateNew = false)
             if (clientId.isBlank()) {
@@ -116,13 +126,14 @@ class MqttConnectionManager(
                 AppLogger.d(TAG, "Generated and saved new clientId: $clientId")
             }
 
-            mqttClient = MqttAsyncClient(
+            val client = MqttAsyncClient(
                 settings.brokerUrl,
                 clientId,
                 MemoryPersistence()
             )
+            mqttClient = client
 
-            mqttClient?.setCallback(object : MqttCallback {
+            client.setCallback(object : MqttCallback {
                 override fun connectionLost(cause: Throwable?) {
                     AppLogger.w(TAG, "Connection lost: ${cause?.message}")
                     _connectionState.value = MqttService.ConnectionState.DISCONNECTED
@@ -131,6 +142,7 @@ class MqttConnectionManager(
 
                 override fun messageArrived(topic: String?, message: MqttMessage?) {
                     if (topic != null && message != null) {
+                        connectionRef.lastMessageTime = System.currentTimeMillis()
                         onMessage(topic, message.payload)
                     }
                 }
@@ -140,9 +152,10 @@ class MqttConnectionManager(
 
             val options = MqttConnectOptions().apply {
                 isCleanSession = false
-                keepAliveInterval = settings.keepAlive
+                keepAliveInterval = settings.keepAlive.coerceAtLeast(60)
                 connectionTimeout = 30
-                isAutomaticReconnect = true
+                // 仅使用应用层 scheduleReconnect，避免与 Paho 自动重连双轨打架
+                isAutomaticReconnect = false
                 maxInflight = 100
                 if (settings.hasAuth()) {
                     userName = settings.authToken
@@ -150,8 +163,8 @@ class MqttConnectionManager(
                 }
             }
 
-            mqttClient?.connectSuspend(options)
-            mqttClient?.subscribe(settings.topic, 1)?.waitForCompletion(10000)
+            client.connectSuspend(options)
+            client.subscribe(settings.topic, 1)?.waitForCompletion(10000)
 
             _connectionState.value = MqttService.ConnectionState.CONNECTED
             reconnectAttempt = 0
@@ -159,20 +172,39 @@ class MqttConnectionManager(
             AppLogger.d(TAG, "Connected and subscribed to ${settings.topic}")
             onConnected()
 
+        } catch (e: CancellationException) {
+            AppLogger.d(TAG, "Connection cancelled: ${e.message}")
+            _connectionState.value = MqttService.ConnectionState.DISCONNECTED
+            throw e
         } catch (e: Exception) {
             AppLogger.e(TAG, "Connection failed: ${e.message}", e)
             _connectionState.value = MqttService.ConnectionState.DISCONNECTED
             scheduleReconnect()
+        } finally {
+            connectMutex.unlock()
+        }
+    }
+
+    private fun closeClientQuietly() {
+        val client = mqttClient ?: return
+        mqttClient = null
+        try {
+            if (client.isConnected) {
+                client.disconnect()?.waitForCompletion(3000)
+            }
+        } catch (e: Exception) {
+            AppLogger.d(TAG, "Disconnect before reconnect: ${e.message}")
+        }
+        try {
+            client.close()
+        } catch (e: Exception) {
+            AppLogger.d(TAG, "Close client: ${e.message}")
         }
     }
 
     suspend fun disconnectMqtt() {
         try {
-            mqttClient?.let {
-                if (it.isConnected) it.disconnect()?.waitForCompletion(5000)
-                it.close()
-            }
-            mqttClient = null
+            closeClientQuietly()
         } catch (e: Exception) {
             AppLogger.e(TAG, "Disconnect error: ${e.message}")
         }
@@ -185,10 +217,10 @@ class MqttConnectionManager(
         }
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
-            val delay = minOf(baseReconnectDelay * (1L shl reconnectAttempt), maxReconnectDelay)
+            val delayMs = minOf(baseReconnectDelay * (1L shl reconnectAttempt.coerceAtMost(5)), maxReconnectDelay)
             reconnectAttempt++
-            AppLogger.d(TAG, "Reconnecting in ${delay / 1000}s (attempt $reconnectAttempt)")
-            delay(delay)
+            AppLogger.d(TAG, "Reconnecting in ${delayMs / 1000}s (attempt $reconnectAttempt)")
+            delay(delayMs)
             if (_connectionState.value == MqttService.ConnectionState.DISCONNECTED && !userDisconnected) {
                 val settings = configStore.settings.first()
                 connectMqtt(settings)
@@ -254,35 +286,37 @@ class MqttConnectionManager(
 
     fun handleKeepAlive() {
         val mqttConnected = mqttClient?.isConnected == true
-        val state = _connectionState.value
+        val stateConnected = _connectionState.value == MqttService.ConnectionState.CONNECTED
+        val action = KeepAliveDecision.decide(
+            userDisconnected = userDisconnected,
+            stateConnected = stateConnected,
+            mqttConnected = mqttConnected
+        )
 
-        AppLogger.d(TAG, "Keep-alive check: state=$state, mqtt=$mqttConnected")
+        AppLogger.d(TAG, "Keep-alive check: state=${_connectionState.value}, mqtt=$mqttConnected, action=$action")
 
-        if (!mqttConnected && !userDisconnected) {
-            AppLogger.d(TAG, "Keep-alive: connection lost, attempting reconnect...")
-            scope.launch {
-                val settings = configStore.settings.first()
-                connectMqtt(settings)
+        when (action) {
+            KeepAliveAction.SKIP -> {
+                AppLogger.d(TAG, "Keep-alive: user disconnected, skip")
             }
-        } else if (mqttConnected && !userDisconnected) {
-            if (connectionRef.lastConnectTime > 0) {
-                val connectDuration = System.currentTimeMillis() - connectionRef.lastConnectTime
-                val timeSinceLastMessage = if (connectionRef.lastMessageTime > 0) {
-                    System.currentTimeMillis() - connectionRef.lastMessageTime
+            KeepAliveAction.HEALTHY -> {
+                val lastMsg = if (connectionRef.lastMessageTime > 0) {
+                    "${(System.currentTimeMillis() - connectionRef.lastMessageTime) / 1000}s ago"
                 } else {
-                    Long.MAX_VALUE
+                    "never"
                 }
-                if (connectDuration >= minConnectStableTime && timeSinceLastMessage >= maxNoMessageTime) {
-                    AppLogger.d(TAG, "Keep-alive: reconnecting to refresh callback (connected ${connectDuration / 1000}s, no message for ${timeSinceLastMessage / 1000}s)...")
-                    scope.launch {
-                        val settings = configStore.settings.first()
-                        connectMqtt(settings)
-                    }
-                } else {
-                    AppLogger.d(TAG, "Keep-alive: connection healthy (connected ${connectDuration / 1000}s, last message ${if (connectionRef.lastMessageTime > 0) "${timeSinceLastMessage / 1000}s ago" else "never"}), skip reconnect")
+                AppLogger.d(TAG, "Keep-alive: connection healthy (last message $lastMsg)")
+            }
+            KeepAliveAction.RECONNECT -> {
+                AppLogger.d(TAG, "Keep-alive: not healthy, attempting reconnect...")
+                // 若状态仍显示 CONNECTED 但 socket 已断，先纠正状态以便 scheduleReconnect 条件成立
+                if (_connectionState.value != MqttService.ConnectionState.DISCONNECTED) {
+                    _connectionState.value = MqttService.ConnectionState.DISCONNECTED
                 }
-            } else {
-                AppLogger.d(TAG, "Keep-alive: connection just established, skip reconnect")
+                scope.launch {
+                    val settings = configStore.settings.first()
+                    connectMqtt(settings)
+                }
             }
         }
 
@@ -334,7 +368,7 @@ class MqttConnectionManager(
             if (t.isEmpty()) t = "notice"
         }
         if (t.contains("+")) {
-            t = t.split("/").map { if (it == "+") "reply" else it }.joinToString("/")
+            t = t.split("/").joinToString("/") { if (it == "+") "reply" else it }
         }
         return t
     }

@@ -57,16 +57,50 @@
 
 <style>
   .overlay { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.6); z-index:var(--z-overlay-modal); backdrop-filter:blur(6px); }
-  .modal { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:520px; max-width:calc(100% - 60px); max-height:calc(100% - 80px); background:var(--bg-elevated); border:1px solid var(--border-light); border-radius:var(--radius-lg); z-index:var(--z-modal); display:flex; flex-direction:column; box-shadow:var(--shadow-lg); }
+  .modal {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(96vw, 1100px);
+    max-height: calc(100% - 48px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    z-index: var(--z-modal);
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-lg);
+  }
   .header { padding:18px 20px 14px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
   .d-title { font-size:16px; font-weight:700; }
-  .d-meta { font-size:11px; color:var(--text-hint); margin-top:4px; display:flex; gap:12px; align-items:center; }
+  .d-meta { font-size:11px; color:var(--text-hint); margin-top:4px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
   .d-tag { padding:1px 8px; border-radius:10px; background:var(--accent-alpha-8); color:var(--accent); font-size:10px; font-weight:600; }
   .close-btn { width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text-hint); cursor:pointer; font-size:22px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .close-btn:hover { background:var(--bg-hover); color:var(--text-primary); }
-  .body { flex:1; padding:20px; overflow-y:auto; line-height:1.7; font-size:14px; color:var(--text-secondary); white-space:pre-wrap; word-break:break-word; }
-  .body :global(p) { margin:0; }
-  .body :global(p+p) { margin-top:.5em; }
+  /* Markdown 已输出 <p>/<br>，勿用 pre-wrap，否则 HTML 源码换行会叠成多余空行 */
+  .body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    line-height: 1.65;
+    font-size: 14px;
+    color: var(--text-secondary);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .body :global(p) { margin: 0; }
+  .body :global(p + p) { margin-top: 0.65em; }
+  .body :global(br + br) { display: none; }
+  @media (max-width: 640px) {
+    .modal {
+      width: calc(100% - 16px);
+      max-height: calc(100% - 16px);
+      border-radius: var(--radius-md);
+    }
+    .header, .body, .footer { padding-left: 14px; padding-right: 14px; }
+  }
   .body :global(code) { background:var(--bg-card); padding:.1em .35em; border-radius:4px; font-size:.9em; }
   .body :global(pre) { background:var(--bg-card); padding:.5rem; border-radius:6px; overflow-x:auto; margin:.5em 0; }
   .body :global(img) { max-width:100%; border-radius:8px; margin:.5em 0; }
@@ -83,5 +117,5 @@
   .btn-text.danger:hover { color:var(--danger); background:var(--danger-dim); }
   .btn-primary-sm { background:var(--accent); color:var(--text-on-accent); border:none; font-size:13px; font-weight:600; cursor:pointer; padding:6px 16px; border-radius:var(--radius-sm); }
   .btn-primary-sm:hover { filter:brightness(1.1); }
-  @media (max-width: 640px) { .modal { width: calc(100% - 20px); max-width: none; } }
+
 </style>

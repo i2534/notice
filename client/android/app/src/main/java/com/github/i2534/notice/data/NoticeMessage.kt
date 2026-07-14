@@ -6,6 +6,7 @@ import androidx.room.Ignore
 import androidx.room.PrimaryKey
 import com.github.i2534.notice.ui.ContentBlock
 import com.github.i2534.notice.ui.ContentBlockParser
+import com.github.i2534.notice.util.MessageHistorySync
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.time.Instant
@@ -75,11 +76,21 @@ data class NoticeMessage(
                 if (json.optString("content_encoding", "") == CONTENT_ENCODING_GZIP_B64 && content.isNotEmpty()) {
                     decodeGzipBase64Content(content)?.let { content = it }
                 }
+                var title = json.optString("title", "").ifBlank { "通知" }
+                var client = json.optString("client").takeIf { it.isNotEmpty() }
+                MessageHistorySync.unwrapNestedNoticeContent(content)?.let { nested ->
+                    content = nested.content
+                    nested.title?.let { title = it }
+                    nested.client?.let { client = it }
+                }
+                val timestamp = MessageHistorySync.parseTimestamp(json.opt("timestamp"))
+                    ?: System.currentTimeMillis()
                 NoticeMessage(
                     topic = topic,
-                    title = json.optString("title", "通知"),
+                    title = title,
                     content = content,
-                    client = json.optString("client").takeIf { it.isNotEmpty() }
+                    timestamp = timestamp,
+                    client = client
                 )
             } catch (e: Exception) {
                 // 非 JSON 格式，使用纯文本

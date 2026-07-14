@@ -133,7 +133,9 @@ marked.use({
 export function renderMarkdown(text) {
   if (text == null || text === '') return ''
   try {
-    const raw = marked.parse(String(text), { gfm: true, breaks: true })
+    // 压缩多余空行，避免 marked 产出一串空 <p>
+    const cleaned = String(text).replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n')
+    const raw = marked.parse(cleaned, { gfm: true, breaks: true })
     const html = typeof raw === 'string' ? raw : ''
     return DOMPurify.sanitize(html, {
       ALLOWED_TAGS: ['p','br','strong','em','s','code','pre','ul','ol','li','a','img','audio','blockquote','h1','h2','h3','hr','table','thead','tbody','tr','th','td'],

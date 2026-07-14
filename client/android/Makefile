@@ -1,4 +1,4 @@
-.PHONY: build build-release docker docker-release docker-rebuild docker-clean clean help
+.PHONY: build build-release docker docker-release docker-test docker-rebuild docker-clean clean help
 
 # 默认目标
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  make build-release  - 构建 Release APK"
 	@echo "  make docker         - 使用 Docker 构建 Debug APK"
 	@echo "  make docker-release - 使用 Docker 构建 Release APK"
+	@echo "  make docker-test    - 使用 Docker 跑单元测试"
 	@echo "  make docker-rebuild - 强制重新构建 Docker 镜像"
 	@echo "  make docker-clean   - 清理 Docker 镜像"
 	@echo "  make clean          - 清理构建产物"
@@ -15,6 +16,7 @@ help:
 	@echo "版本参数:"
 	@echo "  VERSION_NAME=1.0.0  - 版本名称（仅 make docker 未指定时默认为当前时间 YYYYMMDD-HHMMSS）"
 	@echo "  VERSION_CODE=1      - 版本号"
+	@echo "  DOCKER_USER=0:0     - 容器用户（rootless 默认 0:0；rootful 可用 \$$(id -u):\$$(id -g)）"
 	@echo ""
 	@echo "示例:"
 	@echo "  make docker         # Debug，未指定时 versionName 为当前时间"
@@ -44,6 +46,10 @@ PROJECT_GRADLE ?= $(PWD)/.gradle
 ANDROID_HOME_CACHE ?= $(PWD)/.android
 KOTLIN_CACHE ?= $(PWD)/.kotlin
 
+# rootless Docker 下容器 uid 0 映射到宿主机当前用户，才能写入挂载的 app/build；
+# 经典 rootful 可用: make docker DOCKER_USER=$$(id -u):$$(id -g)
+DOCKER_USER ?= $(shell docker info 2>/dev/null | grep -qi rootless && echo 0:0 || echo $$(id -u):$$(id -g))
+
 # 构建参数
 GRADLE_VERSION_ARGS := $(if $(VERSION_NAME),-PversionName=$(VERSION_NAME),) $(if $(VERSION_CODE),-PversionCode=$(VERSION_CODE),)
 
@@ -58,6 +64,7 @@ docker:
 	if [ -n "$(VERSION_CODE)" ]; then DOCKER_DEBUG_GRADLE_ARGS="$$DOCKER_DEBUG_GRADLE_ARGS -PversionCode=$(VERSION_CODE)"; fi; \
 	echo "🐳 使用 Docker 构建..."; \
 	echo "  VERSION_NAME=$$DOCKER_DEBUG_VERSION_NAME"; \
+	echo "  DOCKER_USER=$(DOCKER_USER)"; \
 	echo "  GRADLE_ARGS=$$DOCKER_DEBUG_GRADLE_ARGS"; \
 	if docker image inspect notice-android-builder >/dev/null 2>&1; then \
 		echo "✓ 镜像已存在，跳过构建"; \
@@ -69,8 +76,9 @@ docker:
 	echo ""; \
 	echo "📦 构建 APK (源码+缓存挂载)..."; \
 	docker run --rm \
-		-u $(shell id -u):$(shell id -g) \
+		-u $(DOCKER_USER) \
 		-e ANDROID_USER_HOME=/android-home \
+		-e GRADLE_USER_HOME=/gradle-cache \
 		-v "$(PWD)/app:/app/app" \
 		-v "$(PWD)/build.gradle.kts:/app/build.gradle.kts:ro" \
 		-v "$(PWD)/settings.gradle.kts:/app/settings.gradle.kts:ro" \
@@ -80,10 +88,34 @@ docker:
 		-v "$(ANDROID_HOME_CACHE):/android-home" \
 		-v "$(KOTLIN_CACHE):/app/.kotlin" \
 		notice-android-builder \
-		./gradlew assembleDebug --no-daemon --console=plain --info $$DOCKER_DEBUG_GRADLE_ARGS && \
+		./gradlew assembleDebug --no-daemon --console=plain $$DOCKER_DEBUG_GRADLE_ARGS && \
 	echo "" && \
 	echo "✅ Debug APK 已生成 (versionName=$$DOCKER_DEBUG_VERSION_NAME):" && \
 	ls -lh app/build/outputs/apk/debug/*.apk
+
+# Docker 单元测试
+docker-test:
+	@echo "🧪 Docker 单元测试 (DOCKER_USER=$(DOCKER_USER))..."
+	@if docker image inspect notice-android-builder >/dev/null 2>&1; then \
+		echo "✓ 镜像已存在"; \
+	else \
+		docker build -t notice-android-builder .; \
+	fi
+	@mkdir -p $(GRADLE_CACHE) $(PROJECT_GRADLE) $(ANDROID_HOME_CACHE) $(KOTLIN_CACHE)
+	docker run --rm \
+		-u $(DOCKER_USER) \
+		-e ANDROID_USER_HOME=/android-home \
+		-e GRADLE_USER_HOME=/gradle-cache \
+		-v "$(PWD)/app:/app/app" \
+		-v "$(PWD)/build.gradle.kts:/app/build.gradle.kts:ro" \
+		-v "$(PWD)/settings.gradle.kts:/app/settings.gradle.kts:ro" \
+		-v "$(PWD)/gradle:/app/gradle:ro" \
+		-v "$(GRADLE_CACHE):/gradle-cache" \
+		-v "$(PROJECT_GRADLE):/app/.gradle" \
+		-v "$(ANDROID_HOME_CACHE):/android-home" \
+		-v "$(KOTLIN_CACHE):/app/.kotlin" \
+		notice-android-builder \
+		./gradlew testDebugUnitTest --no-daemon --console=plain
 
 # 签名配置 (通过环境变量传入，默认从 key 文件读取密码)
 KEYSTORE_PASSWORD ?= $(shell cat key 2>/dev/null || echo "")
@@ -107,10 +139,11 @@ docker-release:
 	fi
 	@mkdir -p $(GRADLE_CACHE) $(PROJECT_GRADLE) $(ANDROID_HOME_CACHE) $(KOTLIN_CACHE)
 	@echo ""
-	@echo "📦 构建 Release APK..."
+	@echo "📦 构建 Release APK (DOCKER_USER=$(DOCKER_USER))..."
 	docker run --rm \
-		-u $(shell id -u):$(shell id -g) \
+		-u $(DOCKER_USER) \
 		-e ANDROID_USER_HOME=/android-home \
+		-e GRADLE_USER_HOME=/gradle-cache \
 		-e KEYSTORE_PASSWORD="$(KEYSTORE_PASSWORD)" \
 		-e KEY_PASSWORD="$(KEY_PASSWORD)" \
 		-e KEY_ALIAS="$(KEY_ALIAS)" \

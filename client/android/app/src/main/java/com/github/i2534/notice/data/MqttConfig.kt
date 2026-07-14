@@ -18,7 +18,8 @@ data class MqttSettings(
     /** 上次选择的回复主题，用于预填 */
     val lastSelectedTopic: String = "",
     val autoConnect: Boolean = true,
-    val keepAlive: Int = 30,
+    /** MQTT keepAlive 秒数；过小在 Doze 下易被服务端 i/o timeout 踢线 */
+    val keepAlive: Int = 120,
     val authToken: String = "",  // 认证 Token
     /** Notice 服务器 URL（用于语音/多媒体上传，与 OpenClaw serverUrl 一致；留空则不可上传） */
     val serverUrl: String = "",
@@ -69,7 +70,7 @@ class MqttConfigStore(private val context: Context) {
             topic = prefs[KEY_TOPIC] ?: MqttSettings().topic,
             lastSelectedTopic = prefs[KEY_LAST_SELECTED_TOPIC] ?: "",
             autoConnect = prefs[KEY_AUTO_CONNECT] ?: true,
-            keepAlive = prefs[KEY_KEEP_ALIVE] ?: 30,
+            keepAlive = prefs[KEY_KEEP_ALIVE] ?: MqttSettings().keepAlive,
             authToken = prefs[KEY_AUTH_TOKEN] ?: "",
             serverUrl = prefs[KEY_SERVER_URL] ?: "",
             pushNotification = prefs[KEY_PUSH_NOTIFICATION] ?: true,

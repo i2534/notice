@@ -287,4 +287,27 @@ class Transcriber:
             text = await backend.transcribe(filepath)
             if text:
                 return text
+        # 回退到 Hermes 全局 STT（stt.provider / built-in）
+        return await self._transcribe_via_global_stt(filepath)
+
+    @staticmethod
+    async def _transcribe_via_global_stt(filepath: str) -> str | None:
+        try:
+            from tools.transcription_tools import transcribe_audio
+        except ImportError:
+            return None
+        try:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, transcribe_audio, filepath)
+            if isinstance(result, dict) and result.get("success") and result.get("transcript"):
+                return str(result["transcript"]).strip() or None
+            if isinstance(result, dict) and result.get("error"):
+                logger.debug("Global STT failed: %s", result.get("error"))
+        except Exception as e:
+            logger.debug("Global STT unavailable: %s", e)
         return None
+
+    @property
+    def can_transcribe(self) -> bool:
+        """有本地 backend 时优先；否则仍会尝试全局 STT。"""
+        return True
