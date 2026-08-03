@@ -18,9 +18,9 @@ from gateway.platforms.base import (
 )
 from gateway.session import SessionSource
 
-from asr import Transcriber, CliTranscriber, _API_PROVIDERS
-from coalesce import ContentCoalescer
-from config import (
+from .asr import Transcriber, CliTranscriber, _API_PROVIDERS
+from .coalesce import ContentCoalescer
+from .config import (
     ENV_ALLOW_ALL,
     ENV_ALLOWED_USERS,
     ENV_HOME_CHANNEL,
@@ -30,16 +30,16 @@ from config import (
     load_settings,
     validate_config,
 )
-from media import markdown_with_images, resolve_media_url
-from mqtt_transport import create_mqtt_client, make_client_id, publish_qos1
-from payload import (
+from .media import markdown_with_images, resolve_media_url
+from .mqtt_transport import create_mqtt_client, make_client_id, publish_qos1
+from .payload import (
     OUTBOUND_CLIENT,
     build_outbound_payload,
     decode_inbound_payload,
     dumps_payload,
     resolve_publish_topic,
 )
-from standalone import standalone_send
+from .standalone import standalone_send
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 logger = logging.getLogger("gateway.platforms.notice")
