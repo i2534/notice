@@ -1,6 +1,5 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
-  import { get } from 'svelte/store'
   import { currentRoute, settings, settingsPanelOpen, detailMessageId, messages, mergeMessages } from '../../lib/store.js'
   import { connect } from '../../lib/mqtt.js'
   import { applyTheme } from '../../lib/theme.js'
@@ -34,15 +33,8 @@
   let isPolling = false
   let isPageVisible = true
 
-  // Get the oldest message ID from current list for cursor-based pagination
-  function getOldestMessageId() {
-    const list = get(messages)
-    if (!list.length) return 0
-    // Messages are sorted newest first, so the last one is oldest
-    return list[list.length - 1].id
-  }
-
-  // Poll for new messages (incremental fetch using before_id cursor)
+  // 轮询拉取最新 50 条（不带 before_id 游标——游标语义是"取更旧的"，
+  // 永远拉不到新消息），按服务端 id 合并，作为 MQTT 断连时漏收消息的兜底
   async function pollMessages() {
     if (isPolling || !isPageVisible) return
     const s = $settings
@@ -50,11 +42,9 @@
 
     isPolling = true
     try {
-      const beforeId = getOldestMessageId()
-      // Fetch older messages (before the oldest we have)
-      const res = await fetchMessages(s.token, 50, beforeId)
+      const res = await fetchMessages(s.token, 50)
       if (res.ok && Array.isArray(res.data?.data?.messages) && res.data.data.messages.length > 0) {
-        const history = res.data.data.messages.map(m =>
+        const latest = res.data.data.messages.map(m =>
           normalizeAndCategorize({
             id: m.id,
             topic: m.topic,
@@ -67,7 +57,7 @@
         )
         messages.update(list => {
           const max = $settings.maxMessages || 200
-          return mergeMessages(list, history).slice(0, max)
+          return mergeMessages(list, latest).slice(0, max)
         })
       }
     } catch (e) {
