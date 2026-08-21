@@ -5,6 +5,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
@@ -102,6 +105,33 @@ class MqttConnectionManager(
                     AppLogger.i(TAG, "Device exited Doze mode, checking connection...")
                     handleKeepAlive()
                 }
+            }
+        }
+    }
+
+    private val connectivityManager by lazy {
+        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
+
+    /**
+     * 网络变化即时触发保活检查，覆盖 WiFi↔蜂窝切换 / 断网恢复等假活高发场景，
+     * 无需等 5 分钟保活闹钟。
+     */
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            AppLogger.d(TAG, "Network available, checking connection...")
+            handleKeepAlive()
+        }
+
+        override fun onLost(network: Network) {
+            AppLogger.d(TAG, "Network lost")
+            handleKeepAlive()
+        }
+
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+            if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                AppLogger.d(TAG, "Network validated, checking connection...")
+                handleKeepAlive()
             }
         }
     }
@@ -282,6 +312,23 @@ class MqttConnectionManager(
         try {
             context.unregisterReceiver(dozeReceiver)
             AppLogger.d(TAG, "Doze mode receiver unregistered")
+        } catch (_: Exception) {
+        }
+    }
+
+    fun registerNetworkCallback() {
+        try {
+            connectivityManager.registerDefaultNetworkCallback(networkCallback)
+            AppLogger.d(TAG, "Network callback registered")
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Failed to register network callback: ${e.message}")
+        }
+    }
+
+    fun unregisterNetworkCallback() {
+        try {
+            connectivityManager.unregisterNetworkCallback(networkCallback)
+            AppLogger.d(TAG, "Network callback unregistered")
         } catch (_: Exception) {
         }
     }

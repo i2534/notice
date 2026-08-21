@@ -96,6 +96,7 @@ class MqttService : Service() {
         connectionManager.apply {
             startHeartbeat()
             registerDozeReceiver()
+            registerNetworkCallback()
             scheduleKeepAliveAlarm()
         }
         loadMessagesAsc()
@@ -200,6 +201,7 @@ class MqttService : Service() {
 
     override fun onDestroy() {
         connectionManager.unregisterDozeReceiver()
+        connectionManager.unregisterNetworkCallback()
         connectionManager.cancelKeepAliveAlarm()
         connectionManager.stopHeartbeat()
         disconnect()
