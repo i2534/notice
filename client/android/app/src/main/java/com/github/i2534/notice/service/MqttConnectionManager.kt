@@ -74,6 +74,8 @@ class MqttConnectionManager(
     private val heartbeatInterval = 10_000L
 
     private val keepAliveInterval = 10 * 60 * 1000L
+    private val PROBE_TOPIC = "\$notice/ping"
+    private val PROBE_TIMEOUT_MS = 10_000L
     private val alarmManager: AlarmManager by lazy {
         context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     }
@@ -300,28 +302,61 @@ class MqttConnectionManager(
                 AppLogger.d(TAG, "Keep-alive: user disconnected, skip")
             }
             KeepAliveAction.PROBE -> {
-                // 决策层已改探活语义，真探活实现见后续提交；当前保留健康日志
-                val lastMsg = if (connectionRef.lastMessageTime > 0) {
-                    "${(System.currentTimeMillis() - connectionRef.lastMessageTime) / 1000}s ago"
-                } else {
-                    "never"
+                // handleKeepAlive 非 suspend，探活需在 scope 内执行
+                scope.launch {
+                    if (probeAlive()) {
+                        AppLogger.d(TAG, "Keep-alive: connection healthy (probe ok)")
+                    } else {
+                        AppLogger.w(TAG, "Keep-alive: probe failed, forcing reconnect")
+                        forceReconnect()
+                    }
                 }
-                AppLogger.d(TAG, "Keep-alive: connection healthy (last message $lastMsg)")
             }
             KeepAliveAction.RECONNECT -> {
                 AppLogger.d(TAG, "Keep-alive: not healthy, attempting reconnect...")
-                // 若状态仍显示 CONNECTED 但 socket 已断，先纠正状态以便 scheduleReconnect 条件成立
-                if (_connectionState.value != MqttService.ConnectionState.DISCONNECTED) {
-                    _connectionState.value = MqttService.ConnectionState.DISCONNECTED
-                }
-                scope.launch {
-                    val settings = configStore.settings.first()
-                    connectMqtt(settings)
-                }
+                scope.launch { forceReconnect() }
             }
         }
 
         scheduleKeepAliveAlarm()
+    }
+
+    /**
+     * 主动探活：向服务端发布 QoS1 探测消息并等待 PUBACK。
+     * 僵尸连接（TCP 半开）下服务端收不到 publish、不回 PUBACK，waitForCompletion 超时 → 判定假活。
+     * 探活消息同时是 MQTT 活跃流量，可防止 NAT/代理会话静默超时。
+     */
+    private suspend fun probeAlive(): Boolean {
+        if (!connectMutex.tryLock()) return true // 正在连接中，不打扰（连接流程会自愈状态）
+        return try {
+            val client = mqttClient
+            if (client == null || !client.isConnected) return false
+            try {
+                client.publish(PROBE_TOPIC, byteArrayOf(0), 1, false)
+                    .waitForCompletion(PROBE_TIMEOUT_MS)
+                true
+            } catch (e: MqttException) {
+                AppLogger.w(TAG, "Probe failed: ${e.message}")
+                false
+            }
+        } finally {
+            connectMutex.unlock()
+        }
+    }
+
+    /**
+     * 强制重建连接：纠正状态并走 connectMqtt（内部 close 旧 client + 新建连接 + 重新订阅）。
+     * 适用于假活/探活失败/周期兜底，不依赖 Paho connectionLost 回调。
+     * 注意：本方法不得持有 connectMutex（connectMqtt 内部 tryLock），仅纠正状态后调用。
+     */
+    suspend fun forceReconnect() {
+        if (userDisconnected) return
+        if (_connectionState.value != MqttService.ConnectionState.DISCONNECTED) {
+            _connectionState.value = MqttService.ConnectionState.DISCONNECTED
+        }
+        cancelReconnectJob()
+        val settings = configStore.settings.first()
+        connectMqtt(settings)
     }
 
     fun tryAutoConnect() {
