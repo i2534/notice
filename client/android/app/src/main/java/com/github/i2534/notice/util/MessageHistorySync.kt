@@ -19,9 +19,9 @@ data class HistoryPage(
 )
 
 enum class KeepAliveAction {
-    SKIP,
-    HEALTHY,
-    RECONNECT
+    SKIP,        // 用户主动断开，不做任何事
+    RECONNECT,   // 显式断开（状态或 mqtt 本地标志为 false），直接重连
+    PROBE        // 本地标志为 connected，需主动探活确认（防假活）
 }
 
 object KeepAliveDecision {
@@ -32,8 +32,24 @@ object KeepAliveDecision {
     ): KeepAliveAction {
         if (userDisconnected) return KeepAliveAction.SKIP
         if (!stateConnected || !mqttConnected) return KeepAliveAction.RECONNECT
-        return KeepAliveAction.HEALTHY
+        // 本地标志不可信：Paho isConnected 是本地状态，僵尸连接下仍为 true，必须主动探活
+        return KeepAliveAction.PROBE
     }
+}
+
+/**
+ * 心跳兜底：连接已建立超过 forceIntervalMs 且仍显示 connected 时，强制重建连接。
+ * 覆盖探活遗漏的僵尸场景（如 Paho 线程异常、探活 publish 恰好被吞等）。
+ */
+fun shouldForceReconnect(
+    stateConnected: Boolean,
+    mqttConnected: Boolean,
+    lastConnectTime: Long,
+    now: Long,
+    forceIntervalMs: Long
+): Boolean {
+    if (!stateConnected || !mqttConnected) return false
+    return now - lastConnectTime >= forceIntervalMs
 }
 
 object MessageHistorySync {

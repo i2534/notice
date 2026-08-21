@@ -299,7 +299,8 @@ class MqttConnectionManager(
             KeepAliveAction.SKIP -> {
                 AppLogger.d(TAG, "Keep-alive: user disconnected, skip")
             }
-            KeepAliveAction.HEALTHY -> {
+            KeepAliveAction.PROBE -> {
+                // 决策层已改探活语义，真探活实现见后续提交；当前保留健康日志
                 val lastMsg = if (connectionRef.lastMessageTime > 0) {
                     "${(System.currentTimeMillis() - connectionRef.lastMessageTime) / 1000}s ago"
                 } else {

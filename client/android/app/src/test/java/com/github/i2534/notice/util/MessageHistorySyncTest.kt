@@ -155,15 +155,31 @@ class MessageHistorySyncTest {
     }
 
     @Test
-    fun keepAliveDecision_healthyWhenFullyConnected() {
+    fun keepAliveDecision_probeWhenLocalFlagsConnected() {
+        // 本地标志 connected 不代表 TCP 真实连通（Paho isConnected 是本地标志），必须主动探活
         assertEquals(
-            KeepAliveAction.HEALTHY,
+            KeepAliveAction.PROBE,
             KeepAliveDecision.decide(
                 userDisconnected = false,
                 stateConnected = true,
                 mqttConnected = true
             )
         )
+    }
+
+    @Test
+    fun shouldForceReconnect_trueWhenConnectionOlderThanInterval() {
+        val intervalMs = 12 * 60 * 60 * 1000L
+        assertTrue(shouldForceReconnect(true, true, 1000L, 1000L + intervalMs, intervalMs))
+        assertTrue(shouldForceReconnect(true, true, 1000L, 1000L + intervalMs + 1, intervalMs))
+    }
+
+    @Test
+    fun shouldForceReconnect_falseWhenRecentOrNotConnected() {
+        val intervalMs = 12 * 60 * 60 * 1000L
+        assertFalse(shouldForceReconnect(true, true, 1000L, 1000L + intervalMs - 1, intervalMs))
+        assertFalse(shouldForceReconnect(false, true, 1000L, 999999999L, intervalMs))
+        assertFalse(shouldForceReconnect(true, false, 1000L, 999999999L, intervalMs))
     }
 
     @Test
