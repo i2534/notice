@@ -17,6 +17,7 @@ import com.github.i2534.notice.receiver.KeepAliveReceiver
 import com.github.i2534.notice.util.AppLogger
 import com.github.i2534.notice.util.KeepAliveAction
 import com.github.i2534.notice.util.KeepAliveDecision
+import com.github.i2534.notice.util.shouldForceReconnect
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -76,7 +77,8 @@ class MqttConnectionManager(
     private var heartbeatJob: Job? = null
     private val heartbeatInterval = 10_000L
 
-    private val keepAliveInterval = 10 * 60 * 1000L
+    private val keepAliveInterval = 5 * 60 * 1000L
+    private val forceReconnectInterval = 12 * 60 * 60 * 1000L
     private val PROBE_TOPIC = "\$notice/ping"
     private val PROBE_TIMEOUT_MS = 10_000L
     private val alarmManager: AlarmManager by lazy {
@@ -426,9 +428,23 @@ class MqttConnectionManager(
         heartbeatJob = scope.launch {
             while (isActive) {
                 delay(heartbeatInterval)
-                val state = _connectionState.value.name
+                val state = _connectionState.value
                 val mqttConnected = mqttClient?.isConnected == true
                 AppLogger.d(TAG, "Heartbeat: alive, state=$state, mqtt=$mqttConnected")
+                if (shouldForceReconnect(
+                        stateConnected = state == MqttService.ConnectionState.CONNECTED,
+                        mqttConnected = mqttConnected,
+                        lastConnectTime = connectionRef.lastConnectTime,
+                        now = System.currentTimeMillis(),
+                        forceIntervalMs = forceReconnectInterval
+                    )
+                ) {
+                    AppLogger.w(
+                        TAG,
+                        "Heartbeat: connection older than ${forceReconnectInterval / 3_600_000}h, forcing reconnect"
+                    )
+                    forceReconnect()
+                }
             }
         }
     }
