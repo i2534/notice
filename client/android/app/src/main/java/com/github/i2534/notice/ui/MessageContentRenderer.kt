@@ -139,6 +139,7 @@ object MessageContentRenderer {
      * @param textSelectable 为 true 时，文本块可长按选择，用于详情弹窗
      * @param maxImageHeightInList 列表场景下图片最大高度（px），过高则固定高度 + centerCrop 裁剪
      * @param detailImageMinWidth 详情场景下图片最小宽度（px），保证窄图能看清
+     * @param onImageLongClick 图片长按回调（url, 本地缓存路径, ImageView），用于保存等操作；列表预览不渲染图片，不会触发
      */
     fun render(
         container: ViewGroup,
@@ -152,7 +153,8 @@ object MessageContentRenderer {
         showUrlWhenNoCache: Boolean = true,
         maxImageHeightInList: Int? = null,
         detailImageMinWidth: Int? = null,
-        onTruncated: ((Boolean) -> Unit)? = null
+        onTruncated: ((Boolean) -> Unit)? = null,
+        onImageLongClick: ((url: String, localPath: String?, imageView: ImageView) -> Unit)? = null
     ) {
         container.removeAllViews()
         val inflater = LayoutInflater.from(container.context)
@@ -261,6 +263,14 @@ object MessageContentRenderer {
                             imageView.isGone = true
                             urlFallback.text = urlFallback.context.getString(R.string.image_load_failed)
                             urlFallback.isVisible = true
+                        }
+                    }
+
+                    // 图片长按：调用方（如详情页）用于弹保存菜单；返回 true 消费事件
+                    if (onImageLongClick != null) {
+                        imageView.setOnLongClickListener {
+                            onImageLongClick(block.url, imageLocalPath, imageView)
+                            true
                         }
                     }
 

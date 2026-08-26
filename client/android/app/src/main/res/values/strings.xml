@@ -133,6 +133,9 @@
     <string name="from_client">来自 %s</string>
     <string name="voice_play_error">播放失败</string>
     <string name="image_load_failed">图片加载失败</string>
+    <string name="menu_save_image">保存图片</string>
+    <string name="image_saved">图片已保存</string>
+    <string name="image_save_failed">保存失败</string>
     <string name="voice_playing_label">播放中…</string>
     <string name="voice_paused_label">已暂停</string>
     <string name="audio_load_failed">音频加载失败</string>

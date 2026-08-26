@@ -26,6 +26,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -44,6 +45,7 @@ import com.github.i2534.notice.databinding.ActivityMainBinding
 import com.github.i2534.notice.databinding.DialogMessageDetailBinding
 import com.github.i2534.notice.service.MqttService
 import com.github.i2534.notice.util.MediaCacheLoader
+import com.github.i2534.notice.util.MediaSaveHelper
 import com.github.i2534.notice.util.TopicColor
 import com.github.i2534.notice.util.MessageBanner
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -54,6 +56,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val DIALOG_MAX_HEIGHT_RATIO = 0.85
+        private const val IMAGE_MENU_SAVE = 1
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -554,7 +557,10 @@ class MainActivity : AppCompatActivity() {
                 textSelectable = true,
                 mediaCachePathByUrl = mediaCachePathByUrl,
                 showUrlWhenNoCache = true,
-                detailImageMinWidth = null
+                detailImageMinWidth = null,
+                onImageLongClick = { url, localPath, imageView ->
+                    showImageSaveMenu(url, localPath, imageView)
+                }
             )
             detailBinding.dialogTopic.text = message.topic
             detailBinding.dialogTime.text = message.getFormattedTime()
@@ -599,6 +605,33 @@ class MainActivity : AppCompatActivity() {
                 renderAndShowDialog(if (map.isEmpty()) null else map)
             }
         }
+    }
+
+    /**
+     * 长按消息详情中的图片：弹出菜单，目前仅「保存图片」一项。
+     * 保存到系统相册 Pictures/Notice（minSdk=29 无需存储权限）。
+     */
+    private fun showImageSaveMenu(url: String, localPath: String?, imageView: ImageView) {
+        val popup = PopupMenu(this, imageView)
+        popup.menu.add(0, IMAGE_MENU_SAVE, 0, R.string.menu_save_image)
+        popup.setOnMenuItemClickListener { item ->
+            if (item.itemId == IMAGE_MENU_SAVE) {
+                val bitmap = MediaSaveHelper.extractBitmap(imageView)
+                lifecycleScope.launch {
+                    val ok = MediaSaveHelper.saveToGallery(applicationContext, url, localPath, bitmap)
+                    MessageBanner.showRes(
+                        this@MainActivity,
+                        if (ok) R.string.image_saved else R.string.image_save_failed,
+                        if (ok) com.github.i2534.notice.util.BannerType.Success
+                        else com.github.i2534.notice.util.BannerType.Error
+                    )
+                }
+                true
+            } else {
+                false
+            }
+        }
+        popup.show()
     }
 
     private fun updateConnectionUI(state: MqttService.ConnectionState) {

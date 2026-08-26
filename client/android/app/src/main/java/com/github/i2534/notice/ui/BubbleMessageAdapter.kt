@@ -261,16 +261,17 @@ class BubbleMessageAdapter(
                 touchThrough = true,
                 isOutgoing = isOutgoing,
                 mediaCachePathByUrl = null,
-                showUrlWhenNoCache = false
-            ) { isTruncated ->
-                bubbleMore.apply {
-                    visibility = if (isTruncated) View.VISIBLE else View.GONE
-                    setTextColor(
-                        if (isOutgoing) android.graphics.Color.parseColor("#80FFFFFF")
-                        else ContextCompat.getColor(ctx, R.color.primary_light)
-                    )
+                showUrlWhenNoCache = false,
+                onTruncated = { isTruncated ->
+                    bubbleMore.apply {
+                        visibility = if (isTruncated) View.VISIBLE else View.GONE
+                        setTextColor(
+                            if (isOutgoing) android.graphics.Color.parseColor("#80FFFFFF")
+                            else ContextCompat.getColor(ctx, R.color.primary_light)
+                        )
+                    }
                 }
-            }
+            )
 
             if (mergedCount > 1) {
                 bubbleMergedBadge.text = "×$mergedCount"
