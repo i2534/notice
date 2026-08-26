@@ -16,6 +16,7 @@ AGENTS.md
 server/logs/
 server/data/
 server/notice-server
+server/.gocache/
 data/
 
 # Android Client
